@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffaf0;
+  --foreground: #102116;
+  --emerald: #14532d;
+  --gold: #d4af37;
+  --cream: #fff7df;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-display);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+* { box-sizing: border-box; scroll-behavior: smooth; }
+body { margin: 0; background: radial-gradient(circle at top left, #fff8dc 0, transparent 28%), linear-gradient(135deg, #fffdf7, #f7ead0 55%, #eef8ef); color: var(--foreground); font-family: var(--font-display), serif; }
+button, input, select, textarea { font: inherit; }
+.glass { background: rgba(255,255,255,.72); border: 1px solid rgba(212,175,55,.24); box-shadow: 0 24px 80px rgba(20,83,45,.12); backdrop-filter: blur(18px); }
+.gold-gradient { background: linear-gradient(135deg, #f7d978, #d4af37 45%, #a57612); }
+.hero-gradient { background: radial-gradient(circle at 70% 25%, rgba(212,175,55,.35), transparent 24%), linear-gradient(125deg, #052e18, #14532d 48%, #0a1f14); }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.animate-marquee { animation: marquee 28s linear infinite; }

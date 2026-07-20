@@ -8,15 +8,44 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  role      String   @default("customer")
-  orders    Order[]
-  createdAt DateTime @default(now())
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  phone               String?              @unique
+  passwordHash        String?
+  image               String?
+  role                String               @default("customer")
+  isActive            Boolean              @default(true)
+  addresses           Address[]
+  wishlists           Wishlist[]
+  orders              Order[]
+  userVouchers        UserVoucher[]
+  checkoutHistories   CheckoutHistory[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@map("users")
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipientName String
+  phone         String
+  province      String
+  city          String
+  district      String
+  village       String
+  postalCode    String
+  detail        String
+  note          String?
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("addresses")
 }
 
 model Category {
@@ -43,9 +72,26 @@ model Product {
   rating      Float       @default(0)
   isActive    Boolean     @default(true)
   orderItems  OrderItem[]
+  wishlists   Wishlist[]
   createdAt   DateTime    @default(now())
 
   @@map("products")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productRef String
+  name      String
+  price     Int
+  image     String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productRef])
+  @@map("wishlists")
 }
 
 model ParcelPackage {
@@ -67,6 +113,7 @@ model Order {
   id        String      @id @default(cuid())
   userId    String?
   user      User?       @relation(fields: [userId], references: [id])
+  invoice   String      @unique
   customer  String
   phone     String
   address   String
@@ -77,7 +124,9 @@ model Order {
   total     Int
   status    String      @default("pending")
   items     OrderItem[]
+  checkoutHistories CheckoutHistory[]
   createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   @@map("orders")
 }
@@ -94,6 +143,68 @@ model OrderItem {
   subtotal  Int
 
   @@map("order_items")
+}
+
+model Voucher {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  title        String
+  description  String?
+  discountType String        @default("percent")
+  value        Int
+  minSpend     Int           @default(0)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  isActive     Boolean       @default(true)
+  userVouchers UserVoucher[]
+  createdAt    DateTime      @default(now())
+
+  @@map("vouchers")
+}
+
+model UserVoucher {
+  id        String    @id @default(cuid())
+  userId    String
+  voucherId String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voucher   Voucher   @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, voucherId])
+  @@map("user_vouchers")
+}
+
+model CheckoutHistory {
+  id        String   @id @default(cuid())
+  userId    String?
+  orderId   String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  channel   String   @default("whatsapp")
+  items     Json
+  subtotal  Int
+  shipping  Int
+  discount  Int
+  total     Int
+  city      String?
+  voucher   String?
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("checkout_histories")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
 }
 
 model Testimonial {

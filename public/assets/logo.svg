@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">AFA STORE monogram logo</title>
+  <desc id="desc">Premium circular AFA monogram in dark green with gold accents.</desc>
+  <circle cx="64" cy="64" r="60" fill="#184C3A"/>
+  <circle cx="64" cy="64" r="53" fill="none" stroke="#D4AF37" stroke-width="5"/>
+  <path d="M26 82 39 46h12l13 36H53l-2.2-7H39.2L37 82H26Zm16-17h6l-3-10-3 10Z" fill="#D4AF37"/>
+  <path d="M60 82V46h25v10H71v5h12v10H71v11H60Z" fill="#D4AF37"/>
+  <path d="M84 82 97 46h12l13 36h-11l-2.2-7H97.2L95 82H84Zm16-17h6l-3-10-3 10Z" fill="#D4AF37"/>
+  <path d="M33 94h62" stroke="#D4AF37" stroke-width="5" stroke-linecap="round"/>
+</svg>

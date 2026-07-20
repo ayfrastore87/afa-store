@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/server-auth";
 import { prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
 
 export async function GET() {
     const user = await getCurrentUser();
@@ -8,7 +10,6 @@ export async function GET() {
     const histories = await prisma.checkoutHistory.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
     return NextResponse.json({ histories });
 }
-
 export async function POST(request: Request) {
     const user = await getCurrentUser();
     const data = await request.json();

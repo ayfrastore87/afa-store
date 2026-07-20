@@ -1,7 +1,7 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT } from "jose/jwt/sign";
+import { jwtVerify } from "jose/jwt/verify";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 
 export const AUTH_COOKIE = "afa_session";
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET || "afa-store-dev-secret-change-me");
@@ -15,7 +15,7 @@ export type SessionUser = {
     role: string;
 };
 
-export async function signSession(user: SessionUser, remember = false) {
+export async function signToken(user: SessionUser, remember = false) {
     return new SignJWT({ user })
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
@@ -23,7 +23,7 @@ export async function signSession(user: SessionUser, remember = false) {
         .sign(secret);
 }
 
-export async function verifySession(token?: string) {
+export async function verifyToken(token?: string) {
     if (!token) return null;
     try {
         const { payload } = await jwtVerify(token, secret);
@@ -33,15 +33,13 @@ export async function verifySession(token?: string) {
     }
 }
 
-export async function getCurrentUser() {
+export async function getSession() {
     const store = await cookies();
-    const session = await verifySession(store.get(AUTH_COOKIE)?.value);
-    if (!session) return null;
-    return prisma.user.findFirst({
-        where: { id: session.id, isActive: true },
-        select: { id: true, name: true, email: true, phone: true, image: true, role: true, createdAt: true },
-    });
+    return verifyToken(store.get(AUTH_COOKIE)?.value);
 }
+
+export const signSession = signToken;
+export const verifySession = verifyToken;
 
 export function publicUser(user: { id: string; name: string; email: string; phone: string | null; image: string | null; role: string; createdAt?: Date }) {
     return {

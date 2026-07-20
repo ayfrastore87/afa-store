@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser, publicUser } from "@/lib/auth";
+import { publicUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/server-auth";
 import { AccountDashboard } from "@/components/account/account-dashboard";
 
 export default async function AccountPage() {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") || "";
@@ -11,7 +13,6 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ users });
 }
-
 export async function PATCH(request: Request) {
     const { id, ...data } = await request.json();
     const user = await prisma.user.update({ where: { id }, data });

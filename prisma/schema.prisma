@@ -58,37 +58,37 @@ model Category {
 }
 
 model Product {
-  id          String      @id @default(cuid())
-  categoryId  String?
-  category    Category?   @relation(fields: [categoryId], references: [id])
-  name        String
-  slug        String      @unique
-  flavor      String?
-  size        String?
-  price       Int
-  stock       Int         @default(0)
-  image       String?
-  badge       String?
-  rating      Float       @default(0)
-  isActive    Boolean     @default(true)
-  orderItems  OrderItem[]
-  wishlists   Wishlist[]
-  createdAt   DateTime    @default(now())
+  id         String      @id @default(cuid())
+  categoryId String?
+  category   Category?   @relation(fields: [categoryId], references: [id])
+  name       String
+  slug       String      @unique
+  flavor     String?
+  size       String?
+  price      Int
+  stock      Int         @default(0)
+  image      String?
+  badge      String?
+  rating     Float       @default(0)
+  isActive   Boolean     @default(true)
+  orderItems OrderItem[]
+  wishlists  Wishlist[]
+  createdAt  DateTime    @default(now())
 
   @@map("products")
 }
 
 model Wishlist {
-  id        String   @id @default(cuid())
-  userId    String
-  productId String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  id         String   @id @default(cuid())
+  userId     String
+  productId  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   productRef String
-  name      String
-  price     Int
-  image     String?
-  createdAt DateTime @default(now())
+  name       String
+  price      Int
+  image      String?
+  createdAt  DateTime @default(now())
 
   @@unique([userId, productRef])
   @@map("wishlists")
@@ -110,23 +110,23 @@ model ParcelPackage {
 }
 
 model Order {
-  id        String      @id @default(cuid())
-  userId    String?
-  user      User?       @relation(fields: [userId], references: [id])
-  invoice   String      @unique
-  customer  String
-  phone     String
-  address   String
-  note      String?
-  subtotal  Int
-  shipping  Int         @default(0)
-  voucher   String?
-  total     Int
-  status    String      @default("pending")
-  items     OrderItem[]
+  id                String            @id @default(cuid())
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id])
+  invoice           String            @unique
+  customer          String
+  phone             String
+  address           String
+  note              String?
+  subtotal          Int
+  shipping          Int               @default(0)
+  voucher           String?
+  total             Int
+  status            String            @default("pending")
+  items             OrderItem[]
   checkoutHistories CheckoutHistory[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@map("orders")
 }
@@ -196,13 +196,13 @@ model CheckoutHistory {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  token     String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@map("password_reset_tokens")
 }
@@ -234,13 +234,13 @@ model Banner {
 }
 
 model Promotion {
-  id        String   @id @default(cuid())
-  title     String
-  type      String
-  value     Int
-  startsAt  DateTime
-  endsAt    DateTime
-  isActive  Boolean  @default(true)
+  id       String   @id @default(cuid())
+  title    String
+  type     String
+  value    Int
+  startsAt DateTime
+  endsAt   DateTime
+  isActive Boolean  @default(true)
 
   @@map("promotions")
 }

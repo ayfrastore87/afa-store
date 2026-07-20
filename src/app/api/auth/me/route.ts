@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, publicUser } from "@/lib/auth";
+import { publicUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/server-auth";
+
+export const runtime = "nodejs";
 
 export async function GET() {
     const user = await getCurrentUser();

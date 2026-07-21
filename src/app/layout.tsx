@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond } from "next/font/google";
+import { Inter, Cormorant_Garamond } from "next/font/google";
 import { CartProvider } from "@/context/cart-context";
+import { WishlistProvider } from "@/context/wishlist-context";
 import "./globals.css";
+
+const body = Inter({
+  variable: "--font-body",
+  subsets: ["latin"],
+});
 
 const display = Cormorant_Garamond({
   variable: "--font-display",
@@ -12,8 +18,14 @@ const display = Cormorant_Garamond({
 export const metadata: Metadata = {
   metadataBase: new URL("https://afa-store.vercel.app"),
   title: "AFA STORE | Bawang Goreng Premium & Parcel Hampers",
-  description: "Pusat Bawang Goreng Premium & Parcel Hampers Berkualitas dengan checkout WhatsApp cepat.",
-  keywords: ["AFA STORE", "bawang goreng", "parcel hampers", "hampers premium"],
+  description:
+    "Pusat Bawang Goreng Premium & Parcel Hampers Berkualitas dengan checkout WhatsApp cepat.",
+  keywords: [
+    "AFA STORE",
+    "bawang goreng",
+    "parcel hampers",
+    "hampers premium",
+  ],
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -21,7 +33,12 @@ export const metadata: Metadata = {
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],
   },
-  openGraph: { title: "AFA STORE", description: "Bawang Goreng Premium & Parcel Hampers Berkualitas", type: "website", locale: "id_ID" },
+  openGraph: {
+    title: "AFA STORE",
+    description: "Bawang Goreng Premium & Parcel Hampers Berkualitas",
+    type: "website",
+    locale: "id_ID",
+  },
 };
 
 export default function RootLayout({
@@ -30,16 +47,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="id"
-      className={`${display.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col"><CartProvider>{children}</CartProvider></body>
-      <html
-        lang="id"
-        data-scroll-behavior="smooth"
-        className={`${display.variable} h-full antialiased`}
-      ></html>
+    <html lang="id" className={`${display.variable} ${body.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-[#F8F4EC] text-[#2E2A26]">
+        <CartProvider><WishlistProvider>{children}</WishlistProvider></CartProvider>
+      </body>
     </html>
   );
 }

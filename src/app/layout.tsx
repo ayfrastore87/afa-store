@@ -35,6 +35,11 @@ export default function RootLayout({
       className={`${display.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col"><CartProvider>{children}</CartProvider></body>
+      <html
+        lang="id"
+        data-scroll-behavior="smooth"
+        className={`${display.variable} h-full antialiased`}
+      ></html>
     </html>
   );
 }

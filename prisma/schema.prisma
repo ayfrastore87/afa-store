@@ -122,8 +122,17 @@ model Order {
   subtotal          Int
   shipping          Int               @default(0)
   voucher           String?
+  discount          Int               @default(0)
   total             Int
   status            String            @default("pending")
+  courier           String?
+  trackingNumber    String?
+  paidAt            DateTime?
+  processedAt       DateTime?
+  packedAt          DateTime?
+  shippedAt         DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
   items             OrderItem[]
   checkoutHistories CheckoutHistory[]
   createdAt         DateTime          @default(now())

@@ -41,6 +41,7 @@ export async function POST(request: Request) {
     const shipping = SHIPPING_COST;
     const total = subtotal + shipping;
     const fullAddress = `${address.address}, ${address.district}, ${address.city}, ${address.province} ${address.postalCode}`;
+    const now = new Date();
 
     const order = await prisma.order.create({
         data: {
@@ -51,8 +52,15 @@ export async function POST(request: Request) {
             address: fullAddress,
             subtotal,
             shipping,
+            discount: 0,
             total,
             status: "PENDING",
+            paidAt: null,
+            processedAt: null,
+            packedAt: null,
+            shippedAt: null,
+            completedAt: null,
+            cancelledAt: null,
             items: {
                 create: items.map((item) => ({
                     name: item.name,
@@ -62,7 +70,22 @@ export async function POST(request: Request) {
                 })),
             },
         },
-        select: { invoice: true },
+        select: { id: true, invoice: true },
+    });
+
+    await prisma.checkoutHistory.create({
+        data: {
+            userId: user.id,
+            orderId: order.id,
+            channel: "checkout",
+            items,
+            subtotal,
+            shipping,
+            discount: 0,
+            total,
+            city: address.city?.trim() || null,
+            message: `Order ${order.invoice} dibuat pada ${now.toISOString()}`,
+        },
     });
 
     const response = NextResponse.json({ redirectTo: `/payment/${order.invoice}` }, { status: 201 });

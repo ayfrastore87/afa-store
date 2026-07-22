@@ -14,7 +14,10 @@ type CheckoutAddress = {
     city?: string;
     district?: string;
     postalCode?: string;
+    paymentMethod?: string;
 };
+
+const paymentMethods = ["QRIS", "TRANSFER_BANK", "COD"] as const;
 
 function invoiceNumber() {
     return `AFA-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
     const total = subtotal + shipping;
     const fullAddress = `${address.address}, ${address.district}, ${address.city}, ${address.province} ${address.postalCode}`;
     const now = new Date();
+    const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
 
     const order = await prisma.order.create({
         data: {
@@ -55,6 +59,9 @@ export async function POST(request: Request) {
             discount: 0,
             total,
             status: "PENDING",
+            paymentMethod,
+            paymentStatus: paymentMethod === "COD" ? "WAITING_CONFIRMATION" : "WAITING_PAYMENT",
+            paymentProof: null,
             paidAt: null,
             processedAt: null,
             packedAt: null,

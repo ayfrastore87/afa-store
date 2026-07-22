@@ -3,9 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 model User {
@@ -125,6 +123,9 @@ model Order {
   discount          Int               @default(0)
   total             Int
   status            String            @default("pending")
+  paymentMethod     String            @default("QRIS") @map("payment_method")
+  paymentStatus     String            @default("WAITING_PAYMENT") @map("payment_status")
+  paymentProof      String?           @map("payment_proof")
   courier           String?
   trackingNumber    String?
   paidAt            DateTime?

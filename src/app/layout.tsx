@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
-import { Inter, Cormorant_Garamond } from "next/font/google";
+import { Playfair_Display, Poppins } from "next/font/google";
 import { CartProvider } from "@/context/cart-context";
 import { WishlistProvider } from "@/context/wishlist-context";
 import "./globals.css";
 
-const body = Inter({
+const body = Poppins({
   variable: "--font-body",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
-const display = Cormorant_Garamond({
+const display = Playfair_Display({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
@@ -48,7 +49,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${display.variable} ${body.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-[#F8F4EC] text-[#2E2A26]">
+      <body className="min-h-full flex flex-col bg-[#F8F5EE] text-[#123524]">
         <CartProvider><WishlistProvider>{children}</WishlistProvider></CartProvider>
       </body>
     </html>

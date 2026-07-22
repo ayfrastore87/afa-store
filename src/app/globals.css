@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --cream: #F8F4EC;
+  --cream: #F8F5EE;
   --ivory: #FFFDF8;
   --secondary: #EFE6D5;
-  --gold: #C8A45D;
-  --gold-dark: #A9853F;
-  --dark-text: #2E2A26;
+  --gold: #C9A45B;
+  --gold-dark: #A7833A;
+  --dark-text: #123524;
   --soft-brown: #8B6B3F;
   --card: #FFFFFF;
 }
@@ -18,9 +18,85 @@ html {
 body {
   font-family: var(--font-body), sans-serif;
   background:
-    radial-gradient(circle at 15% 10%, rgba(200, 164, 93, 0.18), transparent 28rem),
+    radial-gradient(circle at 15% 10%, rgba(201, 164, 91, 0.18), transparent 28rem),
     linear-gradient(135deg, var(--cream), var(--ivory) 52%, var(--secondary));
   color: var(--dark-text);
+}
+
+body[data-theme="dark"] {
+  --cream: #0f1713;
+  --ivory: #111c17;
+  --secondary: #16231d;
+  --gold: #d4b06a;
+  --gold-dark: #b38a43;
+  --dark-text: #eef4ed;
+  --soft-brown: #c7b59b;
+  --card: rgba(18, 28, 23, 0.92);
+  background:
+    radial-gradient(circle at 15% 10%, rgba(201, 164, 91, 0.16), transparent 28rem),
+    linear-gradient(135deg, #0a100d, #111a16 52%, #132019);
+  color: var(--dark-text);
+}
+
+body[data-theme="dark"] .luxury-card,
+body[data-theme="dark"] .theme-dark-card {
+  background: rgba(16, 24, 20, 0.88);
+  border-color: rgba(212, 176, 106, 0.16);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme="dark"] header,
+body[data-theme="dark"] footer,
+body[data-theme="dark"] section,
+body[data-theme="dark"] main {
+  color: var(--dark-text);
+}
+
+body[data-theme="dark"] select,
+body[data-theme="dark"] input,
+body[data-theme="dark"] textarea {
+  background-color: rgba(11, 17, 14, 0.92);
+  color: var(--dark-text);
+  border-color: rgba(212, 176, 106, 0.22);
+}
+
+body[data-theme="dark"] option {
+  background: #111c17;
+  color: #eef4ed;
+}
+
+body[data-theme="dark"] button,
+body[data-theme="dark"] a {
+  color: inherit;
+}
+
+body[data-theme="dark"] .bg-white,
+body[data-theme="dark"] .bg-white\/10,
+body[data-theme="dark"] .bg-white\/60,
+body[data-theme="dark"] .bg-white\/75,
+body[data-theme="dark"] .bg-white\/80,
+body[data-theme="dark"] .bg-white\/85,
+body[data-theme="dark"] .bg-white\/88,
+body[data-theme="dark"] .bg-white\/90,
+body[data-theme="dark"] .bg-white\/95 {
+  background-color: rgba(18, 27, 22, 0.9) !important;
+}
+
+body[data-theme="dark"] [class~="text-[#123524]"],
+body[data-theme="dark"] [class~="text-[#2E2A26]"],
+body[data-theme="dark"] [class~="text-[#43503f]"] {
+  color: #eef4ed !important;
+}
+
+body[data-theme="dark"] [class~="text-[#8B6B3F]"] {
+  color: #c7b59b !important;
+}
+
+body[data-theme="dark"] [class~="border-[#C9A45B]/15"],
+body[data-theme="dark"] [class~="border-[#C9A45B]/20"],
+body[data-theme="dark"] [class~="border-[#C9A45B]/25"],
+body[data-theme="dark"] [class~="border-[#C9A45B]/30"] {
+  border-color: rgba(212, 176, 106, 0.22) !important;
 }
 
 h1,
@@ -32,11 +108,34 @@ h3,
 
 .luxury-card {
   background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(200, 164, 93, 0.22);
-  box-shadow: 0 20px 60px rgba(46, 42, 38, 0.09);
+  border: 1px solid rgba(201, 164, 91, 0.2);
+  box-shadow: 0 20px 60px rgba(18, 53, 36, 0.09);
   backdrop-filter: blur(18px);
 }
 
 .gold-gradient {
   background: linear-gradient(135deg, #E4C982 0%, var(--gold) 48%, #B28D45 100%);
+}
+
+.soft-pattern {
+  background-image:
+    linear-gradient(rgba(201, 164, 91, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201, 164, 91, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@keyframes floatLuxury {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float-luxury {
+  animation: floatLuxury 4.8s ease-in-out infinite;
 }

@@ -1,47 +1,30 @@
-import { SignJWT } from "jose/jwt/sign";
-import { jwtVerify } from "jose/jwt/verify";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { redirect } from "next/navigation";
+import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
+import { jwtVerify, SignJWT } from "jose";
+import type { NextResponse } from "next/server";
 
 export const AUTH_COOKIE = "afa_session";
-const secret = new TextEncoder().encode(process.env.AUTH_SECRET || "afa-store-dev-secret-change-me");
 
-export type SessionUser = {
+export type PublicUser = {
     id: string;
     name: string;
     email: string;
     phone: string | null;
     image: string | null;
     role: string;
+    createdAt?: string;
 };
 
-export async function signToken(user: SessionUser, remember = false) {
-    return new SignJWT({ user })
-        .setProtectedHeader({ alg: "HS256" })
-        .setIssuedAt()
-        .setExpirationTime(remember ? "30d" : "1d")
-        .sign(secret);
+type UserLike = Omit<PublicUser, "createdAt"> & { createdAt?: Date | string };
+
+function getJwtSecret() {
+    return new TextEncoder().encode(process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "afa-store-dev-secret");
 }
 
-export async function verifyToken(token?: string) {
-    if (!token) return null;
-    try {
-        const { payload } = await jwtVerify(token, secret);
-        return payload.user as SessionUser;
-    } catch {
-        return null;
-    }
-}
-
-export async function getSession() {
-    const store = await cookies();
-    return verifyToken(store.get(AUTH_COOKIE)?.value);
-}
-
-export const signSession = signToken;
-export const verifySession = verifyToken;
-
-export function publicUser(user: { id: string; name: string; email: string; phone: string | null; image: string | null; role: string; createdAt?: Date }) {
+export function publicUser<T extends UserLike>(user: T): PublicUser {
     return {
         id: user.id,
         name: user.name,
@@ -49,8 +32,29 @@ export function publicUser(user: { id: string; name: string; email: string; phon
         phone: user.phone,
         image: user.image,
         role: user.role,
-        createdAt: user.createdAt?.toISOString(),
+        createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt,
     };
+}
+
+export async function signSession(user: PublicUser, remember = false) {
+    const maxAge = remember ? "30d" : "1d";
+
+    return new SignJWT(publicUser(user))
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime(maxAge)
+        .sign(getJwtSecret());
+}
+
+export async function verifyToken(token?: string) {
+    if (!token) return null;
+
+    try {
+        const { payload } = await jwtVerify(token, getJwtSecret());
+        return payload as PublicUser;
+    } catch {
+        return null;
+    }
 }
 
 export function setAuthCookie(response: NextResponse, token: string, remember = false) {
@@ -71,4 +75,85 @@ export function clearAuthCookie(response: NextResponse) {
         path: "/",
         maxAge: 0,
     });
+}
+
+export async function getSession() {
+    const cookieStore = await cookies();
+    return verifyToken(cookieStore.get(AUTH_COOKIE)?.value);
+}
+
+export async function createSupabaseServerClient() {
+    const cookieStore = await cookies();
+
+    return createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                getAll() {
+                    return cookieStore.getAll();
+                },
+                setAll(cookiesToSet: {
+                    name: string;
+                    value: string;
+                    options: CookieOptions;
+                }[]) {
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                        cookieStore.set(name, value, options);
+                    });
+                },
+            },
+        }
+    );
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+    const supabase = await createSupabaseServerClient();
+
+    const {
+        data: { user },
+        error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+        return null;
+    }
+
+    return user;
+}
+
+export async function getCurrentAdmin() {
+    const user = await getCurrentUser();
+
+    if (!user) {
+        return null;
+    }
+
+    const supabase = await createSupabaseServerClient();
+
+    const { data: admin, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("auth_id", user.id)
+        .single();
+
+    if (error || !admin) {
+        return null;
+    }
+
+    if (admin.role !== "admin") {
+        return null;
+    }
+
+    return admin;
+}
+
+export async function requireAdmin() {
+    const admin = await getCurrentAdmin();
+
+    if (!admin) {
+        redirect("/admin/login");
+    }
+
+    return admin;
 }

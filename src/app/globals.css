@@ -139,3 +139,128 @@ h3,
 .animate-float-luxury {
   animation: floatLuxury 4.8s ease-in-out infinite;
 }
+
+.product-grid {
+  align-items: stretch;
+  grid-auto-rows: 1fr;
+}
+
+.product-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+}
+
+.product-card-info {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.product-card-title {
+  display: -webkit-box;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.product-card-actions {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 12px;
+  margin-top: auto;
+  min-width: 0;
+  padding: 16px;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+.product-card-cart-button,
+.product-card-buy-button {
+  border-radius: 16px;
+  height: 48px;
+  min-height: 48px;
+}
+
+.product-card-buy-button {
+  flex: 1 1 0;
+  font-size: 16px;
+  font-weight: 600;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .product-section {
+    padding-bottom: 208px;
+  }
+
+  .product-card {
+    border-radius: 24px;
+  }
+
+  .product-card-info {
+    padding-bottom: 10px;
+  }
+
+  .product-card-actions {
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .product-card-cart-button {
+    flex: 0 0 48px;
+    width: 48px;
+  }
+
+  .product-card-buy-button {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
+@media (max-width: 479px) {
+  .product-section {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .product-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .product-card {
+    max-width: 100%;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .product-card-actions {
+    gap: 12px;
+    max-width: 100%;
+    padding: 16px;
+  }
+
+  .product-card-buy-button {
+    flex: 1 1 0;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  #parcel {
+    padding-bottom: 208px;
+  }
+}

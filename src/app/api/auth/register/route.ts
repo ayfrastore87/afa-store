@@ -1,9 +1,11 @@
-import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createSupabaseServerClient, publicUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
+
+const RATE_LIMIT_MESSAGE = "Terlalu banyak email verifikasi yang dikirim dalam waktu singkat. Silakan tunggu beberapa saat lalu coba lagi.";
 
 const registerSchema = z.object({
     name: z.string().trim().min(2, "Nama minimal 2 karakter."),
@@ -37,34 +39,66 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: "Konfirmasi password tidak sama." }, { status: 400 });
     }
 
-    const exists = await prisma.user.findFirst({
-        where: {
-            OR: [{ email }, { phone }],
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: {
+                name,
+                phone,
+            },
         },
     });
 
-    if (exists) {
-        return NextResponse.json({ message: "Email atau WhatsApp sudah terdaftar." }, { status: 409 });
+    if (error) {
+        console.error("Supabase register error:", error);
+        const message = /email rate limit exceeded/i.test(error.message)
+            ? RATE_LIMIT_MESSAGE
+            : /already|registered|exists/i.test(error.message)
+                ? "Email sudah digunakan."
+                : "Registrasi gagal. Silakan coba lagi.";
+        return NextResponse.json({ message }, { status: 400 });
     }
 
-    const user = await prisma.user.create({
-        data: {
+    const authUser = data.user;
+
+    if (!authUser || authUser.identities?.length === 0) {
+        return NextResponse.json({ message: "Email sudah digunakan." }, { status: 409 });
+    }
+
+    const phoneExists = await prisma.user.findFirst({
+        where: {
+            phone,
+            NOT: { email },
+        },
+    });
+
+    if (phoneExists) {
+        return NextResponse.json({ message: "Nomor WhatsApp sudah terdaftar." }, { status: 409 });
+    }
+
+    const user = await prisma.user.upsert({
+        where: { email },
+        update: {
+            id: authUser.id,
+            name,
+            phone,
+            passwordHash: null,
+        },
+        create: {
+            id: authUser.id,
             name,
             email,
             phone,
-            passwordHash: await bcrypt.hash(password, 12),
+            passwordHash: null,
         },
     });
 
     return NextResponse.json(
         {
-            message: "Registrasi berhasil.",
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-            },
+            message: "Silakan cek email untuk verifikasi akun.",
+            user: publicUser(user),
         },
         { status: 201 }
     );

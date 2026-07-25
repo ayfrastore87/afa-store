@@ -203,8 +203,16 @@ h3,
     padding-bottom: 208px;
   }
 
+  .product-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
   .product-card {
     border-radius: 24px;
+    max-width: 100%;
+    overflow: hidden;
+    width: 100%;
   }
 
   .product-card-info {
@@ -233,17 +241,6 @@ h3,
   .product-section {
     padding-left: 16px;
     padding-right: 16px;
-  }
-
-  .product-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-  }
-
-  .product-card {
-    max-width: 100%;
-    overflow: hidden;
-    width: 100%;
   }
 
   .product-card-actions {

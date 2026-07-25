@@ -26,6 +26,10 @@ export async function middleware(request: NextRequest) {
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
+        console.error("Admin middleware Supabase env missing", {
+            hasUrl: Boolean(supabaseUrl),
+            hasAnonKey: Boolean(supabaseKey),
+        });
         return NextResponse.redirect(new URL("/admin/login", request.url));
     }
 

@@ -10,6 +10,24 @@ import { supabase } from "@/lib/supabase";
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
+const LOGIN_TIMEOUT_MS = 15000;
+
+type AuthApiResponse = {
+    message?: string;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+        return "Login terlalu lama. Periksa koneksi internet lalu coba lagi.";
+    }
+
+    if (error instanceof Error) {
+        return error.message || fallback;
+    }
+
+    return fallback;
+}
+
 export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
     const router = useRouter();
     const [form, setForm] = useState<Record<string, string>>({ token: token || "" });
@@ -136,12 +154,48 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
 
         const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
         const payload = mode === "login" ? { identifier: form.identifier, password: form.password, remember: form.remember === "on" } : form;
-        const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        const data = await response.json();
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
+        let response: Response;
+        let data: AuthApiResponse = {};
+
+        try {
+            if (mode === "login") {
+                console.log("Login request started");
+            }
+
+            response = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+
+            if (mode === "login") {
+                console.log("Login response received", { ok: response.ok, status: response.status });
+            }
+
+            data = await response.json().catch((error) => {
+                console.error("Login response JSON parse failed", error);
+                return {};
+            }) as AuthApiResponse;
+        } catch (error) {
+            const errorMessage = getErrorMessage(error, "Server tidak merespons.");
+            console.error("Login request failed", error);
+            setLoading(false);
+            setError(errorMessage);
+            showToast(errorMessage, "error");
+            return;
+        } finally {
+            window.clearTimeout(timeoutId);
+        }
+
         setLoading(false);
         if (!response.ok) {
             const errorMessage = mode === "register" ? getRegisterErrorMessage(data.message || "") : data.message || "Terjadi kesalahan.";
-            if (mode === "register") {
+            if (mode === "login") {
+                console.error("Login failed", { status: response.status, message: errorMessage });
+            } else {
                 console.error("Supabase register error:", data.message || errorMessage);
             }
             setError(errorMessage);
@@ -152,7 +206,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         const successMessage = data.message || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
         setMessage(successMessage);
         showToast(successMessage);
-        if (mode === "login") router.push("/account");
+        if (mode === "login" && response.ok) router.push("/account");
     };
 
     const input = (name: string, label: string, type = "text") => <label className="block text-sm font-bold">{label}<input name={name} type={type} value={form[name] || ""} onChange={(e) => setForm({ ...form, [name]: e.target.value })} className="mt-2 w-full rounded-2xl border border-[#184C3A]/15 bg-white/80 px-4 py-3 outline-none focus:ring-2 focus:ring-[#D4AF37]" /></label>;

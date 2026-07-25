@@ -23,13 +23,14 @@ const breadcrumbs: Record<string, string> = {
     "/admin/akun": "Akun",
 };
 
-export function AdminDashboardLink() {
+export function AdminDashboardLink({ onClick }: { onClick?: () => void }) {
     const pathname = usePathname();
     const active = pathname === "/admin";
 
     return (
         <Link
             href="/admin"
+            onClick={onClick}
             className={`flex items-center gap-3 rounded-[12px] bg-[#0F4C45] px-4 py-3 font-semibold text-white transition-colors duration-200 hover:bg-[#D4AF37] hover:text-[#0F4C45] ${active ? "ring-2 ring-[#D4AF37]/45" : ""}`}
             aria-current={active ? "page" : undefined}
         >

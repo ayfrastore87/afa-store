@@ -24,6 +24,21 @@ function getJwtSecret() {
     return new TextEncoder().encode(process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "afa-store-dev-secret");
 }
 
+function getSupabaseServerEnv() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+        console.error("Supabase server env missing", {
+            hasUrl: Boolean(supabaseUrl),
+            hasAnonKey: Boolean(supabaseAnonKey),
+        });
+        throw new Error("Konfigurasi Supabase belum lengkap.");
+    }
+
+    return { supabaseUrl, supabaseAnonKey };
+}
+
 export function publicUser<T extends UserLike>(user: T): PublicUser {
     return {
         id: user.id,
@@ -52,7 +67,8 @@ export async function verifyToken(token?: string) {
     try {
         const { payload } = await jwtVerify(token, getJwtSecret());
         return payload as PublicUser;
-    } catch {
+    } catch (error) {
+        console.error("Auth token verification failed", error);
         return null;
     }
 }
@@ -84,10 +100,11 @@ export async function getSession() {
 
 export async function createSupabaseServerClient() {
     const cookieStore = await cookies();
+    const { supabaseUrl, supabaseAnonKey } = getSupabaseServerEnv();
 
     return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        supabaseUrl,
+        supabaseAnonKey,
         {
             cookies: {
                 getAll() {
@@ -116,6 +133,7 @@ export async function getCurrentUser(): Promise<User | null> {
     } = await supabase.auth.getUser();
 
     if (error || !user) {
+        if (error) console.error("Supabase getCurrentUser failed", error);
         return null;
     }
 
@@ -138,6 +156,7 @@ export async function getCurrentAdmin() {
         .single();
 
     if (error || !admin) {
+        if (error) console.error("Supabase getCurrentAdmin failed", error);
         return null;
     }
 

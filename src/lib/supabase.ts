@@ -5,11 +5,18 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-if (!isSupabaseConfigured && process.env.NODE_ENV !== "production") {
-    console.warn("Supabase environment variables are not configured. Supabase calls will fail until env values are provided.");
+function getSupabaseBrowserEnv() {
+    if (!supabaseUrl) {
+        throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL");
+    }
+
+    if (!supabaseAnonKey) {
+        throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    }
+
+    return { supabaseUrl, supabaseAnonKey };
 }
 
-export const supabase = createBrowserClient(
-    supabaseUrl || "https://placeholder.supabase.co",
-    supabaseAnonKey || "placeholder-anon-key"
-);
+const { supabaseUrl: browserSupabaseUrl, supabaseAnonKey: browserSupabaseAnonKey } = getSupabaseBrowserEnv();
+
+export const supabase = createBrowserClient(browserSupabaseUrl, browserSupabaseAnonKey);

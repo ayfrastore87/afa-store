@@ -16,6 +16,22 @@ export type ParcelPackage = {
 
 type ParcelRow = Record<string, unknown>;
 
+export const fallbackParcelPackages: ParcelPackage[] = [
+    {
+        id: "parcel-fallback-paket-parcel",
+        name: "Paket Parcel AFA",
+        slug: "paket-parcel-afa",
+        category: "Parcel",
+        price: 150000,
+        description: "Paket parcel pilihan AFA STORE untuk hadiah keluarga, relasi, dan momen istimewa.",
+        image: "/products/paket parcel.png",
+        contents: ["Bawang goreng premium", "Kemasan hadiah", "Kartu ucapan"],
+        badge: "Ready",
+        isActive: true,
+        createdAt: null,
+    },
+];
+
 const numberValue = (value: unknown, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -54,12 +70,16 @@ export function mapParcelPackage(row: ParcelRow): ParcelPackage {
 }
 
 export async function fetchParcelPackages() {
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
         .from("parcel_packages")
-        .select("*")
+        .select("*", { count: "exact" })
         .order("createdAt", { ascending: false, nullsFirst: false });
     if (error) throw new Error(error.message);
 
     const parcels = (data ?? []).map((row) => mapParcelPackage(row as ParcelRow));
-    return parcels.length ? parcels : [];
+    if (!parcels.length) {
+        console.info(`Parcel packages query returned ${count ?? 0} rows from parcel_packages; showing fallback parcel package.`);
+    }
+
+    return parcels.length ? parcels : fallbackParcelPackages;
 }

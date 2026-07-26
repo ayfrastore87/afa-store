@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Download, PackageCheck, PackageSearch, Truck, Wallet, XCircle } from "lucide-react";
 import jsPDF from "jspdf";
+import { parseJsonResponse } from "@/lib/api-fetch";
 
 type User = { id: string; name: string; email: string; phone: string | null; image: string | null; role: string; createdAt?: string };
 type Address = { id: string; recipientName: string; phone: string; province: string; city: string; district: string; village: string; postalCode: string; detail: string; note?: string | null; isDefault: boolean };
@@ -13,6 +14,8 @@ type OrderItem = { id: string; name: string; quantity: number; price?: number; s
 type Order = { id: string; invoice: string; createdAt: string; updatedAt?: string; subtotal: number; shipping: number; discount?: number; total: number; voucher?: string | null; status: string; courier?: string | null; trackingNumber?: string | null; paidAt?: string | null; processedAt?: string | null; packedAt?: string | null; shippedAt?: string | null; completedAt?: string | null; cancelledAt?: string | null; items: OrderItem[] };
 type Checkout = { id: string; createdAt: string; total: number; channel: string; message: string };
 type Voucher = { id: string; code: string; title: string; description?: string | null; value: number; discountType: string; minSpend: number; endsAt?: string | null };
+type ApiListResponse = { addresses?: Address[]; wishlist?: Wishlist[]; orders?: Order[]; histories?: Checkout[]; vouchers?: Voucher[] };
+type ApiSubmitResponse = { message?: string; user?: User };
 
 const tabs = ["Ringkasan", "Profil Saya", "Alamat Saya", "Pesanan Saya", "Wishlist", "Voucher Saya", "Riwayat Checkout", "Ubah Password"];
 const orderTabs = ["Semua", "Belum Bayar", "Diproses", "Dikemas", "Dikirim", "Selesai", "Dibatalkan"];
@@ -33,11 +36,11 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
 
     const refresh = async () => {
         const [a, w, o, h, v] = await Promise.all([fetch("/api/account/addresses"), fetch("/api/account/wishlist"), fetch("/api/account/orders"), fetch("/api/account/checkout-history"), fetch("/api/account/vouchers")]);
-        if (a.ok) setAddresses((await a.json()).addresses || []);
-        if (w.ok) setWishlist((await w.json()).wishlist || []);
-        if (o.ok) setOrders((await o.json()).orders || []);
-        if (h.ok) setHistories((await h.json()).histories || []);
-        if (v.ok) setVouchers((await v.json()).vouchers || []);
+        if (a.ok) setAddresses((await parseJsonResponse<ApiListResponse>(a)).addresses || []);
+        if (w.ok) setWishlist((await parseJsonResponse<ApiListResponse>(w)).wishlist || []);
+        if (o.ok) setOrders((await parseJsonResponse<ApiListResponse>(o)).orders || []);
+        if (h.ok) setHistories((await parseJsonResponse<ApiListResponse>(h)).histories || []);
+        if (v.ok) setVouchers((await parseJsonResponse<ApiListResponse>(v)).vouchers || []);
     };
 
     useEffect(() => { refresh(); }, []);
@@ -54,7 +57,7 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
         setMsg("");
         setBusy(true);
         const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        const data = await res.json();
+        const data = await parseJsonResponse<ApiSubmitResponse>(res);
         setBusy(false);
         if (!res.ok) return setMsg(data.message || "Gagal menyimpan data.");
         if (data.user) setUser(data.user);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Banknote, CreditCard, Loader2, MapPin, PackageCheck, QrCode, Truck } from "lucide-react";
 import { CheckoutItem } from "@/lib/checkout";
+import { parseJsonResponse } from "@/lib/api-fetch";
 import { formatRupiah } from "@/lib/products";
 
 type CheckoutSession = {
@@ -42,11 +43,18 @@ export default function CheckoutPage() {
     useEffect(() => {
         const loadCheckout = async () => {
             const response = await fetch("/api/checkout/session");
-            const data = await response.json();
+            const text = await response.text();
+            let data: CheckoutSession & { redirectTo?: string; message?: string };
+            try {
+                data = JSON.parse(text);
+            } catch {
+                throw new Error("API returned HTML instead of JSON:\n" + text);
+            }
             if (response.status === 401) {
                 window.location.href = data.redirectTo || "/login";
                 return;
             }
+            if (!response.ok) throw new Error(data.message || text || "Checkout tidak dapat dimuat.");
             setSession(data);
             setLoading(false);
         };
@@ -65,19 +73,26 @@ export default function CheckoutPage() {
         setPaying(true);
         setError("");
 
-        const response = await fetch("/api/checkout/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-        const data = await response.json();
-        setPaying(false);
-
-        if (response.status === 401) {
-            window.location.href = data.redirectTo || "/login";
-            return;
+        try {
+            const response = await fetch("/api/checkout/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+            if (response.status === 401) {
+                const text = await response.text();
+                let data: { redirectTo?: string };
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    throw new Error("API returned HTML instead of JSON:\n" + text);
+                }
+                window.location.href = data.redirectTo || "/login";
+                return;
+            }
+            const data = await parseJsonResponse<{ redirectTo: string }>(response);
+            window.location.href = data.redirectTo;
+        } catch (error) {
+            setError(error instanceof Error ? error.message : "Order gagal dibuat.");
+        } finally {
+            setPaying(false);
         }
-        if (!response.ok) {
-            setError(data.message || "Order gagal dibuat.");
-            return;
-        }
-        window.location.href = data.redirectTo;
     };
 
     if (loading) return <main className="grid min-h-screen place-items-center bg-[#F8F4EC] text-[#2E2A26]"><Loader2 className="animate-spin text-[#C8A45D]" /></main>;

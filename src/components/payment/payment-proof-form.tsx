@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
+import { fetchJsonSafe } from "@/lib/api-fetch";
 
 type Props = {
     invoice: string;
@@ -46,17 +47,19 @@ export function PaymentProofForm({ invoice, total, paymentMethod, paymentStatus,
         if (!file) return setMessage("Pilih bukti pembayaran terlebih dahulu.");
         setLoading(true);
         setMessage("");
+        try {
+            const formData = new FormData();
+            formData.append("invoice", invoice);
+            formData.append("paymentMethod", paymentMethod);
+            formData.append("paymentProof", file);
 
-        const formData = new FormData();
-        formData.append("invoice", invoice);
-        formData.append("paymentMethod", paymentMethod);
-        formData.append("paymentProof", file);
-
-        const response = await fetch("/api/payment/upload", { method: "POST", body: formData });
-        const data = await response.json();
-        setLoading(false);
-        if (!response.ok) return setMessage(data.message || "Upload gagal.");
-        setMessage(data.message || "Bukti pembayaran berhasil dikirim.");
+            const data = await fetchJsonSafe<{ message?: string }>("/api/payment/upload", { method: "POST", body: formData });
+            setMessage(data.message || "Bukti pembayaran berhasil dikirim.");
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : "Upload gagal.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const expiryText = expiredAt ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(expiredAt)) : "-";

@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { Playfair_Display, Poppins } from "next/font/google";
 import { CartProvider } from "@/context/cart-context";
 import { WishlistProvider } from "@/context/wishlist-context";
+import { validateMidtransEnvOnStartup } from "@/lib/env-check";
 import "./globals.css";
+
+validateMidtransEnvOnStartup();
 
 const body = Poppins({
   variable: "--font-body",

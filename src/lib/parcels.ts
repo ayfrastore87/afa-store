@@ -70,13 +70,13 @@ export function mapParcelPackage(row: ParcelRow): ParcelPackage {
 }
 
 export async function fetchParcelPackages() {
-    const query = supabase
+    const query = () => supabase
         .from("parcel_packages")
         .select("*", { count: "exact" })
 
-    const { data, error, count } = await query.order("createdAt", { ascending: false, nullsFirst: false });
+    const { data, error, count } = await query().order("createdAt", { ascending: false, nullsFirst: false });
     const result = error?.code === "42703"
-        ? await query.order("created_at", { ascending: false, nullsFirst: false })
+        ? await query().order("created_at", { ascending: false, nullsFirst: false })
         : { data, error, count };
 
     if (result.error) throw new Error(result.error.message);

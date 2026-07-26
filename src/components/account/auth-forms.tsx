@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 
+import { parseJsonResponse } from "@/lib/api-fetch";
 import { supabase } from "@/lib/supabase";
 
 type Mode = "login" | "register" | "forgot" | "reset";
@@ -175,10 +176,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
                 console.log("Login response received", { ok: response.ok, status: response.status });
             }
 
-            data = await response.json().catch((error) => {
-                console.error("Login response JSON parse failed", error);
-                return {};
-            }) as AuthApiResponse;
+            data = await parseJsonResponse<AuthApiResponse>(response);
         } catch (error) {
             const errorMessage = getErrorMessage(error, "Server tidak merespons.");
             console.error("Login request failed", error);

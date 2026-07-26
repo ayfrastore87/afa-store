@@ -1,8 +1,5 @@
 import crypto from "crypto";
 
-const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
-const baseUrl = isProduction ? "https://api.midtrans.com" : "https://api.sandbox.midtrans.com";
-
 export type MidtransChargeItem = {
     id: string;
     price: number;
@@ -23,6 +20,8 @@ export type MidtransChargePayload = {
 };
 
 export type MidtransChargeResponse = {
+    token?: string;
+    redirect_url?: string;
     transaction_id?: string;
     order_id?: string;
     gross_amount?: string;
@@ -34,10 +33,35 @@ export type MidtransChargeResponse = {
     status_message?: string;
 };
 
-export function getMidtransConfig() {
-    const serverKey = process.env.MIDTRANS_SERVER_KEY;
-    if (!serverKey) throw new Error("MIDTRANS_SERVER_KEY belum diisi.");
-    return { serverKey, baseUrl, isProduction };
+type MidtransConfig = {
+    serverKey: string;
+    merchantId: string;
+    isProduction: boolean;
+    baseUrl: string;
+};
+
+const UNKNOWN_MERCHANT_MESSAGE = "Server Key atau Merchant ID tidak cocok dengan environment Sandbox/Production.";
+
+export function getMidtransConfig(): MidtransConfig {
+    const serverKey = process.env.MIDTRANS_SERVER_KEY?.trim();
+    const merchantId = process.env.MIDTRANS_MERCHANT_ID?.trim();
+    const productionFlag = process.env.MIDTRANS_IS_PRODUCTION?.trim();
+
+    if (!serverKey) throw new Error("MIDTRANS_SERVER_KEY missing");
+    if (!merchantId) throw new Error("MIDTRANS_MERCHANT_ID missing");
+    if (!productionFlag) throw new Error("MIDTRANS_IS_PRODUCTION missing");
+
+    const isProduction = productionFlag === "true";
+    const baseUrl = isProduction ? "https://app.midtrans.com" : "https://app.sandbox.midtrans.com";
+
+    console.log({
+        baseUrl,
+        merchantId: process.env.MIDTRANS_MERCHANT_ID,
+        isProduction,
+        serverKeyPrefix: process.env.MIDTRANS_SERVER_KEY?.substring(0, 15),
+    });
+
+    return { serverKey, merchantId, isProduction, baseUrl };
 }
 
 export function getMidtransAuthHeader() {
@@ -46,11 +70,22 @@ export function getMidtransAuthHeader() {
 }
 
 export function getQrisActionUrl(response: MidtransChargeResponse) {
-    return response.actions?.find((action) => action.name === "generate-qr-code")?.url ?? response.actions?.find((action) => action.url)?.url ?? null;
+    return response.redirect_url ?? response.actions?.find((action) => action.name === "generate-qr-code")?.url ?? response.actions?.find((action) => action.url)?.url ?? null;
 }
 
 export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
-    const response = await fetch(`${baseUrl}/v2/charge`, {
+    const { baseUrl, merchantId, isProduction } = getMidtransConfig();
+    const endpoint = `${baseUrl}/snap/v1/transactions`;
+
+    console.log({
+        orderId: payload.invoice,
+        grossAmount: payload.amount,
+        merchantId,
+        environment: isProduction ? "production" : "sandbox",
+        midtransEndpoint: endpoint,
+    });
+
+    const response = await fetch(endpoint, {
         method: "POST",
         headers: {
             Accept: "application/json",
@@ -58,7 +93,7 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            payment_type: "qris",
+            enabled_payments: ["qris"],
             transaction_details: {
                 order_id: payload.invoice,
                 gross_amount: payload.amount,
@@ -74,17 +109,34 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
                 email: payload.customer.email || undefined,
                 phone: payload.customer.phone || undefined,
             },
-            custom_expiry: {
-                expiry_duration: payload.expiryMinutes ?? 60,
+            expiry: {
+                duration: payload.expiryMinutes ?? 60,
                 unit: "minute",
             },
         }),
     });
 
-    const data = (await response.json()) as MidtransChargeResponse;
+    const text = await response.text();
+
     if (!response.ok) {
-        throw new Error(data.status_message || "Gagal membuat transaksi Midtrans.");
+        console.error({ status: response.status, body: text });
     }
+
+    let data: MidtransChargeResponse;
+    try {
+        data = JSON.parse(text) as MidtransChargeResponse;
+    } catch {
+        throw new Error(text);
+    }
+
+    const statusMessage = data.status_message || text;
+    if (!response.ok) {
+        if (statusMessage.toLowerCase().includes("unknown merchant")) {
+            throw new Error(UNKNOWN_MERCHANT_MESSAGE);
+        }
+        throw new Error(`Midtrans error ${response.status}: ${statusMessage}\n${text}`);
+    }
+
     return data;
 }
 

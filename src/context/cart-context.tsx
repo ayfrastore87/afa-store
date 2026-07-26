@@ -8,6 +8,7 @@ import {
     useMemo,
     useState,
 } from "react";
+import { parseJsonResponse } from "@/lib/api-fetch";
 import { CART_STORAGE_KEY, calculateSubtotal, calculateTotalItems, normalizeCartItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
 
 export type { CartItem } from "@/lib/cart";
@@ -73,7 +74,7 @@ async function requestCart(path = "/api/cart", init?: RequestInit) {
         throw new Error("Keranjang gagal disinkronkan.");
     }
 
-    return response.json() as Promise<CartResponse>;
+    return parseJsonResponse<CartResponse>(response);
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -87,7 +88,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
         const syncCart = async () => {
             const sessionResponse = await fetch("/api/auth/me");
-            const sessionData = await sessionResponse.json() as { user?: { id: string } | null };
+            const sessionData = await parseJsonResponse<{ user?: { id: string } | null }>(sessionResponse);
 
             if (!sessionData.user) {
                 setIsLoggedIn(false);

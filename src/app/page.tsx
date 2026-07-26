@@ -9,6 +9,7 @@ import { ArrowUp, ChevronRight, Headphones, Heart, Menu, Minus, Moon, Plus, Sear
 import AdminButton from "@/components/AdminButton";
 import { CartItem, useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
+import { parseJsonResponse } from "@/lib/api-fetch";
 import { fetchProducts, formatRupiah, productSizes, testimonials, type Product } from "@/lib/products";
 import { fetchParcelPackages, type ParcelPackage } from "@/lib/parcels";
 const waNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "6287770000883";
@@ -89,9 +90,14 @@ export default function Home() {
   const visibleParcelPackages = parcelPackages;
   const addCart = (item: { id: string; name: string; price: number; image: string }) => { addToCart(item); setCartOpen(true); };
   const buyNow = async (item: { id: string; name: string; price: number; image: string }) => {
-    const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, qty: 1 }) });
-    const data = await response.json();
-    router.push(data.redirectTo || (response.ok ? "/checkout" : "/login"));
+    try {
+      const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, qty: 1 }) });
+      const data = await parseJsonResponse<{ redirectTo?: string }>(response);
+      router.push(data.redirectTo || "/checkout");
+    } catch (error) {
+      console.error("Buy now failed", error);
+      router.push("/login");
+    }
   };
   const checkoutWhatsApp = (shipping: number, discount: number) => {
     const finalTotal = subtotal + shipping - discount;
@@ -203,6 +209,8 @@ function CartDrawer({ open, cart, subtotal, totalItems, onClose, onCheckout, inc
 
   return <AnimatePresence>{open && <motion.aside initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }} className="fixed right-0 top-0 z-90 h-full w-full max-w-md overflow-auto bg-white p-6 text-[#102116] shadow-2xl"><div className="mb-6 flex justify-between"><div><h2 className="text-2xl font-bold">Keranjang Belanja</h2><p className="text-sm text-[#8B6B3F]">{totalItems} item dalam keranjang</p></div><button onClick={onClose}><X /></button></div>{cart.length > 0 ? <><button onClick={clearCart} className="mb-4 w-full rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50">Kosongkan Keranjang</button>{cart.map((i) => <div key={i.id} className="mb-4 flex items-center gap-3 border-b pb-4"><div className="relative h-16 w-16 overflow-hidden rounded-xl bg-[#fff7df]"><Image src={i.image} alt={i.name} fill sizes="64px" className="object-cover" /></div><div className="flex-1"><b>{i.name}</b><p>{formatRupiah(i.price)}</p><div className="mt-2 inline-flex items-center overflow-hidden rounded-full border border-[#14532d]/25 bg-[#fff7df]"><button onClick={() => decreaseQty(i.id)} aria-label={`Kurangi ${i.name}`} className="grid h-9 w-9 place-items-center text-[#14532d] hover:bg-[#14532d] hover:text-white"><Minus size={14} /></button><span className="min-w-10 text-center text-sm font-bold">{i.qty}</span><button onClick={() => increaseQty(i.id)} aria-label={`Tambah ${i.name}`} className="grid h-9 w-9 place-items-center bg-[#14532d] text-white hover:bg-[#184C3A]"><Plus size={14} /></button></div><p className="mt-1 text-sm font-bold">Subtotal {formatRupiah(i.price * i.qty)}</p></div><button onClick={() => removeFromCart(i.id)} aria-label={`Hapus ${i.name}`}><Trash2 size={18} /></button></div>)}</> : <p className="py-8 text-center opacity-70">Keranjang masih kosong</p>}<select value={area} onChange={(e) => setArea(e.target.value)} className="mb-3 w-full rounded-xl border px-4 py-3">{Object.entries(shippingOptions).map(([name, price]) => <option key={name} value={name}>{name} - {formatRupiah(price)}</option>)}</select><input value={voucher} onChange={(e) => { setVoucher(e.target.value); setVoucherError(""); }} className="mb-2 w-full rounded-xl border px-4 py-3" placeholder="Voucher" />{voucherError && <p className="mb-3 text-sm font-bold text-red-600">{voucherError}</p>}<p>Total Item: {totalItems}</p><p>Subtotal: {formatRupiah(subtotal)}</p><p>Ongkir: {formatRupiah(shipping)}</p><p>Diskon: {formatRupiah(discount)}</p><h3 className="mt-4 text-2xl font-bold">Grand Total {formatRupiah(total)}</h3><button onClick={handleCheckout} disabled={!cart.length} className="mt-5 w-full rounded-2xl bg-[#14532d] px-6 py-4 font-bold text-white disabled:opacity-40">Checkout via WhatsApp</button></motion.aside>}</AnimatePresence>;
 }
+
+
 
 
 

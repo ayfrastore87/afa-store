@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ in
             orderId: order.id,
             method: body.method || order.paymentMethod,
             amount: order.total,
-            status: body.status || "Pending",
+            status: body.status || "PENDING",
             paidAt: body.paidAt ? new Date(body.paidAt) : null,
             expiredAt: body.expiredAt ? new Date(body.expiredAt) : null,
         },
@@ -35,14 +35,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ in
         },
     });
 
-    const shouldMarkPaid = payment.status === "Paid";
+    const shouldMarkPaid = payment.status === "PAID";
     if (shouldMarkPaid) {
         await prisma.order.update({
             where: { id: order.id },
             data: {
                 paymentStatus: "PAID",
                 paidAt: payment.paidAt ?? new Date(),
-                status: order.status === "PENDING" ? "PROCESSING" : order.status,
+                status: "PAID",
             },
         });
     }

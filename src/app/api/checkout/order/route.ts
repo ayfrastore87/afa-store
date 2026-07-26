@@ -1,8 +1,10 @@
 ﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
+import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
 import { isPaymentMethod } from "@/lib/payments";
 import { getCurrentUser } from "@/lib/server-auth";
 
@@ -77,11 +79,35 @@ export async function POST(request: Request) {
                 })),
             },
         },
-        select: { id: true, invoice: true },
+        include: { items: true, user: true },
     });
 
     const normalizedMethod = isPaymentMethod(paymentMethod) ? paymentMethod : "QRIS";
-    const paymentStatus = paymentMethod === "COD" ? "Pending" : "Pending";
+    const paymentStatus = paymentMethod === "COD" ? "PENDING" : "PENDING";
+    const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    let qrisUrl: string | null = null;
+    let expiredAt = defaultExpiredAt;
+    let transactionId: string | null = null;
+    let transactionRef: string | null = null;
+    let paymentType: string | null = null;
+    let rawResponse: Prisma.InputJsonValue | null = null;
+
+    if (normalizedMethod === "QRIS") {
+        const midtrans = await createMidtransQrisCharge({
+            invoice: order.invoice,
+            amount: total,
+            customer: { name: order.customer, email: order.user?.email, phone: order.phone },
+            items: order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
+            expiryMinutes: 60,
+        });
+        qrisUrl = getQrisActionUrl(midtrans);
+        expiredAt = midtrans.expiry_time ? new Date(midtrans.expiry_time.replace(" ", "T")) : defaultExpiredAt;
+        transactionId = midtrans.transaction_id ?? null;
+        transactionRef = midtrans.order_id ?? order.invoice;
+        paymentType = midtrans.payment_type ?? "qris";
+        rawResponse = midtrans as Prisma.InputJsonValue;
+    }
 
     await prisma.payment.upsert({
         where: { orderId: order.id },
@@ -90,14 +116,24 @@ export async function POST(request: Request) {
             method: normalizedMethod,
             amount: total,
             status: paymentStatus,
-            expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            transactionId,
+            transactionRef,
+            paymentType,
+            qrisUrl,
+            rawResponse: rawResponse ?? Prisma.JsonNull,
+            expiredAt,
             paidAt: null,
         },
         update: {
             method: normalizedMethod,
             amount: total,
             status: paymentStatus,
-            expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            transactionId,
+            transactionRef,
+            paymentType,
+            qrisUrl,
+            rawResponse: rawResponse ?? Prisma.JsonNull,
+            expiredAt,
         },
     });
 
@@ -116,7 +152,7 @@ export async function POST(request: Request) {
         },
     });
 
-    const response = NextResponse.json({ redirectTo: `/order/${order.invoice}` }, { status: 201 });
+    const response = NextResponse.json({ redirectTo: normalizedMethod === "QRIS" ? `/payment/${order.invoice}` : `/order/${order.invoice}` }, { status: 201 });
     response.cookies.set(CHECKOUT_COOKIE, "", { path: "/", maxAge: 0 });
     return response;
 }

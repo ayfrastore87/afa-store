@@ -164,16 +164,21 @@ model Order {
 }
 
 model Payment {
-  id        String    @id @default(cuid())
-  orderId   String    @unique
-  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  method    String
-  amount    Int
-  status    String    @default("Pending")
-  expiredAt DateTime?
-  paidAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  orderId        String    @unique
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method         String
+  amount         Int
+  status         String    @default("PENDING")
+  transactionId  String?
+  transactionRef String?   @unique
+  paymentType    String?
+  qrisUrl        String?
+  rawResponse    Json?
+  expiredAt      DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@map("payments")
 }

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export const PAYMENT_STATUSES = ["Pending", "Paid", "Expired", "Cancelled"] as const;
+export const PAYMENT_STATUSES = ["PENDING", "PAID", "EXPIRED", "CANCELLED"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const PAYMENT_METHODS = ["QRIS", "TRANSFER_BANK", "COD", "MIDTRANS", "TRIPAY", "XENDIT"] as const;
@@ -21,14 +21,14 @@ export async function syncOrderPaymentByInvoice(invoice: string) {
     const payment = await prisma.payment.findUnique({ where: { orderId: order.id } });
     if (!payment) return { order, payment: null };
 
-    const shouldMarkPaid = payment.status === "Paid";
+    const shouldMarkPaid = payment.status === "PAID";
 
     const updatedOrder = shouldMarkPaid
         ? await prisma.order.update({
             where: { id: order.id },
             data: {
                 paymentStatus: "PAID",
-                status: order.status === "PENDING" ? "PROCESSING" : order.status,
+                status: "PAID",
                 paidAt: payment.paidAt ?? order.paidAt ?? new Date(),
             },
         })

@@ -28,13 +28,28 @@ export async function POST(request: Request) {
     await writeFile(path.join(uploadDir, safeName), buffer);
 
     const paymentProof = `/uploads/payment-proofs/${safeName}`;
+    await prisma.payment.upsert({
+        where: { orderId: order.id },
+        create: {
+            orderId: order.id,
+            method: paymentMethod || order.paymentMethod,
+            amount: order.total,
+            status: "Pending",
+            expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            paidAt: null,
+        },
+        update: {
+            method: paymentMethod || order.paymentMethod,
+            amount: order.total,
+        },
+    });
+
     await prisma.order.update({
         where: { id: order.id },
         data: {
             paymentMethod: paymentMethod || order.paymentMethod,
-            paymentStatus: "WAITING_CONFIRMATION",
             paymentProof,
-            paidAt: new Date(),
+            paymentStatus: "WAITING_CONFIRMATION",
         },
     });
 

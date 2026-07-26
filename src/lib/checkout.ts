@@ -1,4 +1,4 @@
-export const CHECKOUT_COOKIE = "afa_checkout";
+﻿export const CHECKOUT_COOKIE = "afa_checkout";
 export const SHIPPING_COST = 15000;
 
 export type CheckoutItem = {

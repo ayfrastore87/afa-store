@@ -8,17 +8,20 @@ import {
     useMemo,
     useState,
 } from "react";
-import { CART_STORAGE_KEY, calculateSubtotal, normalizeCartItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
+import { CART_STORAGE_KEY, calculateSubtotal, calculateTotalItems, normalizeCartItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
 
 export type { CartItem } from "@/lib/cart";
 
 type CartContextValue = {
     cart: CartItem[];
     subtotal: number;
+    totalItems: number;
+    grandTotal: number;
     addToCart: (item: ProductInput) => void;
     increaseQty: (id: string) => void;
     decreaseQty: (id: string) => void;
     removeFromCart: (id: string) => void;
+    clearCart: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -152,6 +155,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             .catch((error) => console.error("Cart remove failed", error));
     }, [applyServerCart, isLoggedIn]);
 
+    const persistClear = useCallback(() => {
+        if (!isLoggedIn) return;
+
+        requestCart("/api/cart", { method: "DELETE" })
+            .then(applyServerCart)
+            .catch((error) => console.error("Cart clear failed", error));
+    }, [applyServerCart, isLoggedIn]);
+
     const addToCart = useCallback((item: ProductInput) => {
         persistAdd({ ...item, qty: 1 });
         setCart((items) => {
@@ -193,21 +204,33 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setCart((items) => items.filter((item) => item.id !== id));
     }, [persistRemove]);
 
+    const clearCart = useCallback(() => {
+        persistClear();
+        setCart([]);
+        if (!isLoggedIn) window.localStorage.removeItem(CART_STORAGE_KEY);
+    }, [isLoggedIn, persistClear]);
+
     const subtotal = useMemo(
         () => calculateSubtotal(cart),
         [cart]
     );
 
+    const totalItems = useMemo(() => calculateTotalItems(cart), [cart]);
+    const grandTotal = subtotal;
+
     const value = useMemo(
         () => ({
             cart,
             subtotal,
+            totalItems,
+            grandTotal,
             addToCart,
             increaseQty,
             decreaseQty,
             removeFromCart,
+            clearCart,
         }),
-        [cart, subtotal, addToCart, increaseQty, decreaseQty, removeFromCart]
+        [cart, subtotal, totalItems, grandTotal, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart]
     );
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

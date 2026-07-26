@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Banknote, CreditCard, Loader2, MapPin, PackageCheck, QrCode, Truck } from "lucide-react";
 import { CheckoutItem } from "@/lib/checkout";
-import { formatRupiah } from "@/lib/data";
+import { formatRupiah } from "@/lib/products";
 
 type CheckoutSession = {
     items: CheckoutItem[];

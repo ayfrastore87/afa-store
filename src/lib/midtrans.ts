@@ -76,14 +76,32 @@ export function getQrisActionUrl(response: MidtransChargeResponse) {
 export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
     const { baseUrl, merchantId, isProduction } = getMidtransConfig();
     const endpoint = `${baseUrl}/snap/v1/transactions`;
+    const grossAmount = payload.amount;
+    const itemDetails = payload.items.map((item) => ({
+        id: item.id.slice(0, 50),
+        price: item.price,
+        quantity: item.quantity,
+        name: item.name.slice(0, 50),
+    }));
+    const totalItemDetails = itemDetails.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     console.log({
         orderId: payload.invoice,
-        grossAmount: payload.amount,
+        grossAmount,
         merchantId,
         environment: isProduction ? "production" : "sandbox",
         midtransEndpoint: endpoint,
     });
+    console.log("Gross:", grossAmount);
+    console.log("Items:", itemDetails);
+    console.log({
+        grossAmount,
+        totalItemDetails,
+    });
+
+    if (grossAmount !== totalItemDetails) {
+        throw new Error(`Midtrans payload invalid: gross_amount ${grossAmount} tidak sama dengan total item_details ${totalItemDetails}.`);
+    }
 
     const response = await fetch(endpoint, {
         method: "POST",
@@ -96,14 +114,9 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
             enabled_payments: ["qris"],
             transaction_details: {
                 order_id: payload.invoice,
-                gross_amount: payload.amount,
+                gross_amount: grossAmount,
             },
-            item_details: payload.items.map((item) => ({
-                id: item.id.slice(0, 50),
-                price: item.price,
-                quantity: item.quantity,
-                name: item.name.slice(0, 50),
-            })),
+            item_details: itemDetails,
             customer_details: {
                 first_name: payload.customer.name,
                 email: payload.customer.email || undefined,

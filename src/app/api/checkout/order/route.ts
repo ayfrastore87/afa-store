@@ -112,7 +112,10 @@ export async function POST(request: Request) {
                 invoice: order.invoice,
                 amount: total,
                 customer: { name: order.customer, email: order.user?.email, phone: order.phone },
-                items: order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
+                items: [
+                    ...order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
+                    { id: "shipping", name: "Ongkir", price: shipping, quantity: 1 },
+                ],
                 expiryMinutes: 60,
             });
             qrisUrl = getQrisActionUrl(midtrans);

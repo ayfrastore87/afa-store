@@ -29,6 +29,8 @@ export type MidtransChargeResponse = {
     transaction_status?: string;
     expiry_time?: string;
     actions?: { name?: string; method?: string; url?: string }[];
+    qr_string?: string;
+    qrString?: string;
     status_code?: string;
     status_message?: string;
 };
@@ -70,7 +72,11 @@ export function getMidtransAuthHeader() {
 }
 
 export function getQrisActionUrl(response: MidtransChargeResponse) {
-    return response.redirect_url ?? response.actions?.find((action) => action.name === "generate-qr-code")?.url ?? response.actions?.find((action) => action.url)?.url ?? null;
+    return response.actions?.find((action) => action.name === "generate-qr-code")?.url ?? response.redirect_url ?? response.actions?.find((action) => action.url)?.url ?? null;
+}
+
+export function getQrisString(response: MidtransChargeResponse) {
+    return response.qr_string ?? response.qrString ?? null;
 }
 
 export async function createMidtransQrisCharge(payload: MidtransChargePayload) {

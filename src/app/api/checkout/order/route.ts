@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
-import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
+import { createMidtransQrisCharge, getQrisActionUrl, getQrisString } from "@/lib/midtrans";
 import { isPaymentMethod } from "@/lib/payments";
 import { getCurrentUser } from "@/lib/server-auth";
 
@@ -119,6 +119,7 @@ export async function POST(request: Request) {
                 expiryMinutes: 60,
             });
             qrisUrl = getQrisActionUrl(midtrans);
+            console.log({ qrUrl: qrisUrl, qrString: getQrisString(midtrans), actions: midtrans.actions });
             expiredAt = midtrans.expiry_time ? new Date(midtrans.expiry_time.replace(" ", "T")) : defaultExpiredAt;
             transactionId = midtrans.transaction_id ?? null;
             transactionRef = midtrans.order_id ?? order.invoice;

@@ -8,7 +8,7 @@ export type Product = {
     stock: number;
     image: string;
     rating: number;
-    reviews: number;
+    reviews: number | null;
     badge: string | null;
     flavor?: string | null;
     size?: string | null;
@@ -20,6 +20,8 @@ export type Product = {
 
 type ProductRow = Record<string, unknown>;
 
+type CategoryRelation = { name?: unknown; slug?: unknown } | { name?: unknown; slug?: unknown }[];
+
 const numberValue = (value: unknown, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -27,18 +29,33 @@ const numberValue = (value: unknown, fallback = 0) => {
 
 const stringValue = (value: unknown, fallback = "") => typeof value === "string" && value.trim() ? value : fallback;
 
+const relationStringValue = (value: unknown, key: "name" | "slug") => {
+    const relation = Array.isArray(value) ? value[0] : value;
+    return relation && typeof relation === "object" ? stringValue((relation as Record<string, unknown>)[key]) : "";
+};
+
+const categoryValue = (row: ProductRow) => {
+    return stringValue(
+        row.category,
+        stringValue(
+            row.category_name,
+            stringValue(relationStringValue(row.category, "name"), stringValue(relationStringValue(row.categories, "name"), stringValue(row.flavor, "Bawang Goreng")))
+        )
+    );
+};
+
 export const formatRupiah = (price: number) => `Rp ${price.toLocaleString("id-ID")}`;
 
 export function mapProduct(row: ProductRow): Product {
     return {
         id: String(row.id),
         name: stringValue(row.name, "Produk"),
-        category: stringValue(row.category, stringValue(row.category_name, "Tanpa Kategori")),
+        category: categoryValue(row),
         price: numberValue(row.price),
         stock: numberValue(row.stock),
         image: stringValue(row.image, "/window.svg"),
         rating: numberValue(row.rating, 0),
-        reviews: numberValue(row.reviews, 0),
+        reviews: row.reviews === null || row.reviews === undefined ? null : numberValue(row.reviews, 0),
         badge: typeof row.badge === "string" && row.badge.trim() ? row.badge : null,
         flavor: typeof row.flavor === "string" ? row.flavor : null,
         size: typeof row.size === "string" ? row.size : null,
@@ -50,9 +67,12 @@ export function mapProduct(row: ProductRow): Product {
 }
 
 export async function fetchProducts() {
-    const { data, error } = await supabase.from("products").select("*").order("createdAt", { ascending: false });
+    const { data, error } = await supabase
+        .from("products")
+        .select("*, categories(name, slug)")
+        .order("createdAt", { ascending: false });
     if (error) throw new Error(error.message);
-    return (data ?? []).map((row) => mapProduct(row as ProductRow));
+    return (data ?? []).map((row) => mapProduct(row as ProductRow & { categories?: CategoryRelation }));
 }
 
 export const productSizes = ["35g", "100g", "250g", "500g", "1 Kg"];

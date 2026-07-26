@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-type ProductRow = { id: string; name?: string; price?: number; image?: string };
+type ProductRow = { id: string; name?: string; slug?: string | null; price?: number; image?: string };
 type CartItemRow = { id: string; userId: string; productId: string | null; productRef: string; name: string; price: number; image: string | null; quantity: number; createdAt?: string; updatedAt?: string };
 const GUEST_CART_COOKIE = "afa-guest-cart";
 
@@ -78,7 +78,7 @@ async function getCart(userId: string, payloadItems: CartItem[] = []) {
     let productMap = new Map<string, ProductRow>();
 
     if (ids.length) {
-        const products = await supabase.from("products").select("id,name,price,image").in("id", ids);
+        const products = await supabase.from("products").select("id,name,slug,price,image").in("id", ids);
         if (!products.error) productMap = new Map(((products.data ?? []) as ProductRow[]).map((product) => [product.id, product]));
     }
 
@@ -89,6 +89,7 @@ async function getCart(userId: string, payloadItems: CartItem[] = []) {
         return {
             id: itemId,
             name: row.name ?? product?.name ?? payload?.name ?? fallbackItem(itemId, row.quantity).name,
+            slug: product?.slug ?? payload?.slug ?? null,
             price: Number(row.price ?? product?.price ?? payload?.price ?? 0),
             image: row.image ?? product?.image ?? payload?.image ?? fallbackItem(itemId, row.quantity).image,
             qty: row.quantity,
@@ -126,12 +127,16 @@ export async function POST(request: Request) {
         const existingMap = new Map(((existingData ?? []) as CartItemRow[]).map((row) => [row.productRef, row]));
         const now = new Date().toISOString();
 
+        const productIds = incomingItems.map((item) => item.id);
+        const products = await supabase.from("products").select("id").in("id", productIds);
+        const validProductIds = new Set(((products.data ?? []) as ProductRow[]).map((product) => product.id));
+
         await Promise.all(incomingItems.map((item) => {
             const existing = existingMap.get(item.id);
             if (existing) {
                 return supabase.from("cart_items").update({ quantity: existing.quantity + item.qty, updatedAt: now }).eq("id", existing.id);
             }
-            return supabase.from("cart_items").insert({ userId: user.id, productId: item.id, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
+            return supabase.from("cart_items").insert({ userId: user.id, productId: validProductIds.has(item.id) ? item.id : null, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
         }));
 
         return NextResponse.json(await getCart(user.id, incomingItems));

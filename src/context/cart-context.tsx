@@ -63,6 +63,11 @@ function readCartFromStorage(): CartItem[] {
     }
 }
 
+function writeCartToStorage(items: CartItem[]) {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(normalizeCartItems(items)));
+}
+
 async function requestCart(path = "/api/cart", init?: RequestInit) {
     const response = await fetch(path, init);
 
@@ -134,7 +139,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, [cart, isLoggedIn, serverReady]);
 
     const applyServerCart = useCallback((data: CartResponse | null) => {
-        if (data) setCart(data.items);
+        if (!data) return;
+
+        setCart((current) => {
+            const next = data.items.length ? data.items : current;
+            writeCartToStorage(next);
+            return next;
+        });
     }, []);
 
     const persistAdd = useCallback((item: CartItem) => {
@@ -174,19 +185,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, [applyServerCart, serverReady]);
 
     const addToCart = useCallback((item: ProductInput) => {
+        console.log("ADD CART", item);
         persistAdd({ ...item, qty: 1 });
         setCart((items) => {
             const existing = items.find((cartItem) => cartItem.id === item.id);
 
             if (existing) {
-                return items.map((cartItem) =>
+                const next = items.map((cartItem) =>
                     cartItem.id === item.id
                         ? { ...cartItem, qty: cartItem.qty + 1 }
                         : cartItem
                 );
+                writeCartToStorage(next);
+                return next;
             }
 
-            return [...items, { ...item, qty: 1 }];
+            const next = [...items, { ...item, qty: 1 }];
+            writeCartToStorage(next);
+            return next;
         });
     }, [persistAdd]);
 
@@ -195,6 +211,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             const next = items.map((item) => item.id === id ? { ...item, qty: item.qty + 1 } : item);
             const updated = next.find((item) => item.id === id);
             if (updated) persistQty(id, updated.qty);
+            writeCartToStorage(next);
             return next;
         });
     }, [persistQty]);
@@ -205,19 +222,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 .map((item) => item.id === id ? { ...item, qty: Math.max(0, item.qty - 1) } : item)
                 .filter((item) => item.qty > 0);
             persistQty(id, next.find((item) => item.id === id)?.qty ?? 0);
+            writeCartToStorage(next);
             return next;
         });
     }, [persistQty]);
 
     const removeFromCart = useCallback((id: string) => {
         persistRemove(id);
-        setCart((items) => items.filter((item) => item.id !== id));
+        setCart((items) => {
+            const next = items.filter((item) => item.id !== id);
+            writeCartToStorage(next);
+            return next;
+        });
     }, [persistRemove]);
 
     const clearCart = useCallback(() => {
         persistClear();
         setCart([]);
-        if (!isLoggedIn) window.localStorage.removeItem(CART_STORAGE_KEY);
+        window.localStorage.removeItem(CART_STORAGE_KEY);
     }, [isLoggedIn, persistClear]);
 
     const subtotal = useMemo(

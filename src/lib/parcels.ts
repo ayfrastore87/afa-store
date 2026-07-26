@@ -23,10 +23,20 @@ const numberValue = (value: unknown, fallback = 0) => {
 
 const stringValue = (value: unknown, fallback = "") => typeof value === "string" && value.trim() ? value : fallback;
 
+const contentItemValue = (item: unknown): string => {
+    if (typeof item === "string") return item.trim();
+    if (typeof item === "number") return String(item);
+    if (item && typeof item === "object") {
+        const row = item as ParcelRow;
+        return stringValue(row.name, stringValue(row.slug, stringValue(row.sku, stringValue(row.id))));
+    }
+    return "";
+};
+
 const contentsValue = (value: unknown): string[] => {
-    if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+    if (Array.isArray(value)) return value.map(contentItemValue).filter(Boolean);
     if (typeof value === "string" && value.trim()) return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
-    if (value && typeof value === "object") return Object.values(value).map((item) => String(item)).filter(Boolean);
+    if (value && typeof value === "object") return Object.values(value).map(contentItemValue).filter(Boolean);
     return [];
 };
 
@@ -56,8 +66,8 @@ export function mapParcelPackage(row: ParcelRow): ParcelPackage {
 
 export async function fetchParcelPackages() {
     const { data, error } = await supabase
-        .from("parcels")
-        .select("*, parcel_categories(name, slug), parcel_images(url, alt, sortOrder)")
+        .from("parcel_packages")
+        .select("*")
         .eq("isActive", true)
         .order("createdAt", { ascending: false, nullsFirst: false });
 

@@ -6,7 +6,7 @@ create table if not exists public.parcel_categories (
   "updatedAt" timestamp(3) not null default current_timestamp
 );
 
-create table if not exists public.parcels (
+create table if not exists public.parcel_packages (
   id text primary key,
   "categoryId" text null references public.parcel_categories(id) on delete set null,
   name text not null,
@@ -23,14 +23,14 @@ create table if not exists public.parcels (
 
 create table if not exists public.parcel_images (
   id text primary key,
-  "parcelId" text not null references public.parcels(id) on delete cascade,
+  "parcelId" text not null references public.parcel_packages(id) on delete cascade,
   url text not null,
   alt text,
   "sortOrder" integer not null default 0,
   "createdAt" timestamp(3) not null default current_timestamp
 );
 
-create index if not exists parcels_category_id_idx on public.parcels("categoryId");
+create index if not exists parcel_packages_category_id_idx on public.parcel_packages("categoryId");
 create index if not exists parcel_images_parcel_id_idx on public.parcel_images("parcelId");
 
 insert into public.parcel_categories (id, name, slug)
@@ -40,7 +40,7 @@ where not exists (select 1 from public.parcel_categories where slug = 'parcel');
 do $$
 begin
   if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'parcel_packages') then
-    insert into public.parcels (id, "categoryId", name, slug, description, price, contents, badge, image, "isActive")
+    insert into public.parcel_packages (id, "categoryId", name, slug, description, price, contents, badge, image, "isActive")
     select
       id,
       'parcel-category-default',
@@ -58,14 +58,14 @@ begin
 end $$;
 
 alter table public.parcel_categories enable row level security;
-alter table public.parcels enable row level security;
+alter table public.parcel_packages enable row level security;
 alter table public.parcel_images enable row level security;
 
 drop policy if exists "Parcel categories are public readable" on public.parcel_categories;
 create policy "Parcel categories are public readable" on public.parcel_categories for select using (true);
 
-drop policy if exists "Parcels are public readable" on public.parcels;
-create policy "Parcels are public readable" on public.parcels for select using (true);
+drop policy if exists "Parcel packages are public readable" on public.parcel_packages;
+create policy "Parcel packages are public readable" on public.parcel_packages for select using (true);
 
 drop policy if exists "Parcel images are public readable" on public.parcel_images;
 create policy "Parcel images are public readable" on public.parcel_images for select using (true);

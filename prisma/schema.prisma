@@ -58,17 +58,17 @@ model Category {
 }
 
 model ParcelCategory {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  parcels   Parcel[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String          @id @default(cuid())
+  name           String
+  slug           String          @unique
+  parcelPackages ParcelPackage[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@map("parcel_categories")
 }
 
-model Parcel {
+model ParcelPackage {
   id          String          @id @default(cuid())
   categoryId  String?
   category    ParcelCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -80,23 +80,10 @@ model Parcel {
   badge       String?
   image       String?
   isActive    Boolean         @default(true)
-  images      ParcelImage[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  @@map("parcels")
-}
-
-model ParcelImage {
-  id        String   @id @default(cuid())
-  parcelId  String
-  parcel    Parcel   @relation(fields: [parcelId], references: [id], onDelete: Cascade)
-  url       String
-  alt       String?
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-
-  @@map("parcel_images")
+  @@map("parcel_packages")
 }
 
 model Product {
@@ -151,23 +138,7 @@ model CartItem {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([userId, productRef])
   @@map("cart_items")
-}
-
-model ParcelPackage {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  category  String
-  price     Int
-  contents  Json
-  badge     String?
-  image     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  @@map("parcel_packages")
 }
 
 model Order {

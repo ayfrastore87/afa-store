@@ -46,7 +46,7 @@ export async function GET() {
     if (!await requireAdmin()) return json("Akses admin diperlukan.", 403);
 
     const { data, error } = await supabaseAdmin
-        .from("parcels")
+        .from("parcel_packages")
         .select("*, parcel_categories(*), parcel_images(*)")
         .order("createdAt", { ascending: false });
 
@@ -71,8 +71,8 @@ export async function POST(request: Request) {
     };
 
     const { data, error } = body.id
-        ? await supabaseAdmin.from("parcels").update(parcel).eq("id", body.id).select("id").single()
-        : await supabaseAdmin.from("parcels").insert(parcel).select("id").single();
+        ? await supabaseAdmin.from("parcel_packages").update(parcel).eq("id", body.id).select("id").single()
+        : await supabaseAdmin.from("parcel_packages").insert(parcel).select("id").single();
 
     if (error) return json(error.message, 500);
 
@@ -98,11 +98,11 @@ export async function DELETE(request: Request) {
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return json("ID parcel wajib diisi.", 400);
 
-    const { data: existing } = await supabaseAdmin.from("parcels").select("image, parcel_images(url)").eq("id", id).single();
+    const { data: existing } = await supabaseAdmin.from("parcel_packages").select("image, parcel_images(url)").eq("id", id).single();
     const urls = [existing?.image, ...((existing?.parcel_images as { url?: string }[] | null) ?? []).map((image) => image.url)];
     const paths = urls.map((url) => storagePathFromPublicUrl(url, "parcel")).filter((path): path is string => Boolean(path));
 
-    const { error } = await supabaseAdmin.from("parcels").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("parcel_packages").delete().eq("id", id);
     if (error) return json(error.message, 500);
     if (paths.length) await supabaseAdmin.storage.from("parcel").remove(paths);
 

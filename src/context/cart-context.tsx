@@ -92,6 +92,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
             if (!sessionData.user) {
                 setIsLoggedIn(false);
+                const synced = localCart.length
+                    ? await requestCart("/api/cart", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ items: localCart }),
+                    })
+                    : await requestCart();
+
+                if (synced) setCart(synced.items);
                 setServerReady(true);
                 return;
             }
@@ -129,40 +138,40 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const persistAdd = useCallback((item: CartItem) => {
-        if (!isLoggedIn) return;
+        if (!serverReady) return;
 
         requestCart("/api/cart", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ item }),
         }).then(applyServerCart).catch((error) => console.error("Cart add failed", error));
-    }, [applyServerCart, isLoggedIn]);
+    }, [applyServerCart, serverReady]);
 
     const persistQty = useCallback((id: string, qty: number) => {
-        if (!isLoggedIn) return;
+        if (!serverReady) return;
 
         requestCart("/api/cart", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, qty }),
         }).then(applyServerCart).catch((error) => console.error("Cart update failed", error));
-    }, [applyServerCart, isLoggedIn]);
+    }, [applyServerCart, serverReady]);
 
     const persistRemove = useCallback((id: string) => {
-        if (!isLoggedIn) return;
+        if (!serverReady) return;
 
         requestCart(`/api/cart?id=${encodeURIComponent(id)}`, { method: "DELETE" })
             .then(applyServerCart)
             .catch((error) => console.error("Cart remove failed", error));
-    }, [applyServerCart, isLoggedIn]);
+    }, [applyServerCart, serverReady]);
 
     const persistClear = useCallback(() => {
-        if (!isLoggedIn) return;
+        if (!serverReady) return;
 
         requestCart("/api/cart", { method: "DELETE" })
             .then(applyServerCart)
             .catch((error) => console.error("Cart clear failed", error));
-    }, [applyServerCart, isLoggedIn]);
+    }, [applyServerCart, serverReady]);
 
     const addToCart = useCallback((item: ProductInput) => {
         persistAdd({ ...item, qty: 1 });

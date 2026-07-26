@@ -16,22 +16,6 @@ export type ParcelPackage = {
 
 type ParcelRow = Record<string, unknown>;
 
-export const fallbackParcelPackages: ParcelPackage[] = [
-    {
-        id: "parcel-fallback-paket-parcel",
-        name: "Paket Parcel AFA",
-        slug: "paket-parcel-afa",
-        category: "Parcel",
-        price: 150000,
-        description: "Paket parcel pilihan AFA STORE untuk hadiah keluarga, relasi, dan momen istimewa.",
-        image: "/products/paket parcel.png",
-        contents: ["Bawang goreng premium", "Kemasan hadiah", "Kartu ucapan"],
-        badge: "Ready",
-        isActive: true,
-        createdAt: null,
-    },
-];
-
 const numberValue = (value: unknown, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -47,7 +31,8 @@ const contentsValue = (value: unknown): string[] => {
 };
 
 export function mapParcelPackage(row: ParcelRow): ParcelPackage {
-    const category = stringValue(row.category, "Parcel");
+    const categoryRow = row.parcel_categories && typeof row.parcel_categories === "object" ? row.parcel_categories as ParcelRow : null;
+    const category = stringValue(row.category, stringValue(categoryRow?.name, "Parcel"));
     const isActive = typeof row.isActive === "boolean"
         ? row.isActive
         : typeof row.is_active === "boolean"
@@ -70,21 +55,13 @@ export function mapParcelPackage(row: ParcelRow): ParcelPackage {
 }
 
 export async function fetchParcelPackages() {
-    const query = () => supabase
-        .from("parcel_packages")
-        .select("*", { count: "exact" })
+    const { data, error } = await supabase
+        .from("parcels")
+        .select("*, parcel_categories(name, slug), parcel_images(url, alt, sortOrder)")
+        .eq("isActive", true)
+        .order("createdAt", { ascending: false, nullsFirst: false });
 
-    const { data, error, count } = await query().order("createdAt", { ascending: false, nullsFirst: false });
-    const result = error?.code === "42703"
-        ? await query().order("created_at", { ascending: false, nullsFirst: false })
-        : { data, error, count };
+    if (error) throw new Error(error.message);
 
-    if (result.error) throw new Error(result.error.message);
-
-    const parcels = (result.data ?? []).map((row) => mapParcelPackage(row as ParcelRow));
-    if (!parcels.length) {
-        console.info(`Parcel packages query returned ${result.count ?? 0} rows from parcel_packages; showing fallback parcel package.`);
-    }
-
-    return parcels.length ? parcels : fallbackParcelPackages;
+    return (data ?? []).map((row) => mapParcelPackage(row as ParcelRow));
 }

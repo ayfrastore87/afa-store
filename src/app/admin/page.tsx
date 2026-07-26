@@ -170,6 +170,13 @@ function toast(title: string, icon: "success" | "error" | "info" = "success") {
     void Swal.fire({ toast: true, position: "top-end", timer: 2200, showConfirmButton: false, icon, title });
 }
 
+function storagePathFromPublicUrl(url: string | null | undefined, bucket: string) {
+    if (!url) return null;
+    const marker = `/storage/v1/object/public/${bucket}/`;
+    const index = url.indexOf(marker);
+    return index >= 0 ? decodeURIComponent(url.slice(index + marker.length)) : null;
+}
+
 async function saveStockHistory(payload: StockHistoryPayload) {
     const { error } = await supabase.from("stock_history").insert(payload);
     if (error) toast(`Riwayat stok gagal disimpan: ${error.message}`, "info");
@@ -319,6 +326,8 @@ export default function AdminPage() {
         if (!confirm.isConfirmed) return;
         const { error } = await supabase.from("products").delete().eq("id", product.id);
         if (error) return toast(error.message, "error");
+        const path = storagePathFromPublicUrl(product.image, "products");
+        if (path) await supabase.storage.from("products").remove([path]);
         toast("Produk dihapus");
         void loadData();
     }
@@ -490,6 +499,7 @@ function AccountPanel({ adminEmail, onLogout }: { adminEmail: string; onLogout: 
     const actions = [{ label: "Edit Profil", icon: Edit3 }, { label: "Ganti Password", icon: KeyRound }, { label: "Role Admin", icon: ShieldCheck }];
     return <div className="space-y-5"><Card className="overflow-hidden bg-[#0F4C45] text-white"><div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-[2rem] bg-gradient-to-br from-[#D4AF37] to-white text-4xl font-black text-[#0F4C45]">{(adminEmail || "A").slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="text-sm font-black uppercase tracking-[0.25em] text-[#D4AF37]">Akun Admin</p><h3 className="mt-2 text-3xl font-black">Admin AFA STORE</h3><p className="mt-1 break-all text-white/75">{adminEmail}</p><span className="mt-3 inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-black">Role: admin</span></div></div></Card><div className="grid gap-3 sm:grid-cols-3">{actions.map((action) => <button key={action.label} onClick={() => toast(`${action.label} siap digunakan`, "info")} className="min-h-16 rounded-[24px] bg-white/85 p-4 text-left font-black shadow-lg transition hover:-translate-y-1 active:scale-95"><action.icon className="mb-2 text-[#D4AF37]" />{action.label}</button>)}</div><button onClick={() => void onLogout()} className="min-h-12 w-full rounded-2xl bg-red-600 font-black text-white transition active:scale-95"><LogOut className="mr-2 inline" size={18} />Logout</button></div>;
 }
+
 
 
 

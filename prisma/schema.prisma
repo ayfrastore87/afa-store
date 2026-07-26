@@ -57,6 +57,48 @@ model Category {
   @@map("categories")
 }
 
+model ParcelCategory {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  parcels   Parcel[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("parcel_categories")
+}
+
+model Parcel {
+  id          String          @id @default(cuid())
+  categoryId  String?
+  category    ParcelCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name        String
+  slug        String          @unique
+  description String?
+  price       Int
+  contents    Json
+  badge       String?
+  image       String?
+  isActive    Boolean         @default(true)
+  images      ParcelImage[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("parcels")
+}
+
+model ParcelImage {
+  id        String   @id @default(cuid())
+  parcelId  String
+  parcel    Parcel   @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("parcel_images")
+}
+
 model Product {
   id         String      @id @default(cuid())
   categoryId String?

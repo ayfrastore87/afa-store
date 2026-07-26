@@ -8,16 +8,9 @@ import {
     useMemo,
     useState,
 } from "react";
+import { CART_STORAGE_KEY, calculateSubtotal, normalizeCartItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
 
-export type CartItem = {
-    id: string;
-    name: string;
-    price: number;
-    image: string;
-    qty: number;
-};
-
-type ProductInput = Omit<CartItem, "qty">;
+export type { CartItem } from "@/lib/cart";
 
 type CartContextValue = {
     cart: CartItem[];
@@ -29,7 +22,6 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
-const CART_KEY = "afa-cart";
 
 function isCartItem(value: unknown): value is CartItem {
     if (typeof value !== "object" || value === null) {
@@ -53,7 +45,7 @@ function readCartFromStorage(): CartItem[] {
     }
 
     try {
-        const saved = window.localStorage.getItem(CART_KEY);
+        const saved = window.localStorage.getItem(CART_STORAGE_KEY);
 
         if (!saved) {
             return [];
@@ -61,24 +53,107 @@ function readCartFromStorage(): CartItem[] {
 
         const parsed: unknown = JSON.parse(saved);
 
-        return Array.isArray(parsed) ? parsed.filter(isCartItem) : [];
+        return Array.isArray(parsed) ? normalizeCartItems(parsed.filter(isCartItem)) : [];
     } catch {
         return [];
     }
 }
 
+async function requestCart(path = "/api/cart", init?: RequestInit) {
+    const response = await fetch(path, init);
+
+    if (response.status === 401) {
+        return null;
+    }
+
+    if (!response.ok) {
+        throw new Error("Keranjang gagal disinkronkan.");
+    }
+
+    return response.json() as Promise<CartResponse>;
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
     const [cart, setCart] = useState<CartItem[]>([]);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [serverReady, setServerReady] = useState(false);
 
     useEffect(() => {
-        setCart(readCartFromStorage());
+        const localCart = readCartFromStorage();
+        setCart(localCart);
+
+        const syncCart = async () => {
+            const sessionResponse = await fetch("/api/auth/me");
+            const sessionData = await sessionResponse.json() as { user?: { id: string } | null };
+
+            if (!sessionData.user) {
+                setIsLoggedIn(false);
+                setServerReady(true);
+                return;
+            }
+
+            setIsLoggedIn(true);
+            const synced = localCart.length
+                ? await requestCart("/api/cart", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ items: localCart }),
+                })
+                : await requestCart();
+
+            if (synced) {
+                setCart(synced.items);
+                window.localStorage.removeItem(CART_STORAGE_KEY);
+            }
+
+            setServerReady(true);
+        };
+
+        syncCart().catch((error) => {
+            console.error("Cart sync failed", error);
+            setServerReady(true);
+        });
     }, []);
 
     useEffect(() => {
-        window.localStorage.setItem(CART_KEY, JSON.stringify(cart));
-    }, [cart]);
+        if (!serverReady || isLoggedIn) return;
+        window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    }, [cart, isLoggedIn, serverReady]);
+
+    const applyServerCart = useCallback((data: CartResponse | null) => {
+        if (data) setCart(data.items);
+    }, []);
+
+    const persistAdd = useCallback((item: CartItem) => {
+        if (!isLoggedIn) return;
+
+        requestCart("/api/cart", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item }),
+        }).then(applyServerCart).catch((error) => console.error("Cart add failed", error));
+    }, [applyServerCart, isLoggedIn]);
+
+    const persistQty = useCallback((id: string, qty: number) => {
+        if (!isLoggedIn) return;
+
+        requestCart("/api/cart", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, qty }),
+        }).then(applyServerCart).catch((error) => console.error("Cart update failed", error));
+    }, [applyServerCart, isLoggedIn]);
+
+    const persistRemove = useCallback((id: string) => {
+        if (!isLoggedIn) return;
+
+        requestCart(`/api/cart?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+            .then(applyServerCart)
+            .catch((error) => console.error("Cart remove failed", error));
+    }, [applyServerCart, isLoggedIn]);
 
     const addToCart = useCallback((item: ProductInput) => {
+        persistAdd({ ...item, qty: 1 });
         setCart((items) => {
             const existing = items.find((cartItem) => cartItem.id === item.id);
 
@@ -92,32 +167,34 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
             return [...items, { ...item, qty: 1 }];
         });
-    }, []);
+    }, [persistAdd]);
 
     const increaseQty = useCallback((id: string) => {
-        setCart((items) =>
-            items.map((item) =>
-                item.id === id ? { ...item, qty: item.qty + 1 } : item
-            )
-        );
-    }, []);
+        setCart((items) => {
+            const next = items.map((item) => item.id === id ? { ...item, qty: item.qty + 1 } : item);
+            const updated = next.find((item) => item.id === id);
+            if (updated) persistQty(id, updated.qty);
+            return next;
+        });
+    }, [persistQty]);
 
     const decreaseQty = useCallback((id: string) => {
-        setCart((items) =>
-            items
-                .map((item) =>
-                    item.id === id ? { ...item, qty: Math.max(0, item.qty - 1) } : item
-                )
-                .filter((item) => item.qty > 0)
-        );
-    }, []);
+        setCart((items) => {
+            const next = items
+                .map((item) => item.id === id ? { ...item, qty: Math.max(0, item.qty - 1) } : item)
+                .filter((item) => item.qty > 0);
+            persistQty(id, next.find((item) => item.id === id)?.qty ?? 0);
+            return next;
+        });
+    }, [persistQty]);
 
     const removeFromCart = useCallback((id: string) => {
+        persistRemove(id);
         setCart((items) => items.filter((item) => item.id !== id));
-    }, []);
+    }, [persistRemove]);
 
     const subtotal = useMemo(
-        () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
+        () => calculateSubtotal(cart),
         [cart]
     );
 

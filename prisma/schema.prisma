@@ -17,6 +17,7 @@ model User {
   isActive            Boolean              @default(true)
   addresses           Address[]
   wishlists           Wishlist[]
+  cartItems           CartItem[]
   orders              Order[]
   userVouchers        UserVoucher[]
   checkoutHistories   CheckoutHistory[]
@@ -72,6 +73,7 @@ model Product {
   isActive   Boolean     @default(true)
   orderItems OrderItem[]
   wishlists  Wishlist[]
+  cartItems  CartItem[]
   createdAt  DateTime    @default(now())
 
   @@map("products")
@@ -91,6 +93,24 @@ model Wishlist {
 
   @@unique([userId, productRef])
   @@map("wishlists")
+}
+
+model CartItem {
+  id         String   @id @default(cuid())
+  userId     String
+  productId  String?
+  productRef String
+  name       String
+  price      Int
+  image      String?
+  quantity   Int      @default(1)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, productRef])
+  @@map("cart_items")
 }
 
 model ParcelPackage {

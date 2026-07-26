@@ -70,15 +70,20 @@ export function mapParcelPackage(row: ParcelRow): ParcelPackage {
 }
 
 export async function fetchParcelPackages() {
-    const { data, error, count } = await supabase
+    const query = supabase
         .from("parcel_packages")
         .select("*", { count: "exact" })
-        .order("createdAt", { ascending: false, nullsFirst: false });
-    if (error) throw new Error(error.message);
 
-    const parcels = (data ?? []).map((row) => mapParcelPackage(row as ParcelRow));
+    const { data, error, count } = await query.order("createdAt", { ascending: false, nullsFirst: false });
+    const result = error?.code === "42703"
+        ? await query.order("created_at", { ascending: false, nullsFirst: false })
+        : { data, error, count };
+
+    if (result.error) throw new Error(result.error.message);
+
+    const parcels = (result.data ?? []).map((row) => mapParcelPackage(row as ParcelRow));
     if (!parcels.length) {
-        console.info(`Parcel packages query returned ${count ?? 0} rows from parcel_packages; showing fallback parcel package.`);
+        console.info(`Parcel packages query returned ${result.count ?? 0} rows from parcel_packages; showing fallback parcel package.`);
     }
 
     return parcels.length ? parcels : fallbackParcelPackages;

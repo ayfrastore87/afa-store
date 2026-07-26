@@ -20,8 +20,6 @@ export type MidtransChargePayload = {
 };
 
 export type MidtransChargeResponse = {
-    token?: string;
-    redirect_url?: string;
     transaction_id?: string;
     order_id?: string;
     gross_amount?: string;
@@ -54,7 +52,7 @@ export function getMidtransConfig(): MidtransConfig {
     if (!productionFlag) throw new Error("MIDTRANS_IS_PRODUCTION missing");
 
     const isProduction = productionFlag === "true";
-    const baseUrl = isProduction ? "https://app.midtrans.com" : "https://app.sandbox.midtrans.com";
+    const baseUrl = isProduction ? "https://api.midtrans.com" : "https://api.sandbox.midtrans.com";
 
     console.log({
         baseUrl,
@@ -72,7 +70,7 @@ export function getMidtransAuthHeader() {
 }
 
 export function getQrisActionUrl(response: MidtransChargeResponse) {
-    return response.actions?.find((action) => action.name === "generate-qr-code")?.url ?? response.redirect_url ?? response.actions?.find((action) => action.url)?.url ?? null;
+    return response.actions?.find((action) => action.name === "generate-qr-code")?.url ?? response.actions?.find((action) => action.url)?.url ?? null;
 }
 
 export function getQrisString(response: MidtransChargeResponse) {
@@ -81,7 +79,7 @@ export function getQrisString(response: MidtransChargeResponse) {
 
 export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
     const { baseUrl, merchantId, isProduction } = getMidtransConfig();
-    const endpoint = `${baseUrl}/snap/v1/transactions`;
+    const endpoint = `${baseUrl}/v2/charge`;
     const grossAmount = payload.amount;
     const itemDetails = payload.items.map((item) => ({
         id: item.id.slice(0, 50),
@@ -109,15 +107,27 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
         throw new Error(`Midtrans payload invalid: gross_amount ${grossAmount} tidak sama dengan total item_details ${totalItemDetails}.`);
     }
 
-    const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-            Accept: "application/json",
-            Authorization: getMidtransAuthHeader(),
-            "Content-Type": "application/json",
+    const chargePayload = {
+        payment_type: "qris",
+        transaction_details: {
+            order_id: payload.invoice,
+            gross_amount: grossAmount,
         },
-        body: JSON.stringify({
-            enabled_payments: ["qris"],
+        item_details: itemDetails,
+        customer_details: {
+            first_name: payload.customer.name,
+            email: payload.customer.email || undefined,
+            phone: payload.customer.phone || undefined,
+        },
+        qris: {},
+    };
+
+    console.log("=== MIDTRANS REQUEST ===");
+    console.log({
+        endpoint,
+        merchantId,
+        payload: {
+            payment_type: "qris",
             transaction_details: {
                 order_id: payload.invoice,
                 gross_amount: grossAmount,
@@ -125,17 +135,29 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
             item_details: itemDetails,
             customer_details: {
                 first_name: payload.customer.name,
-                email: payload.customer.email || undefined,
-                phone: payload.customer.phone || undefined,
+                email: payload.customer.email,
+                phone: payload.customer.phone,
             },
-            expiry: {
-                duration: payload.expiryMinutes ?? 60,
-                unit: "minute",
-            },
-        }),
+            qris: {},
+        },
+    });
+
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+            Accept: "application/json",
+            Authorization: getMidtransAuthHeader(),
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(chargePayload),
     });
 
     const text = await response.text();
+
+    console.log("=== MIDTRANS RESPONSE ===");
+    console.log("Status:", response.status);
+    console.log("Headers:", Object.fromEntries(response.headers.entries()));
+    console.log("Body:", text);
 
     if (!response.ok) {
         console.error({ status: response.status, body: text });
@@ -153,15 +175,35 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
         if (statusMessage.toLowerCase().includes("unknown merchant")) {
             throw new Error(UNKNOWN_MERCHANT_MESSAGE);
         }
-        throw new Error(`Midtrans error ${response.status}: ${statusMessage}\n${text}`);
+        throw new Error(`Midtrans error ${response.status}: ${statusMessage} \n${text} `);
     }
 
     return data;
 }
 
-export function verifyMidtransSignature(notification: { order_id?: string; status_code?: string; gross_amount?: string; signature_key?: string }) {
+export function verifyMidtransSignature(notification: {
+    order_id?: string;
+    status_code?: string;
+    gross_amount?: string;
+    signature_key?: string;
+}) {
     const { serverKey } = getMidtransConfig();
-    if (!notification.signature_key || !notification.order_id || !notification.status_code || !notification.gross_amount) return false;
-    const hash = crypto.createHash("sha512").update(`${notification.order_id}${notification.status_code}${notification.gross_amount}${serverKey}`).digest("hex");
+
+    if (
+        !notification.signature_key ||
+        !notification.order_id ||
+        !notification.status_code ||
+        !notification.gross_amount
+    ) {
+        return false;
+    }
+
+    const hash = crypto
+        .createHash("sha512")
+        .update(
+            `${notification.order_id}${notification.status_code}${notification.gross_amount}${serverKey}`
+        )
+        .digest("hex");
+
     return hash === notification.signature_key;
 }

@@ -14,7 +14,9 @@ export const runtime = "nodejs";
 type CheckoutAddress = {
     recipientName?: string;
     phone?: string;
+    email?: string;
     address?: string;
+    note?: string;
     province?: string;
     city?: string;
     district?: string;
@@ -57,7 +59,8 @@ export async function POST(request: Request) {
         const subtotal = checkoutSubtotal(items);
         const shipping = SHIPPING_COST;
         const total = subtotal + shipping;
-        const fullAddress = `${address.address}, ${address.district}, ${address.city}, ${address.province} ${address.postalCode}`;
+        const note = requireText(address.note) ? ` Catatan: ${address.note!.trim()}` : "";
+        const fullAddress = `${address.address}, ${address.district}, ${address.city}, ${address.province} ${address.postalCode}.${note}`;
         const now = new Date();
         const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
         const todayPrefix = getInvoicePrefix(now);
@@ -166,7 +169,7 @@ export async function POST(request: Request) {
                 discount: 0,
                 total,
                 city: address.city?.trim() || null,
-                message: `Order ${order.invoice} dibuat pada ${now.toISOString()}`,
+                message: `Order ${order.invoice} dibuat pada ${now.toISOString()}${address.email ? ` untuk ${address.email.trim()}` : ""}`,
             },
         });
 

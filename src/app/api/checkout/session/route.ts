@@ -1,6 +1,6 @@
 ﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
+import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems, encodeCheckoutItems, isCheckoutItem } from "@/lib/checkout";
 import { getCurrentUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -15,6 +15,27 @@ export async function GET() {
         return NextResponse.json({ items, subtotal, shipping: SHIPPING_COST, total: subtotal + SHIPPING_COST });
     } catch (error) {
         console.error("Checkout session Error:", error);
+        return NextResponse.json({ message: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    }
+}
+
+export async function POST(request: Request) {
+    try {
+        const body = await request.json() as { items?: unknown };
+        const items = Array.isArray(body.items) ? body.items.filter(isCheckoutItem) : [];
+        if (!items.length) return NextResponse.json({ message: "Item checkout tidak valid." }, { status: 400 });
+
+        const response = NextResponse.json({ redirectTo: "/checkout" });
+        response.cookies.set(CHECKOUT_COOKIE, encodeCheckoutItems(items), {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            path: "/",
+            maxAge: 60 * 30,
+        });
+        return response;
+    } catch (error) {
+        console.error("Checkout session create Error:", error);
         return NextResponse.json({ message: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
 }

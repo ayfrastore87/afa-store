@@ -240,7 +240,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         persistClear();
         setCart([]);
         window.localStorage.removeItem(CART_STORAGE_KEY);
-    }, [isLoggedIn, persistClear]);
+    }, [persistClear]);
 
     const subtotal = useMemo(
         () => calculateSubtotal(cart),

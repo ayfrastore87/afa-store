@@ -4,13 +4,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound } from "lucide-react";
+import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Home, Loader2, LogOut, PackagePlus, PlusCircle, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton, AdminWebsiteButton, AdminWebsiteFooterButton } from "@/components/admin/AdminNav";
-import { ReportsPanel, SettingsPanel, StockPanel } from "@/components/admin/AdminAdvancedPanels";
+import { ReportsPanel, SettingsPanel, StockPanel, TestimonialsPanel } from "@/components/admin/AdminAdvancedPanels";
 
 type Product = {
     id: string;
@@ -117,6 +117,12 @@ const tabs = [
         href: "/admin/orders",
     },
     {
+        id: "testimonials",
+        label: "Testimoni",
+        icon: MessageSquareHeart,
+        href: "/admin/testimonials",
+    },
+    {
         id: "customers",
         label: "Pelanggan",
         icon: Users,
@@ -152,6 +158,8 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
     "/admin/tambah": "add",
     "/admin/orders": "orders",
     "/admin/pesanan": "orders",
+    "/admin/testimonials": "testimonials",
+    "/admin/testimoni": "testimonials",
     "/admin/reports": "reports",
     "/admin/laporan": "reports",
     "/admin/settings": "settings",
@@ -409,6 +417,7 @@ export default function AdminPage() {
                             {activeTab === "stock" && <StockPanel />}
                             {activeTab === "add" && <ProductFormPanel form={form} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUpload={uploadImage} onCancel={() => setForm(emptyForm)} />}
                             {activeTab === "orders" && <OrdersPanel orders={orders} onStatus={updateOrderStatus} />}
+                            {activeTab === "testimonials" && <TestimonialsPanel />}
                             {activeTab === "reports" && <ReportsPanel />}
                             {activeTab === "settings" && <SettingsPanel />}
                             {activeTab === "account" && <AccountPanel adminEmail={adminEmail} onLogout={logout} />}
@@ -439,7 +448,7 @@ function MobileDrawer({ open, activeTab, onClose }: { open: boolean; activeTab: 
 }
 
 function MobileBottomNav({ activeTab }: { activeTab: string }) {
-    const mobileTabs = tabs.filter((tab) => ["home", "products", "add", "orders", "account"].includes(tab.id));
+    const mobileTabs = tabs.filter((tab) => ["home", "products", "add", "orders", "testimonials"].includes(tab.id));
     return <nav className="fixed inset-x-2 bottom-2 z-40 grid grid-cols-5 rounded-[1.7rem] border border-white/70 bg-white/90 p-2 shadow-2xl backdrop-blur-xl lg:hidden">{mobileTabs.map((tab) => <Link key={tab.id} href={tab.href} className={`relative min-h-14 rounded-2xl px-1 py-2 text-center text-[10px] font-black transition duration-200 active:scale-95 ${activeTab === tab.id ? "text-[#D4AF37]" : "text-[#184D47]/70"}`}>{activeTab === tab.id && <motion.span layoutId="bottom-nav-active" className="absolute inset-0 rounded-2xl bg-[#184D47]" />}<span className="relative z-10"><tab.icon className="mx-auto mb-1" size={19} /><span>{tab.label}</span></span></Link>)}</nav>;
 }
 
@@ -499,6 +508,7 @@ function AccountPanel({ adminEmail, onLogout }: { adminEmail: string; onLogout: 
     const actions = [{ label: "Edit Profil", icon: Edit3 }, { label: "Ganti Password", icon: KeyRound }, { label: "Role Admin", icon: ShieldCheck }];
     return <div className="space-y-5"><Card className="overflow-hidden bg-[#0F4C45] text-white"><div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-[2rem] bg-gradient-to-br from-[#D4AF37] to-white text-4xl font-black text-[#0F4C45]">{(adminEmail || "A").slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="text-sm font-black uppercase tracking-[0.25em] text-[#D4AF37]">Akun Admin</p><h3 className="mt-2 text-3xl font-black">Admin AFA STORE</h3><p className="mt-1 break-all text-white/75">{adminEmail}</p><span className="mt-3 inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-black">Role: admin</span></div></div></Card><div className="grid gap-3 sm:grid-cols-3">{actions.map((action) => <button key={action.label} onClick={() => toast(`${action.label} siap digunakan`, "info")} className="min-h-16 rounded-[24px] bg-white/85 p-4 text-left font-black shadow-lg transition hover:-translate-y-1 active:scale-95"><action.icon className="mb-2 text-[#D4AF37]" />{action.label}</button>)}</div><button onClick={() => void onLogout()} className="min-h-12 w-full rounded-2xl bg-red-600 font-black text-white transition active:scale-95"><LogOut className="mr-2 inline" size={18} />Logout</button></div>;
 }
+
 
 
 

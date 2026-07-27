@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, FileSpreadsheet, FileText, History, Loader2, PackageMinus, PackagePlus, Printer, Save, Search, Settings2, ShieldCheck, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, Edit3, Eye, EyeOff, FileSpreadsheet, FileText, History, Loader2, PackageMinus, PackagePlus, Printer, Save, Search, Settings2, ShieldCheck, Star, Trash2, UploadCloud } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 
@@ -14,6 +14,7 @@ type StockHistory = { id?: string; product_id?: string; productId?: string; prod
 type OrderItem = { id?: string; orderId?: string; productId?: string | null; name: string; quantity: number; price: number; subtotal: number; product?: { category?: { name?: string } | null } | null };
 type Order = { id: string; customer: string; total: number; status: string; createdAt: string; items?: OrderItem[] };
 type SettingValue = string | boolean;
+type Testimonial = { id: string; name: string; city: string; whatsapp?: string | null; message: string; rating: number; avatar?: string | null; isActive: boolean; isVerified: boolean; createdAt: string; updatedAt?: string | null };
 
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
 const pageSize = 8;
@@ -79,6 +80,65 @@ function typeBadge(type: string) {
     if (["IN", "RETURN"].includes(type)) return "bg-emerald-100 text-emerald-700";
     if (["OUT", "SALE"].includes(type)) return "bg-red-100 text-red-700";
     return "bg-[#f8f0dd] text-[#184D47]";
+}
+
+function testimonialStatus(item: Testimonial) {
+    if (item.isActive && item.isVerified) return { label: "Published", className: "bg-emerald-100 text-emerald-700" };
+    if (item.isVerified) return { label: "Verified", className: "bg-blue-100 text-blue-700" };
+    return { label: "Pending", className: "bg-yellow-100 text-yellow-700" };
+}
+
+export function TestimonialsPanel() {
+    const [items, setItems] = useState<Testimonial[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState("");
+    const [rating, setRating] = useState("all");
+    const [status, setStatus] = useState("all");
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        const response = await fetch("/api/admin/testimonials", { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) toast(data.message || "Gagal memuat testimoni", "error");
+        setItems((data.testimonials ?? []) as Testimonial[]);
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { void load(); }, [load]);
+
+    const filtered = items.filter((item) => {
+        const haystack = `${item.name} ${item.city} ${item.message}`.toLowerCase();
+        const itemStatus = item.isActive && item.isVerified ? "published" : item.isVerified ? "verified" : "pending";
+        return haystack.includes(search.toLowerCase()) && (rating === "all" || item.rating === Number(rating)) && (status === "all" || itemStatus === status);
+    });
+    const stats = { total: items.length, pending: items.filter((item) => !item.isVerified).length, verified: items.filter((item) => item.isVerified).length, published: items.filter((item) => item.isActive && item.isVerified).length };
+
+    async function mutate(payload: Record<string, unknown>, success: string) {
+        const response = await fetch("/api/admin/testimonials", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return toast(data.message || "Aksi gagal", "error");
+        toast(success);
+        void load();
+    }
+
+    async function remove(item: Testimonial) {
+        const confirm = await Swal.fire({ title: "Hapus testimoni?", text: `${item.name} - ${item.city}`, icon: "warning", showCancelButton: true, confirmButtonColor: "#184D47", cancelButtonText: "Batal", confirmButtonText: "Hapus" });
+        if (!confirm.isConfirmed) return;
+        const response = await fetch(`/api/admin/testimonials?id=${item.id}`, { method: "DELETE" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return toast(data.message || "Gagal menghapus", "error");
+        toast("Testimoni dihapus");
+        void load();
+    }
+
+    async function edit(item: Testimonial) {
+        const result = await Swal.fire({ title: "Edit Testimoni", width: 720, showCancelButton: true, confirmButtonColor: "#184D47", confirmButtonText: "Simpan", cancelButtonText: "Batal", html: `<div style="display:grid;gap:10px;text-align:left"><input id="swal-name" class="swal2-input" value="${item.name.replace(/"/g, "&quot;")}" placeholder="Nama"><input id="swal-city" class="swal2-input" value="${item.city.replace(/"/g, "&quot;")}" placeholder="Kota"><input id="swal-whatsapp" class="swal2-input" value="${item.whatsapp ?? ""}" placeholder="WhatsApp"><input id="swal-rating" class="swal2-input" type="number" min="1" max="5" value="${item.rating}"><textarea id="swal-message" class="swal2-textarea" placeholder="Pesan">${item.message}</textarea></div>`, preConfirm: () => ({ name: (document.getElementById("swal-name") as HTMLInputElement).value, city: (document.getElementById("swal-city") as HTMLInputElement).value, whatsapp: (document.getElementById("swal-whatsapp") as HTMLInputElement).value, rating: Number((document.getElementById("swal-rating") as HTMLInputElement).value), message: (document.getElementById("swal-message") as HTMLTextAreaElement).value }) });
+        if (!result.isConfirmed) return;
+        await mutate({ id: item.id, ...result.value }, "Testimoni diperbarui");
+    }
+
+    if (loading) return <Card><Loader2 className="animate-spin" /> Memuat testimoni...</Card>;
+    return <div className="space-y-5"><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[{ label: "Semua", value: stats.total }, { label: "Pending", value: stats.pending }, { label: "Verified", value: stats.verified }, { label: "Published", value: stats.published }].map((item) => <Card key={item.label}><p className="text-sm font-bold text-[#184D47]/60">{item.label}</p><p className="mt-2 text-3xl font-black">{item.value}</p></Card>)}</section><Card className="bg-gradient-to-br from-white via-[#fff8ea] to-[#D4AF37]/20"><div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.25em] text-[#D4AF37]">Social Proof Control</p><h3 className="text-2xl font-black">Manajemen Testimoni Pelanggan</h3></div><button onClick={() => exportCsv("testimoni-afa-store.csv", filtered.map((item) => ({ Nama: item.name, Kota: item.city, WhatsApp: item.whatsapp, Rating: item.rating, Status: testimonialStatus(item).label, Pesan: item.message })))} className="rounded-xl border px-4 py-2 font-bold"><Download size={15} className="inline" /> CSV</button></div><div className="mb-4 grid gap-3 md:grid-cols-3"><label className="flex items-center gap-2 rounded-2xl bg-white px-4 shadow-sm"><Search size={18} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, kota, pesan" className="h-12 w-full bg-transparent outline-none" /></label><select value={rating} onChange={(e) => setRating(e.target.value)} className="h-12 rounded-2xl bg-white px-4 font-bold shadow-sm"><option value="all">Semua Rating</option>{[5, 4, 3, 2, 1].map((item) => <option key={item} value={item}>{item} Bintang</option>)}</select><select value={status} onChange={(e) => setStatus(e.target.value)} className="h-12 rounded-2xl bg-white px-4 font-bold shadow-sm"><option value="all">Semua Status</option><option value="pending">Pending</option><option value="verified">Verified</option><option value="published">Published</option></select></div><div className="grid gap-4 xl:grid-cols-2">{filtered.map((item) => { const s = testimonialStatus(item); return <article key={item.id} className="rounded-[28px] border border-[#184D47]/10 bg-white p-4 shadow-lg shadow-[#184D47]/5"><div className="flex gap-4"><div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#0F4C45] font-black text-[#D4AF37]">{item.avatar ? <Image src={item.avatar} alt={item.name} width={64} height={64} className="h-full w-full object-cover" unoptimized /> : item.name.slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h4 className="font-black">{item.name}</h4><span className={`rounded-full px-3 py-1 text-xs font-black ${s.className}`}>{s.label}</span></div><p className="text-sm font-bold text-[#184D47]/60">{item.city} {item.whatsapp ? `- ${item.whatsapp}` : ""}</p><p className="mt-1 text-[#D4AF37]">{Array.from({ length: item.rating }).map((_, i) => <Star key={i} size={15} className="inline fill-current" />)}</p></div></div><p className="mt-4 line-clamp-4 rounded-2xl bg-[#f8f0dd] p-4 font-semibold leading-relaxed text-[#184D47]/80">{item.message}</p><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><button onClick={() => void mutate({ id: item.id, action: "approve" }, "Testimoni disetujui")} className="rounded-2xl bg-emerald-600 px-3 py-3 text-sm font-black text-white"><CheckCircle2 className="mr-1 inline" size={15} />Approve</button><button onClick={() => void mutate({ id: item.id, action: item.isActive ? "unpublish" : "publish" }, item.isActive ? "Testimoni disembunyikan" : "Testimoni dipublish")} className="rounded-2xl bg-[#0F4C45] px-3 py-3 text-sm font-black text-white">{item.isActive ? <EyeOff className="mr-1 inline" size={15} /> : <Eye className="mr-1 inline" size={15} />}{item.isActive ? "Unpublish" : "Publish"}</button><button onClick={() => void edit(item)} className="rounded-2xl bg-[#D4AF37] px-3 py-3 text-sm font-black text-[#0F4C45]"><Edit3 className="mr-1 inline" size={15} />Edit</button><button onClick={() => void mutate({ id: item.id, isVerified: false }, "Verifikasi dibatalkan")} className="rounded-2xl border px-3 py-3 text-sm font-black">Reset</button><button onClick={() => void remove(item)} className="rounded-2xl bg-red-600 px-3 py-3 text-sm font-black text-white"><Trash2 className="mr-1 inline" size={15} />Hapus</button></div></article>; })}</div>{!filtered.length && <p className="py-10 text-center font-bold text-[#184D47]/60">Testimoni tidak ditemukan.</p>}</Card></div>;
 }
 
 export function StockPanel() {

@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://afa-store.vercel.app"),
   title: "AFA STORE | Bawang Goreng Premium & Parcel Hampers",
   description:
-    "Pusat Bawang Goreng Premium & Parcel Hampers Berkualitas dengan checkout WhatsApp cepat.",
+    "Pusat Bawang Goreng Premium & Parcel Hampers Berkualitas dengan checkout pembayaran cepat.",
   keywords: [
     "AFA STORE",
     "bawang goreng",

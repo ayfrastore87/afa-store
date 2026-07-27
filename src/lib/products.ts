@@ -10,8 +10,11 @@ export type Product = {
     rating: number;
     reviews: number | null;
     badge: string | null;
+    sku?: string | null;
+    description?: string | null;
     flavor?: string | null;
     size?: string | null;
+    minimumStock?: number | null;
     isActive?: boolean | null;
     slug?: string | null;
     createdAt?: string | null;
@@ -47,18 +50,22 @@ const categoryValue = (row: ProductRow) => {
 export const formatRupiah = (price: number) => `Rp ${price.toLocaleString("id-ID")}`;
 
 export function mapProduct(row: ProductRow): Product {
+    const category = categoryValue(row);
     return {
         id: String(row.id),
         name: stringValue(row.name, "Produk"),
-        category: categoryValue(row),
+        category,
         price: numberValue(row.price),
         stock: numberValue(row.stock),
         image: stringValue(row.image, "/window.svg"),
         rating: numberValue(row.rating, 0),
         reviews: row.reviews === null || row.reviews === undefined ? null : numberValue(row.reviews, 0),
         badge: typeof row.badge === "string" && row.badge.trim() ? row.badge : null,
+        sku: typeof row.sku === "string" ? row.sku : null,
+        description: typeof row.description === "string" ? row.description : null,
         flavor: typeof row.flavor === "string" ? row.flavor : null,
         size: typeof row.size === "string" ? row.size : null,
+        minimumStock: row.minimumStock === null || row.minimumStock === undefined ? null : numberValue(row.minimumStock, 0),
         isActive: typeof row.isActive === "boolean" ? row.isActive : typeof row.is_active === "boolean" ? row.is_active : null,
         slug: typeof row.slug === "string" ? row.slug : null,
         createdAt: typeof row.createdAt === "string" ? row.createdAt : typeof row.created_at === "string" ? row.created_at : null,
@@ -69,7 +76,7 @@ export function mapProduct(row: ProductRow): Product {
 export async function fetchProducts() {
     const { data, error } = await supabase
         .from("products")
-        .select("*, categories(name, slug)")
+        .select("*")
         .order("createdAt", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []).map((row) => mapProduct(row as ProductRow & { categories?: CategoryRelation }));

@@ -48,62 +48,28 @@ model Address {
   @@map("addresses")
 }
 
-model Category {
-  id       String    @id @default(cuid())
-  name     String    @unique
-  slug     String    @unique
-  products Product[]
-
-  @@map("categories")
-}
-
-model ParcelCategory {
-  id             String          @id @default(cuid())
-  name           String
-  slug           String          @unique
-  parcelPackages ParcelPackage[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-
-  @@map("parcel_categories")
-}
-
-model ParcelPackage {
-  id          String          @id @default(cuid())
-  categoryId  String?
-  category    ParcelCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  name        String
-  slug        String          @unique
-  description String?
-  price       Int
-  contents    Json
-  badge       String?
-  image       String?
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  @@map("parcel_packages")
-}
-
 model Product {
-  id         String      @id @default(cuid())
-  categoryId String?
-  category   Category?   @relation(fields: [categoryId], references: [id])
-  name       String
-  slug       String      @unique
-  flavor     String?
-  size       String?
-  price      Int
-  stock      Int         @default(0)
-  image      String?
-  badge      String?
-  rating     Float       @default(0)
-  isActive   Boolean     @default(true)
-  orderItems OrderItem[]
-  wishlists  Wishlist[]
-  cartItems  CartItem[]
-  createdAt  DateTime    @default(now())
+  id           String      @id @default(cuid())
+  category     String      @default("Bawang Goreng")
+  name         String
+  slug         String      @unique
+  sku          String?     @unique
+  description  String?
+  flavor       String?
+  size         String?
+  price        Int
+  stock        Int         @default(0)
+  minimumStock Int         @default(0)
+  image        String?
+  badge        String?
+  rating       Float       @default(0)
+  status       String      @default("Aktif")
+  isActive     Boolean     @default(true)
+  orderItems   OrderItem[]
+  wishlists    Wishlist[]
+  cartItems    CartItem[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@map("products")
 }

@@ -4,16 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Gift, Send } from "lucide-react";
-import { formatRupiah } from "@/lib/products";
-import { fetchParcelPackages, type ParcelPackage } from "@/lib/parcels";
+import { fetchProducts, formatRupiah, type Product } from "@/lib/products";
 
 export default function CustomParcelPage() {
     const router = useRouter();
-    const [options, setOptions] = useState<ParcelPackage[]>([]);
+    const [options, setOptions] = useState<Product[]>([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    useEffect(() => { fetchParcelPackages().then(setOptions).catch((err: Error) => setError(err.message)).finally(() => setLoading(false)); }, []);
+    useEffect(() => { fetchProducts().then((items) => setOptions(items.filter((item) => item.category === "Parcel"))).catch((err: Error) => setError(err.message)).finally(() => setLoading(false)); }, []);
     const selectedOptions = useMemo(() => options.filter((item) => selectedIds.includes(item.id)), [options, selectedIds]);
     const total = useMemo(() => selectedOptions.reduce((sum, item) => sum + item.price, 0), [selectedOptions]);
     const continueToCheckout = async () => {

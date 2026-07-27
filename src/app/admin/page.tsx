@@ -16,13 +16,15 @@ type Product = {
     id: string;
     name: string;
     slug: string;
+    sku?: string | null;
     price: number;
     stock: number;
+    minimumStock?: number | null;
     rating: number | null;
+    description?: string | null;
     flavor: string | null;
     size: string | null;
     badge: string | null;
-    categoryId?: string | null;
     category?: string | null;
     image: string | null;
     isActive: boolean;
@@ -60,9 +62,12 @@ type ProductForm = {
     id?: string;
     name: string;
     slug: string;
+    sku: string;
     price: string;
     stock: string;
+    minimumStock: string;
     rating: string;
+    description: string;
     flavor: string;
     size: string;
     badge: string;
@@ -74,13 +79,16 @@ type ProductForm = {
 const emptyForm: ProductForm = {
     name: "",
     slug: "",
+    sku: "",
     price: "",
     stock: "0",
+    minimumStock: "10",
     rating: "0",
+    description: "",
     flavor: "",
     size: "",
     badge: "",
-    category: "",
+    category: "Bawang Goreng",
     image: "",
     isActive: true,
 };
@@ -292,13 +300,16 @@ export default function AdminPage() {
         const payload = {
             name: form.name,
             slug: form.slug || slugify(form.name),
+            sku: form.sku || null,
             price: Number(form.price || 0),
             stock: Number(form.stock || 0),
+            minimumStock: Number(form.minimumStock || 0),
             rating: Number(form.rating || 0),
+            description: form.description || null,
             flavor: form.flavor || null,
             size: form.size || null,
             badge: form.badge || null,
-            category: form.category || null,
+            category: form.category || "Bawang Goreng",
             image: form.image || null,
             isActive: form.isActive,
         };
@@ -316,13 +327,16 @@ export default function AdminPage() {
             id: product.id,
             name: product.name,
             slug: product.slug,
+            sku: product.sku ?? "",
             price: String(product.price),
             stock: String(product.stock),
+            minimumStock: String(product.minimumStock ?? 10),
             rating: String(product.rating ?? 0),
+            description: product.description ?? "",
             flavor: product.flavor ?? "",
             size: product.size ?? "",
             badge: product.badge ?? "",
-            category: product.category ?? product.categoryId ?? "",
+            category: product.category ?? "Bawang Goreng",
             image: product.image ?? "",
             isActive: product.isActive,
         });
@@ -486,8 +500,8 @@ function ActionButtons({ product, onEdit, onDelete }: { product: Product; onEdit
 }
 
 function ProductFormPanel({ form, saving, onChange, onSubmit, onUpload, onCancel }: { form: ProductForm; saving: boolean; onChange: (field: keyof ProductForm, value: string | boolean) => void; onSubmit: (event: FormEvent) => void; onUpload: (file: File) => void; onCancel: () => void }) {
-    const fields: [keyof ProductForm, string, string][] = [["name", "Nama", "text"], ["slug", "Slug otomatis", "text"], ["price", "Harga", "number"], ["stock", "Stok", "number"], ["rating", "Rating", "number"], ["flavor", "Flavor", "text"], ["size", "Size", "text"], ["badge", "Badge", "text"], ["category", "Category", "text"]];
-    return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} placeholder={`Masukkan ${label.toLowerCase()}`} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15" required={["name", "slug", "price"].includes(key)} />{["name", "price"].includes(key) && !form[key] && <p className="text-xs font-bold text-red-500">Wajib diisi.</p>}</label>)}<label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Upload Foto</span><div className="flex flex-col gap-3 rounded-3xl border border-dashed border-[#184D47]/25 bg-[#f8f0dd] p-4 sm:flex-row sm:items-center"><Camera className="text-[#C8A14A]" /><input type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} className="min-h-12 text-sm" /><input value={form.image} onChange={(event) => onChange("image", event.target.value)} placeholder="URL image otomatis" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white px-4" /></div></label><label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white p-4 font-bold"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Aktif / Tidak</label><div className="grid gap-3 md:col-span-2 sm:grid-cols-[1fr_auto]"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#184D47] px-5 font-black text-white transition active:scale-95 disabled:opacity-60">{saving ? "Menyimpan..." : "Simpan ke Supabase"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border border-[#184D47]/20 px-5 font-bold transition active:scale-95">Reset</button></div></form></Card>;
+    const fields: [keyof ProductForm, string, string][] = [["name", "Nama", "text"], ["slug", "Slug otomatis", "text"], ["sku", "SKU", "text"], ["price", "Harga", "number"], ["stock", "Stok", "number"], ["minimumStock", "Minimum Stok", "number"], ["rating", "Rating", "number"], ["flavor", "Flavor", "text"], ["size", "Size", "text"], ["badge", "Badge", "text"]];
+    return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} placeholder={`Masukkan ${label.toLowerCase()}`} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15" required={["name", "slug", "price"].includes(key)} />{["name", "price"].includes(key) && !form[key] && <p className="text-xs font-bold text-red-500">Wajib diisi.</p>}</label>)}<label className="space-y-2"><span className="text-sm font-bold">Kategori</span><select value={form.category} onChange={(event) => onChange("category", event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 font-bold outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15">{["Bawang Goreng", "Parcel", "Lainnya"].map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white p-4 font-bold"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Status Aktif</label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Deskripsi</span><textarea value={form.description} onChange={(event) => onChange("description", event.target.value)} rows={4} placeholder="Deskripsi produk" className="w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 py-3 outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15" /></label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Upload Foto</span><div className="flex flex-col gap-3 rounded-3xl border border-dashed border-[#184D47]/25 bg-[#f8f0dd] p-4 sm:flex-row sm:items-center"><Camera className="text-[#C8A14A]" /><input type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} className="min-h-12 text-sm" /><input value={form.image} onChange={(event) => onChange("image", event.target.value)} placeholder="URL image otomatis" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white px-4" /></div></label><div className="grid gap-3 md:col-span-2 sm:grid-cols-[1fr_auto]"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#184D47] px-5 font-black text-white transition active:scale-95 disabled:opacity-60">{saving ? "Menyimpan..." : "Simpan ke Supabase"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border border-[#184D47]/20 px-5 font-bold transition active:scale-95">Reset</button></div></form></Card>;
 }
 
 function OrdersPanel({ orders, onStatus }: { orders: Order[]; onStatus: (order: Order, status: string) => void }) {
@@ -508,6 +522,10 @@ function AccountPanel({ adminEmail, onLogout }: { adminEmail: string; onLogout: 
     const actions = [{ label: "Edit Profil", icon: Edit3 }, { label: "Ganti Password", icon: KeyRound }, { label: "Role Admin", icon: ShieldCheck }];
     return <div className="space-y-5"><Card className="overflow-hidden bg-[#0F4C45] text-white"><div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-[2rem] bg-gradient-to-br from-[#D4AF37] to-white text-4xl font-black text-[#0F4C45]">{(adminEmail || "A").slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="text-sm font-black uppercase tracking-[0.25em] text-[#D4AF37]">Akun Admin</p><h3 className="mt-2 text-3xl font-black">Admin AFA STORE</h3><p className="mt-1 break-all text-white/75">{adminEmail}</p><span className="mt-3 inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-black">Role: admin</span></div></div></Card><div className="grid gap-3 sm:grid-cols-3">{actions.map((action) => <button key={action.label} onClick={() => toast(`${action.label} siap digunakan`, "info")} className="min-h-16 rounded-[24px] bg-white/85 p-4 text-left font-black shadow-lg transition hover:-translate-y-1 active:scale-95"><action.icon className="mb-2 text-[#D4AF37]" />{action.label}</button>)}</div><button onClick={() => void onLogout()} className="min-h-12 w-full rounded-2xl bg-red-600 font-black text-white transition active:scale-95"><LogOut className="mr-2 inline" size={18} />Logout</button></div>;
 }
+
+
+
+
 
 
 

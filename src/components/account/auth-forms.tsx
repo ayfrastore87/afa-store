@@ -42,8 +42,24 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
 
         const params = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        const code = params.get("code");
         const accessToken = hashParams.get("access_token") || params.get("access_token");
         const refreshToken = hashParams.get("refresh_token") || params.get("refresh_token");
+
+        if (code) {
+            supabase.auth.exchangeCodeForSession(code).then(({ error: sessionError }) => {
+                if (sessionError) {
+                    console.error("Supabase reset password code exchange error:", sessionError);
+                    setError(sessionError.message);
+                    setResetReady(false);
+                    return;
+                }
+
+                window.history.replaceState(null, "", "/reset-password");
+                setResetReady(true);
+            });
+            return;
+        }
 
         if (!accessToken || !refreshToken) {
             setError("Link reset password tidak valid atau sudah kedaluwarsa.");
@@ -60,6 +76,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             }
 
             setResetReady(true);
+            window.history.replaceState(null, "", "/reset-password");
         });
     }, [mode]);
 

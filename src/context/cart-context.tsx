@@ -92,31 +92,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setCart(localCart);
 
         const syncCart = async () => {
-            const sessionResponse = await fetch("/api/auth/me");
-            if (!sessionResponse.ok) {
-                setIsLoggedIn(false);
-                setServerReady(true);
-                return;
-            }
-
-            const sessionData = await parseJsonResponse<{ user?: { id: string } | null }>(sessionResponse);
-
-            if (!sessionData.user) {
-                setIsLoggedIn(false);
-                const synced = localCart.length
-                    ? await requestCart("/api/cart", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ items: localCart }),
-                    })
-                    : await requestCart();
-
-                if (synced) setCart(synced.items);
-                setServerReady(true);
-                return;
-            }
-
-            setIsLoggedIn(true);
             const synced = localCart.length
                 ? await requestCart("/api/cart", {
                     method: "POST",
@@ -127,7 +102,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
             if (synced) {
                 setCart(synced.items);
-                window.localStorage.removeItem(CART_STORAGE_KEY);
+                setIsLoggedIn(true);
+                if (localCart.length) window.localStorage.removeItem(CART_STORAGE_KEY);
             }
 
             setServerReady(true);

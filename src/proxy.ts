@@ -22,7 +22,44 @@ export async function proxy(request: NextRequest) {
         },
     });
 
-    await supabase.auth.getUser();
+    const {
+        data: { user },
+        error,
+    } = await supabase.auth.getUser();
+
+    if (error && error.name !== "AuthSessionMissingError") {
+        console.error("Supabase proxy getUser failed", error);
+    }
+
+    const pathname = request.nextUrl.pathname;
+
+    if (!pathname.startsWith("/admin") || pathname === "/admin/login") {
+        return response;
+    }
+
+    if (!user) {
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = "/admin/login";
+        loginUrl.search = "";
+        return NextResponse.redirect(loginUrl);
+    }
+
+    const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("role, isActive")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+
+    if (profileError) {
+        console.error("Supabase proxy admin profile failed", profileError);
+    }
+
+    if (!profile || profile.role !== "admin" || profile.isActive === false) {
+        const homeUrl = request.nextUrl.clone();
+        homeUrl.pathname = "/";
+        homeUrl.search = "";
+        return NextResponse.redirect(homeUrl);
+    }
 
     return response;
 }

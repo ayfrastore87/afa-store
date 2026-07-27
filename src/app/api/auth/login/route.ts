@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { createSupabaseServerClient, publicUser, setAuthCookie, signSession } from "@/lib/auth";
+import { createSupabaseServerClient, ensurePublicUser, publicUser, setAuthCookie, signSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -32,23 +31,7 @@ export async function POST(request: Request) {
         }
 
         const metadata = data.user.user_metadata || {};
-        const user = await prisma.user.upsert({
-            where: { email: data.user.email || email },
-            update: {
-                id: data.user.id,
-                name: String(metadata.name || data.user.email?.split("@")[0] || "Pelanggan"),
-                phone: typeof metadata.phone === "string" ? metadata.phone : null,
-                passwordHash: null,
-                isActive: true,
-            },
-            create: {
-                id: data.user.id,
-                name: String(metadata.name || data.user.email?.split("@")[0] || "Pelanggan"),
-                email: data.user.email || email,
-                phone: typeof metadata.phone === "string" ? metadata.phone : null,
-                passwordHash: null,
-            },
-        });
+        const user = await ensurePublicUser(data.user, String(metadata.name || data.user.email?.split("@")[0] || "Pelanggan"));
 
         if (!user.isActive) {
             console.error("Login blocked for inactive user", { userId: user.id, email: user.email });

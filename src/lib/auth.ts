@@ -10,15 +10,23 @@ export const AUTH_COOKIE = "afa_session";
 
 export type PublicUser = {
     id: string;
+    auth_id?: string | null;
     name: string;
     email: string;
     phone: string | null;
     image: string | null;
     role: string;
+    isActive?: boolean;
     createdAt?: string;
+    updatedAt?: string;
 };
 
-type UserLike = Omit<PublicUser, "createdAt"> & { createdAt?: Date | string };
+type UserLike = Omit<PublicUser, "createdAt" | "updatedAt" | "phone" | "image"> & {
+    phone?: string | null;
+    image?: string | null;
+    createdAt?: Date | string;
+    updatedAt?: Date | string;
+};
 
 function getJwtSecret() {
     return new TextEncoder().encode(process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "afa-store-dev-secret");
@@ -42,13 +50,60 @@ function getSupabaseServerEnv() {
 export function publicUser<T extends UserLike>(user: T): PublicUser {
     return {
         id: user.id,
+        auth_id: user.auth_id,
         name: user.name,
         email: user.email,
-        phone: user.phone,
-        image: user.image,
+        phone: user.phone ?? null,
+        image: user.image ?? null,
         role: user.role,
+        isActive: user.isActive,
         createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt,
+        updatedAt: user.updatedAt instanceof Date ? user.updatedAt.toISOString() : user.updatedAt,
     };
+}
+
+export async function ensurePublicUser(user: User, fallbackName?: string) {
+    const supabase = await createSupabaseServerClient();
+    const email = user.email?.toLowerCase();
+
+    if (!email) {
+        throw new Error("Email user Supabase tidak tersedia.");
+    }
+
+    const { data: existing, error: existingError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+
+    if (existingError) {
+        console.error("Supabase ensurePublicUser lookup failed", existingError);
+        throw existingError;
+    }
+
+    if (existing) return existing;
+
+    const now = new Date().toISOString();
+    const { data: created, error: createError } = await supabase
+        .from("users")
+        .insert({
+            auth_id: user.id,
+            name: fallbackName || String(user.user_metadata?.name || email.split("@")[0] || "Pelanggan"),
+            email,
+            role: "customer",
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+        })
+        .select("*")
+        .single();
+
+    if (createError) {
+        console.error("Supabase ensurePublicUser create failed", createError);
+        throw createError;
+    }
+
+    return created;
 }
 
 export async function signSession(user: PublicUser, remember = false) {
@@ -155,14 +210,14 @@ export async function getCurrentAdmin() {
         .from("users")
         .select("*")
         .eq("auth_id", user.id)
-        .single();
+        .maybeSingle();
 
     if (error || !admin) {
         if (error) console.error("Supabase getCurrentAdmin failed", error);
         return null;
     }
 
-    if (admin.role !== "admin") {
+    if (admin.role !== "admin" || admin.isActive === false) {
         return null;
     }
 

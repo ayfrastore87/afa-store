@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient, publicUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { createSupabaseServerClient, ensurePublicUser, publicUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -48,6 +47,7 @@ export async function POST(request: Request) {
                 name,
                 phone,
             },
+            emailRedirectTo: new URL("/login", request.url).toString(),
         },
     });
 
@@ -67,33 +67,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: "Email sudah digunakan." }, { status: 409 });
     }
 
-    const phoneExists = await prisma.user.findFirst({
-        where: {
-            phone,
-            NOT: { email },
-        },
-    });
-
-    if (phoneExists) {
-        return NextResponse.json({ message: "Nomor WhatsApp sudah terdaftar." }, { status: 409 });
-    }
-
-    const user = await prisma.user.upsert({
-        where: { email },
-        update: {
-            id: authUser.id,
-            name,
-            phone,
-            passwordHash: null,
-        },
-        create: {
-            id: authUser.id,
-            name,
-            email,
-            phone,
-            passwordHash: null,
-        },
-    });
+    const user = await ensurePublicUser(authUser, name);
 
     return NextResponse.json(
         {

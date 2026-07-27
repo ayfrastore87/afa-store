@@ -93,6 +93,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
         const syncCart = async () => {
             const sessionResponse = await fetch("/api/auth/me");
+            if (!sessionResponse.ok) {
+                setIsLoggedIn(false);
+                setServerReady(true);
+                return;
+            }
+
             const sessionData = await parseJsonResponse<{ user?: { id: string } | null }>(sessionResponse);
 
             if (!sessionData.user) {

@@ -132,8 +132,10 @@ export async function getCurrentUser(): Promise<User | null> {
         error,
     } = await supabase.auth.getUser();
 
-    if (error || !user) {
-        if (error) console.error("Supabase getCurrentUser failed", error);
+    if (error) {
+        if (error.name !== "AuthSessionMissingError") {
+            console.error("Supabase getCurrentUser failed", error);
+        }
         return null;
     }
 

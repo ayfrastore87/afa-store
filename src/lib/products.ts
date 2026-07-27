@@ -23,8 +23,6 @@ export type Product = {
 
 type ProductRow = Record<string, unknown>;
 
-type CategoryRelation = { name?: unknown; slug?: unknown } | { name?: unknown; slug?: unknown }[];
-
 const numberValue = (value: unknown, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -32,19 +30,8 @@ const numberValue = (value: unknown, fallback = 0) => {
 
 const stringValue = (value: unknown, fallback = "") => typeof value === "string" && value.trim() ? value : fallback;
 
-const relationStringValue = (value: unknown, key: "name" | "slug") => {
-    const relation = Array.isArray(value) ? value[0] : value;
-    return relation && typeof relation === "object" ? stringValue((relation as Record<string, unknown>)[key]) : "";
-};
-
 const categoryValue = (row: ProductRow) => {
-    return stringValue(
-        row.category,
-        stringValue(
-            row.category_name,
-            stringValue(relationStringValue(row.category, "name"), stringValue(relationStringValue(row.categories, "name"), stringValue(row.flavor, "Bawang Goreng")))
-        )
-    );
+    return stringValue(row.category, stringValue(row.category_name, stringValue(row.flavor, "Bawang Goreng")));
 };
 
 export const formatRupiah = (price: number) => `Rp ${price.toLocaleString("id-ID")}`;
@@ -79,7 +66,7 @@ export async function fetchProducts() {
         .select("*")
         .order("createdAt", { ascending: false });
     if (error) throw new Error(error.message);
-    return (data ?? []).map((row) => mapProduct(row as ProductRow & { categories?: CategoryRelation }));
+    return (data ?? []).map((row) => mapProduct(row as ProductRow));
 }
 
 export const productSizes = ["35g", "100g", "250g", "500g", "1 Kg"];

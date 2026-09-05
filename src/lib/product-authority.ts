@@ -62,6 +62,30 @@ export async function authorizeProductItems(items: ProductRequestItem[], client:
     });
 }
 
+export async function reconcileProductItems(items: ProductRequestItem[], client: ProductReader = prisma): Promise<AuthoritativeProductItem[]> {
+    const grouped = new Map<string, number>();
+    for (const item of items) {
+        if (!item.id || !Number.isInteger(item.qty) || item.qty < 1) continue;
+        grouped.set(item.id, (grouped.get(item.id) ?? 0) + item.qty);
+    }
+    if (!grouped.size) return [];
+
+    const products = await client.product.findMany({
+        where: { id: { in: [...grouped.keys()] }, isActive: true, stock: { gt: 0 } },
+        select: { id: true, name: true, slug: true, price: true, stock: true, image: true },
+    });
+
+    return products.map((product) => ({
+        id: product.id,
+        qty: Math.min(grouped.get(product.id) ?? 1, product.stock),
+        name: product.name,
+        slug: product.slug,
+        price: product.price,
+        stock: product.stock,
+        image: product.image || "/products/parcel.png",
+    }));
+}
+
 export function productAuthorityResponse(error: unknown) {
     if (error instanceof ProductAuthorityError) return { status: error.status, error: error.message };
     return { status: 500 as const, error: "Terjadi kesalahan server" };

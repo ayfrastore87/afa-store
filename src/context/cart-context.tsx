@@ -123,8 +123,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const applyServerCart = useCallback((data: CartResponse | null) => {
         if (!data) return;
 
-        setCart((current) => {
-            const next = data.items.length ? data.items : current;
+        setCart(() => {
+            const next = data.items;
             writeCartToStorage(next);
             return next;
         });

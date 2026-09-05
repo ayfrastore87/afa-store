@@ -28,7 +28,7 @@ export async function syncOrderPaymentByInvoice(invoice: string) {
             where: { id: order.id },
             data: {
                 paymentStatus: "PAID",
-                status: "PAID",
+                status: order.status === "PENDING" ? "PROCESSING" : order.status,
                 paidAt: payment.paidAt ?? order.paidAt ?? new Date(),
             },
         })

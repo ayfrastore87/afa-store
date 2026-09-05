@@ -352,39 +352,14 @@ export default function AdminPage() {
 
     async function updateOrderStatus(order: Order, status: string) {
         const normalizedStatus = status.toLowerCase();
-        const previousStatus = order.status.toLowerCase();
-        if ((normalizedStatus === "selesai" || normalizedStatus === "completed") && !["selesai", "completed"].includes(previousStatus)) {
-            const ok = await applyOrderStockMovement(order, "SALE");
-            if (!ok) return;
-        }
-        if (["dibatalkan", "batal", "cancelled", "canceled"].includes(normalizedStatus) && !["dibatalkan", "batal", "cancelled", "canceled"].includes(previousStatus)) {
-            const ok = await applyOrderStockMovement(order, "RETURN");
-            if (!ok) return;
-        }
+        // Stock is decremented atomically at checkout. Completion must not decrement it again.
+        // Cancellation restoration remains disabled until a separate policy is approved.
         const orderPatch: Record<string, string> = { status };
         if (normalizedStatus === "selesai" || normalizedStatus === "completed") orderPatch.completedAt = new Date().toISOString();
         if (["dibatalkan", "batal", "cancelled", "canceled"].includes(normalizedStatus)) orderPatch.cancelledAt = new Date().toISOString();
         const { error } = await supabase.from("orders").update(orderPatch).eq("id", order.id);
         if (error) return toast(error.message, "error");
         toast("Status pesanan diperbarui");
-    }
-
-    async function applyOrderStockMovement(order: Order, type: "SALE" | "RETURN") {
-        const items = order.items ?? [];
-        for (const item of items) {
-            const productId = item.productId || item.product_id;
-            if (!productId) continue;
-            const current = products.find((product) => product.id === productId) ?? (await supabase.from("products").select("*").eq("id", productId).single()).data as Product | null;
-            if (!current) continue;
-            const quantity = Number(item.quantity || 0);
-            const previousStock = Number(current.stock || 0);
-            const nextStock = type === "SALE" ? Math.max(0, previousStock - quantity) : previousStock + quantity;
-            const { error } = await supabase.from("products").update({ stock: nextStock }).eq("id", productId);
-            if (error) { toast(error.message, "error"); return false; }
-            await saveStockHistory({ product_id: productId, product_name: current.name || item.name, type, quantity, previous_stock: previousStock, new_stock: nextStock, note: type === "SALE" ? `Pesanan selesai #${order.id}` : `Pesanan dibatalkan #${order.id}`, admin: adminEmail || "Admin AFA STORE", order_id: order.id });
-        }
-        void loadData();
-        return true;
     }
 
     async function logout() {

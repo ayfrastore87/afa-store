@@ -27,16 +27,17 @@ export async function POST(request: Request) {
 
         const order = await prisma.order.findFirst({ where: { invoice, userId: user.id } });
         if (!order) return NextResponse.json({ message: "Pesanan tidak ditemukan." }, { status: 404 });
-        if (order.paymentStatus === "PAID" || order.status === "PAID") {
+        if (order.paymentStatus === "PAID") {
             return NextResponse.json({ message: "Pesanan yang sudah lunas tidak dapat diubah." }, { status: 409 });
         }
-        if (order.paymentStatus === "EXPIRED" || order.status === "EXPIRED") {
+        if (order.paymentStatus === "EXPIRED") {
             return NextResponse.json({ message: "Pesanan yang sudah kedaluwarsa tidak dapat diubah." }, { status: 409 });
         }
         if (order.paymentStatus === "CANCELLED" || order.status === "CANCELLED") {
             return NextResponse.json({ message: "Pesanan yang sudah dibatalkan tidak dapat diubah." }, { status: 409 });
         }
         const paymentMethod = order.paymentMethod;
+        if (paymentMethod !== "TRANSFER_BANK") return NextResponse.json({ message: "Bukti pembayaran hanya tersedia untuk transfer bank manual." }, { status: 409 });
         if (!file.type.startsWith("image/") || file.size <= 0 || file.size > 5 * 1024 * 1024) {
             return NextResponse.json({ message: "Bukti pembayaran harus berupa gambar maksimal 5 MB." }, { status: 400 });
         }
@@ -53,34 +54,16 @@ export async function POST(request: Request) {
         await writeFile(path.join(uploadDir, safeName), buffer);
 
         const paymentProof = `/uploads/payment-proofs/${safeName}`;
-        await prisma.payment.upsert({
-            where: { orderId: order.id },
-            create: {
-                orderId: order.id,
-                method: paymentMethod || order.paymentMethod,
-                amount: order.total,
-                status: "PENDING",
-                expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                paidAt: null,
-            },
-            update: {
-                method: paymentMethod || order.paymentMethod,
-                amount: order.total,
-            },
-        });
-
-        await prisma.order.update({
-            where: { id: order.id },
-            data: {
-                paymentMethod: paymentMethod || order.paymentMethod,
-                paymentProof,
-                paymentStatus: "WAITING_CONFIRMATION",
-            },
+        await prisma.$transaction(async (tx) => {
+            const updated = await tx.payment.updateMany({ where: { orderId: order.id, status: "PENDING" }, data: { method: paymentMethod, amount: order.total } });
+            if (!updated.count) throw new Error("payment_state_changed");
+            await tx.order.update({ where: { id: order.id }, data: { paymentProof, paymentStatus: "PENDING" } });
         });
 
         return NextResponse.json({ message: "Bukti pembayaran berhasil dikirim." }, { status: 200 });
     } catch (error) {
-        console.error("Payment upload Error:", error);
+        if (error instanceof Error && error.message === "payment_state_changed") return NextResponse.json({ message: "Status pembayaran telah berubah." }, { status: 409 });
+        console.error("payment_proof_upload_failed");
         return NextResponse.json({ message: "Bukti pembayaran belum dapat disimpan." }, { status: 500 });
     }
 }

@@ -15,7 +15,7 @@ export default function ProductDetailCta({ product, stock }: Props) {
     const [message, setMessage] = useState("");
 
     const buyNow = async () => {
-        const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId: product.id, quantity }) });
+        const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: product.id, qty: quantity }) });
         const data = await response.json() as { redirectTo?: string; error?: string };
         if (!response.ok) return setMessage(data.error || "Produk tidak dapat dibeli.");
         router.push(data.redirectTo || "/checkout");

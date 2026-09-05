@@ -110,7 +110,7 @@ export async function POST(request: Request) {
                     total,
                     status: "PENDING",
                     paymentMethod,
-                    paymentStatus: paymentMethod === "COD" ? "WAITING_CONFIRMATION" : "WAITING_PAYMENT",
+                    paymentStatus: "PENDING",
                     items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty })) },
                 },
                 include: { items: true, user: true },

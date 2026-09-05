@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, CreditCard, Loader2, MapPin, PackageCheck, QrCode, Truck } from "lucide-react";
 import { CheckoutItem } from "@/lib/checkout";
 import { parseJsonResponse } from "@/lib/api-fetch";
@@ -43,6 +43,7 @@ export default function CheckoutPage() {
     const [loading, setLoading] = useState(true);
     const [paying, setPaying] = useState(false);
     const [error, setError] = useState("");
+    const checkoutKey = useRef<string | null>(null);
     const discount = session?.discount ?? 0;
     const voucher = session?.voucher ?? "Belum digunakan";
 
@@ -80,7 +81,8 @@ export default function CheckoutPage() {
         setError("");
 
         try {
-            const response = await fetch("/api/checkout/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+            if (!checkoutKey.current) checkoutKey.current = crypto.randomUUID();
+            const response = await fetch("/api/checkout/order", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": checkoutKey.current }, body: JSON.stringify(form) });
             if (response.status === 401) {
                 const text = await response.text();
                 let data: { redirectTo?: string };

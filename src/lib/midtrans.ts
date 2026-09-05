@@ -54,13 +54,6 @@ export function getMidtransConfig(): MidtransConfig {
     const isProduction = productionFlag === "true";
     const baseUrl = isProduction ? "https://api.midtrans.com" : "https://api.sandbox.midtrans.com";
 
-    console.log({
-        baseUrl,
-        merchantId: process.env.MIDTRANS_MERCHANT_ID,
-        isProduction,
-        serverKeyPrefix: process.env.MIDTRANS_SERVER_KEY?.substring(0, 15),
-    });
-
     return { serverKey, merchantId, isProduction, baseUrl };
 }
 
@@ -78,7 +71,7 @@ export function getQrisString(response: MidtransChargeResponse) {
 }
 
 export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
-    const { baseUrl, merchantId, isProduction } = getMidtransConfig();
+    const { baseUrl } = getMidtransConfig();
     const endpoint = `${baseUrl}/v2/charge`;
     const grossAmount = payload.amount;
     const itemDetails = payload.items.map((item) => ({
@@ -88,20 +81,6 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
         name: item.name.slice(0, 50),
     }));
     const totalItemDetails = itemDetails.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-    console.log({
-        orderId: payload.invoice,
-        grossAmount,
-        merchantId,
-        environment: isProduction ? "production" : "sandbox",
-        midtransEndpoint: endpoint,
-    });
-    console.log("Gross:", grossAmount);
-    console.log("Items:", itemDetails);
-    console.log({
-        grossAmount,
-        totalItemDetails,
-    });
 
     if (grossAmount !== totalItemDetails) {
         throw new Error(`Midtrans payload invalid: gross_amount ${grossAmount} tidak sama dengan total item_details ${totalItemDetails}.`);
@@ -122,26 +101,6 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
         qris: {},
     };
 
-    console.log("=== MIDTRANS REQUEST ===");
-    console.log({
-        endpoint,
-        merchantId,
-        payload: {
-            payment_type: "qris",
-            transaction_details: {
-                order_id: payload.invoice,
-                gross_amount: grossAmount,
-            },
-            item_details: itemDetails,
-            customer_details: {
-                first_name: payload.customer.name,
-                email: payload.customer.email,
-                phone: payload.customer.phone,
-            },
-            qris: {},
-        },
-    });
-
     const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -154,20 +113,15 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
 
     const text = await response.text();
 
-    console.log("=== MIDTRANS RESPONSE ===");
-    console.log("Status:", response.status);
-    console.log("Headers:", Object.fromEntries(response.headers.entries()));
-    console.log("Body:", text);
-
     if (!response.ok) {
-        console.error({ status: response.status, body: text });
+        console.error("Midtrans request failed", { status: response.status });
     }
 
     let data: MidtransChargeResponse;
     try {
         data = JSON.parse(text) as MidtransChargeResponse;
     } catch {
-        throw new Error(text);
+        throw new Error("Midtrans returned an invalid response.");
     }
 
     const statusMessage = data.status_message || text;
@@ -175,7 +129,7 @@ export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
         if (statusMessage.toLowerCase().includes("unknown merchant")) {
             throw new Error(UNKNOWN_MERCHANT_MESSAGE);
         }
-        throw new Error(`Midtrans error ${response.status}: ${statusMessage} \n${text} `);
+        throw new Error(`Midtrans request failed with status ${response.status}.`);
     }
 
     return data;

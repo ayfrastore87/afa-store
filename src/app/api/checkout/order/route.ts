@@ -5,9 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
-import { createMidtransQrisCharge, getQrisActionUrl, getQrisString } from "@/lib/midtrans";
+import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
 import { isPaymentMethod } from "@/lib/payments";
 import { getCurrentUser } from "@/lib/server-auth";
+import { authorizeProductItems, ProductAuthorityError, productAuthorityResponse } from "@/lib/product-authority";
+import { checkoutRequestHash, normalizeIdempotencyKey } from "@/lib/checkout-idempotency";
 
 export const runtime = "nodejs";
 
@@ -41,10 +43,12 @@ export async function POST(request: Request) {
     try {
         const user = await getCurrentUser();
         if (!user) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        const key = normalizeIdempotencyKey(request.headers.get("Idempotency-Key"));
+        if (!key) return NextResponse.json({ message: "Idempotency-Key is required and must be 255 characters or fewer." }, { status: 400 });
 
         const store = await cookies();
-        const items = decodeCheckoutItems(store.get(CHECKOUT_COOKIE)?.value);
-        if (!items.length) return NextResponse.json({ message: "Checkout kosong." }, { status: 400 });
+        const snapshot = decodeCheckoutItems(store.get(CHECKOUT_COOKIE)?.value);
+        if (!snapshot.length) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
 
         let address: CheckoutAddress;
         try {
@@ -56,143 +60,101 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: "Lengkapi alamat pengiriman." }, { status: 400 });
         }
 
-        const subtotal = checkoutSubtotal(items);
-        const shipping = SHIPPING_COST;
-        const total = subtotal + shipping;
         const note = requireText(address.note) ? ` Catatan: ${address.note!.trim()}` : "";
         const fullAddress = `${address.address}, ${address.district}, ${address.city}, ${address.province} ${address.postalCode}.${note}`;
-        const now = new Date();
         const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
-        const todayPrefix = getInvoicePrefix(now);
-        const todayCount = await prisma.order.count({ where: { invoice: { startsWith: todayPrefix } } });
-
-        const order = await prisma.order.create({
-            data: {
-                userId: user.id,
-                invoice: formatOrderInvoice(now, todayCount + 1),
-                customer: address.recipientName!.trim(),
-                phone: address.phone!.trim(),
-                address: fullAddress,
-                subtotal,
-                shipping,
-                discount: 0,
-                total,
-                status: "PENDING",
-                paymentMethod,
-                paymentStatus: paymentMethod === "COD" ? "WAITING_CONFIRMATION" : "WAITING_PAYMENT",
-                paymentProof: null,
-                paidAt: null,
-                processedAt: null,
-                packedAt: null,
-                shippedAt: null,
-                completedAt: null,
-                cancelledAt: null,
-                items: {
-                    create: items.map((item) => ({
-                        name: item.name,
-                        quantity: item.qty,
-                        price: item.price,
-                        subtotal: item.price * item.qty,
-                    })),
-                },
-            },
-            include: { items: true, user: true },
-        });
-
         const normalizedMethod = isPaymentMethod(paymentMethod) ? paymentMethod : "QRIS";
+        const requestHash = checkoutRequestHash(user.id, address, snapshot.map(({ id, qty }) => ({ id, qty })));
+        const existing = await prisma.checkoutIdempotency.findUnique({ where: { key } });
+        if (existing) {
+            if (existing.userId !== user.id || existing.requestHash !== requestHash) {
+                return NextResponse.json({ message: "Idempotency key has already been used with a different request." }, { status: 409 });
+            }
+            if (existing.responsePayload) return NextResponse.json(existing.responsePayload, { status: 201 });
+            return NextResponse.json({ success: false, status: "PROCESSING", message: "Checkout is already being processed." }, { status: 409 });
+        }
         const paymentStatus = paymentMethod === "COD" ? "PENDING" : "PENDING";
         const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000);
+        let order;
+        let total = 0;
+        const shipping = SHIPPING_COST;
+        try {
+        order = await prisma.$transaction(async (tx) => {
+            await tx.checkoutIdempotency.create({ data: { key, userId: user.id, requestHash, status: "PROCESSING" } });
+            const items = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })), tx);
+            const subtotal = checkoutSubtotal(items);
+            total = subtotal + shipping;
+            const orderedItems = [...items].sort((a, b) => a.id.localeCompare(b.id));
+            for (const item of orderedItems) {
+                const changed = await tx.product.updateMany({
+                    where: { id: item.id, isActive: true, stock: { gte: item.qty } },
+                    data: { stock: { decrement: item.qty } },
+                });
+                if (changed.count !== 1) throw new ProductAuthorityError(409, "Stok produk tidak mencukupi");
+            }
 
-        let qrisUrl: string | null = null;
-        let expiredAt = defaultExpiredAt;
-        let transactionId: string | null = null;
-        let transactionRef: string | null = null;
-        let paymentType: string | null = null;
-        let rawResponse: Prisma.InputJsonValue | null = null;
-
-        if (normalizedMethod === "QRIS") {
-            const midtrans = await createMidtransQrisCharge({
-                invoice: order.invoice,
-                amount: total,
-                customer: { name: order.customer, email: order.user?.email, phone: order.phone },
-                items: [
-                    ...order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })),
-                    { id: "shipping", name: "Ongkir", price: shipping, quantity: 1 },
-                ],
-                expiryMinutes: 60,
+            const now = new Date();
+            const todayPrefix = getInvoicePrefix(now);
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${todayPrefix}))`;
+            const todayCount = await tx.order.count({ where: { invoice: { startsWith: todayPrefix } } });
+            const created = await tx.order.create({
+                data: {
+                    userId: user.id,
+                    invoice: formatOrderInvoice(now, todayCount + 1),
+                    customer: address.recipientName!.trim(),
+                    phone: address.phone!.trim(),
+                    address: fullAddress,
+                    subtotal,
+                    shipping,
+                    discount: 0,
+                    total,
+                    status: "PENDING",
+                    paymentMethod,
+                    paymentStatus: paymentMethod === "COD" ? "WAITING_CONFIRMATION" : "WAITING_PAYMENT",
+                    items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty })) },
+                },
+                include: { items: true, user: true },
             });
-            qrisUrl = getQrisActionUrl(midtrans);
-            console.log({ qrUrl: qrisUrl, qrString: getQrisString(midtrans), actions: midtrans.actions });
-            expiredAt = midtrans.expiry_time ? new Date(midtrans.expiry_time.replace(" ", "T")) : defaultExpiredAt;
-            transactionId = midtrans.transaction_id ?? null;
-            transactionRef = midtrans.order_id ?? order.invoice;
-            paymentType = midtrans.payment_type ?? "qris";
-            rawResponse = midtrans as Prisma.InputJsonValue;
+            await tx.payment.create({ data: { orderId: created.id, method: normalizedMethod, amount: total, status: paymentStatus, expiredAt: defaultExpiredAt } });
+            await tx.checkoutHistory.create({
+                data: { userId: user.id, orderId: created.id, channel: "checkout", items, subtotal, shipping, discount: 0, total, city: address.city?.trim() || null, message: `Order ${created.invoice} dibuat pada ${now.toISOString()}${address.email ? ` untuk ${address.email.trim()}` : ""}` },
+            });
+            const responsePayload = { success: true, status: "PENDING", orderId: created.id, invoice: created.invoice, redirectTo: normalizedMethod === "QRIS" ? `/payment/${created.invoice}` : `/order/${created.invoice}` };
+            await tx.checkoutIdempotency.update({ where: { key }, data: { orderId: created.id, status: "COMPLETED", responsePayload } });
+            return created;
+        });
+        } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+                return NextResponse.json({ success: false, error: "Checkout belum tersedia karena komponen idempotensi belum dipasang." }, { status: 503 });
+            }
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                const concurrent = await prisma.checkoutIdempotency.findUnique({ where: { key } });
+                if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash && concurrent.responsePayload) return NextResponse.json(concurrent.responsePayload, { status: 201 });
+                if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash) return NextResponse.json({ success: false, status: "PROCESSING", message: "Checkout is already being processed." }, { status: 409 });
+                return NextResponse.json({ message: "Idempotency key has already been used with a different request." }, { status: 409 });
+            }
+            throw error;
         }
 
-        await prisma.payment.upsert({
-            where: { orderId: order.id },
-            create: {
-                orderId: order.id,
-                method: normalizedMethod,
-                amount: total,
-                status: paymentStatus,
-                transactionId,
-                transactionRef,
-                paymentType,
-                qrisUrl,
-                rawResponse: rawResponse ?? Prisma.JsonNull,
-                expiredAt,
-                paidAt: null,
-            },
-            update: {
-                method: normalizedMethod,
-                amount: total,
-                status: paymentStatus,
-                transactionId,
-                transactionRef,
-                paymentType,
-                qrisUrl,
-                rawResponse: rawResponse ?? Prisma.JsonNull,
-                expiredAt,
-            },
-        });
+        let qrisUrl: string | null = null;
+        if (normalizedMethod === "QRIS") {
+            const midtrans = await createMidtransQrisCharge({ invoice: order.invoice, amount: total, customer: { name: order.customer, email: order.user?.email, phone: order.phone }, items: [...order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })), { id: "shipping", name: "Ongkir", price: shipping, quantity: 1 }], expiryMinutes: 60 });
+            qrisUrl = getQrisActionUrl(midtrans);
+            await prisma.payment.update({ where: { orderId: order.id }, data: { qrisUrl, transactionId: midtrans.transaction_id ?? null, transactionRef: midtrans.order_id ?? order.invoice, paymentType: midtrans.payment_type ?? "qris", rawResponse: midtrans as Prisma.InputJsonValue, expiredAt: midtrans.expiry_time ? new Date(midtrans.expiry_time.replace(" ", "T")) : defaultExpiredAt } });
+        }
 
-        await prisma.checkoutHistory.create({
-            data: {
-                userId: user.id,
-                orderId: order.id,
-                channel: "checkout",
-                items,
-                subtotal,
-                shipping,
-                discount: 0,
-                total,
-                city: address.city?.trim() || null,
-                message: `Order ${order.invoice} dibuat pada ${now.toISOString()}${address.email ? ` untuk ${address.email.trim()}` : ""}`,
-            },
-        });
+        const cart = getSupabaseServerClient().from("cart_items");
+        for (const item of snapshot) {
+            const clearCart = await cart.delete().eq("userId", user.id).eq("productRef", item.id).eq("quantity", item.qty);
+            if (clearCart.error) throw new Error(clearCart.error.message);
+        }
 
-        const clearCart = await getSupabaseServerClient().from("cart_items").delete().eq("userId", user.id);
-        if (clearCart.error) throw new Error(clearCart.error.message);
-
-        const response = NextResponse.json({ redirectTo: normalizedMethod === "QRIS" ? `/payment/${order.invoice}` : `/order/${order.invoice}` }, { status: 201 });
+        const response = NextResponse.json({ success: true, status: "PENDING", orderId: order.id, invoice: order.invoice, redirectTo: normalizedMethod === "QRIS" ? `/payment/${order.invoice}` : `/order/${order.invoice}` }, { status: 201 });
         response.cookies.set(CHECKOUT_COOKIE, "", { path: "/", maxAge: 0 });
         return response;
     } catch (error) {
-        console.error("Checkout Error:", error);
-        const message = error instanceof Error && error.message === "Server Key atau Merchant ID tidak cocok dengan environment Sandbox/Production."
-            ? error.message
-            : error instanceof Error
-                ? error.message
-                : String(error);
-        return NextResponse.json(
-            {
-                success: false,
-                message,
-                stack: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.stack : undefined) : undefined,
-            },
-            { status: 500 }
-        );
+        console.error("Checkout Error", error);
+        const safe = productAuthorityResponse(error);
+        return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
     }
 }

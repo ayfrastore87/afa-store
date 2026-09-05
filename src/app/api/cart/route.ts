@@ -3,10 +3,11 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { buildCartResponse, normalizeCartItems, type CartItem } from "@/lib/cart";
 import { getCurrentUser } from "@/lib/server-auth";
+import { authorizeProductItems, parseProductRequestItem, productAuthorityResponse } from "@/lib/product-authority";
 
 export const runtime = "nodejs";
 
-type ProductRow = { id: string; name?: string; slug?: string | null; price?: number; image?: string };
+type ProductRow = { id: string; name?: string; slug?: string | null; price?: number; image?: string; stock?: number; isActive?: boolean };
 type CartItemRow = { id: string; userId: string; productId: string | null; productRef: string; name: string; price: number; image: string | null; quantity: number; createdAt?: string; updatedAt?: string };
 const GUEST_CART_COOKIE = "afa-guest-cart";
 
@@ -55,16 +56,8 @@ function withGuestCartCookie(items: CartItem[]) {
 
 function cartErrorResponse(error: unknown) {
     console.error("Checkout Error:", error);
-    return NextResponse.json(
-        {
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-            stack: process.env.NODE_ENV === "development"
-                ? (error instanceof Error ? error.stack : undefined)
-                : undefined,
-        },
-        { status: 500 }
-    );
+    const safe = productAuthorityResponse(error);
+    return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
 }
 
 async function getCart(userId: string, payloadItems: CartItem[] = []) {
@@ -78,7 +71,7 @@ async function getCart(userId: string, payloadItems: CartItem[] = []) {
     let productMap = new Map<string, ProductRow>();
 
     if (ids.length) {
-        const products = await supabase.from("products").select("id,name,slug,price,image").in("id", ids);
+        const products = await supabase.from("products").select("id,name,slug,price,image,stock,isActive").in("id", ids).eq("isActive", true);
         if (!products.error) productMap = new Map(((products.data ?? []) as ProductRow[]).map((product) => [product.id, product]));
     }
 
@@ -88,10 +81,10 @@ async function getCart(userId: string, payloadItems: CartItem[] = []) {
         const payload = payloadMap.get(itemId);
         return {
             id: itemId,
-            name: row.name ?? product?.name ?? payload?.name ?? fallbackItem(itemId, row.quantity).name,
-            slug: product?.slug ?? payload?.slug ?? null,
-            price: Number(row.price ?? product?.price ?? payload?.price ?? 0),
-            image: row.image ?? product?.image ?? payload?.image ?? fallbackItem(itemId, row.quantity).image,
+            name: product?.name ?? fallbackItem(itemId, row.quantity).name,
+            slug: product?.slug ?? null,
+            price: Number(product?.price ?? 0),
+            image: product?.image ?? fallbackItem(itemId, row.quantity).image,
             qty: row.quantity,
         };
     });
@@ -112,12 +105,22 @@ export async function POST(request: Request) {
     try {
         const user = await getOptionalUser();
         const body = await request.json() as { item?: CartItem; items?: CartItem[] };
-        const incomingItems = normalizeCartItems(body.items ? body.items : body.item ? [body.item] : []);
-        if (!incomingItems.length) return NextResponse.json({ message: "Item keranjang tidak valid." }, { status: 400 });
+        const rawItems: unknown[] = body.items ? body.items : body.item ? [body.item] : [];
+        const requested = rawItems.map((value) => {
+            const item = value as Record<string, unknown>;
+            return parseProductRequestItem({ id: item.id, qty: item.qty });
+        });
+        if (!requested.length || requested.some((item) => item === null)) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
+        const incomingItems = await authorizeProductItems(requested.filter((item): item is NonNullable<typeof item> => item !== null));
 
         if (!user) {
             const current = await getGuestCart();
-            return withGuestCartCookie([...current.items, ...incomingItems]);
+            const incomingById = new Map(incomingItems.map((item) => [item.id, item]));
+            const merged = normalizeCartItems([...current.items, ...incomingItems]).map((item) => {
+                const product = incomingById.get(item.id);
+                return product ? { ...item, qty: Math.min(item.qty, product.stock) } : item;
+            });
+            return withGuestCartCookie(merged);
         }
 
         const supabase = getSupabaseServerClient();
@@ -127,17 +130,15 @@ export async function POST(request: Request) {
         const existingMap = new Map(((existingData ?? []) as CartItemRow[]).map((row) => [row.productRef, row]));
         const now = new Date().toISOString();
 
-        const productIds = incomingItems.map((item) => item.id);
-        const products = await supabase.from("products").select("id").in("id", productIds);
-        const validProductIds = new Set(((products.data ?? []) as ProductRow[]).map((product) => product.id));
-
-        await Promise.all(incomingItems.map((item) => {
+        const writes = await Promise.all(incomingItems.map((item) => {
             const existing = existingMap.get(item.id);
             if (existing) {
-                return supabase.from("cart_items").update({ quantity: existing.quantity + item.qty, updatedAt: now }).eq("id", existing.id);
+                return supabase.from("cart_items").update({ quantity: Math.min(existing.quantity + item.qty, item.stock), updatedAt: now }).eq("id", existing.id);
             }
-            return supabase.from("cart_items").insert({ userId: user.id, productId: validProductIds.has(item.id) ? item.id : null, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
+            return supabase.from("cart_items").insert({ userId: user.id, productId: item.id, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
         }));
+        const writeError = writes.find((result) => result.error)?.error;
+        if (writeError) throw new Error(writeError.message);
 
         return NextResponse.json(await getCart(user.id, incomingItems));
     } catch (error) {
@@ -157,15 +158,17 @@ async function updateQuantity(request: Request) {
     try {
         const user = await getOptionalUser();
         const body = await request.json() as { id?: string; qty?: number };
-        if (!body.id || typeof body.qty !== "number") return NextResponse.json({ message: "Payload update keranjang tidak valid." }, { status: 400 });
+        if (!body.id || typeof body.qty !== "number") return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
 
         if (!user) {
             const current = await getGuestCart();
+            if (body.qty > 0) await authorizeProductItems([{ id: body.id, qty: body.qty }]);
             const next = body.qty <= 0 ? current.items.filter((item) => item.id !== body.id) : current.items.map((item) => item.id === body.id ? { ...item, qty: body.qty ?? item.qty } : item);
             return withGuestCartCookie(next);
         }
 
         const supabase = getSupabaseServerClient();
+        if (body.qty > 0) await authorizeProductItems([{ id: body.id, qty: body.qty }]);
         const cartRequest = body.qty <= 0
             ? supabase.from("cart_items").delete().eq("userId", user.id).eq("productRef", body.id)
             : supabase.from("cart_items").update({ quantity: body.qty, updatedAt: new Date().toISOString() }).eq("userId", user.id).eq("productRef", body.id);

@@ -28,38 +28,29 @@ export async function POST(request: Request) {
         const status = payload.transaction_status;
         const isPaid = status === "settlement" || (status === "capture" && payload.fraud_status === "accept");
         const isExpired = status === "expire";
+        const isCancelled = status === "cancel" || status === "deny";
+        const nextStatus = isPaid ? "PAID" : isExpired ? "EXPIRED" : isCancelled ? "CANCELLED" : null;
 
-        if (isPaid) {
-            await prisma.order.update({
-                where: { invoice },
-                data: {
-                    status: "PAID",
-                    paymentStatus: "PAID",
-                    paidAt: new Date(),
-                    payment: {
-                        update: {
-                            status: "PAID",
-                            transactionId: payload.transaction_id ?? undefined,
-                            paymentType: payload.payment_type ?? undefined,
-                            paidAt: new Date(),
-                        },
+        if (nextStatus) {
+            const terminalStatuses = ["PAID", "EXPIRED", "CANCELLED"];
+            const paidAt = nextStatus === "PAID" ? new Date() : undefined;
+            await prisma.$transaction(async (tx) => {
+                const order = await tx.order.findUnique({ where: { invoice }, select: { id: true } });
+                if (!order) return;
+                const changed = await tx.order.updateMany({
+                    where: { id: order.id, status: { notIn: terminalStatuses }, paymentStatus: { notIn: terminalStatuses } },
+                    data: { status: nextStatus, paymentStatus: nextStatus, paidAt },
+                });
+                if (!changed.count) return;
+                await tx.payment.updateMany({
+                    where: { orderId: order.id, status: { notIn: terminalStatuses } },
+                    data: {
+                        status: nextStatus,
+                        transactionId: payload.transaction_id ?? undefined,
+                        paymentType: payload.payment_type ?? undefined,
+                        paidAt,
                     },
-                },
-            });
-        } else if (isExpired) {
-            await prisma.order.update({
-                where: { invoice },
-                data: {
-                    status: "EXPIRED",
-                    paymentStatus: "EXPIRED",
-                    payment: {
-                        update: {
-                            status: "EXPIRED",
-                            transactionId: payload.transaction_id ?? undefined,
-                            paymentType: payload.payment_type ?? undefined,
-                        },
-                    },
-                },
+                });
             });
         }
 

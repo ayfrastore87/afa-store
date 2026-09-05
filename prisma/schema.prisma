@@ -21,6 +21,7 @@ model User {
   orders              Order[]
   userVouchers        UserVoucher[]
   checkoutHistories   CheckoutHistory[]
+  checkoutIdempotencies CheckoutIdempotency[]
   passwordResetTokens PasswordResetToken[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -48,28 +49,33 @@ model Address {
   @@map("addresses")
 }
 
+model Category {
+  id       String    @id
+  name     String
+  slug     String
+  products Product[]
+
+  @@map("categories")
+}
+
 model Product {
-  id           String      @id @default(cuid())
-  category     String      @default("Bawang Goreng")
-  name         String
-  slug         String      @unique
-  sku          String?     @unique
-  description  String?
-  flavor       String?
-  size         String?
-  price        Int
-  stock        Int         @default(0)
-  minimumStock Int         @default(0)
-  image        String?
-  badge        String?
-  rating       Float       @default(0)
-  status       String      @default("Aktif")
-  isActive     Boolean     @default(true)
-  orderItems   OrderItem[]
-  wishlists    Wishlist[]
-  cartItems    CartItem[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id         String      @id
+  categoryId String?
+  category   Category?   @relation(fields: [categoryId], references: [id])
+  name       String
+  slug       String
+  flavor     String?
+  size       String?
+  price      Int
+  stock      Int
+  image      String?
+  badge      String?
+  rating     Float
+  isActive   Boolean
+  orderItems OrderItem[]
+  wishlists  Wishlist[]
+  cartItems  CartItem[]
+  createdAt  DateTime
 
   @@map("products")
 }
@@ -138,6 +144,7 @@ model Order {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   payment           Payment?
+  checkoutIdempotency CheckoutIdempotency?
 
   @@map("orders")
 }
@@ -224,6 +231,25 @@ model CheckoutHistory {
   createdAt DateTime @default(now())
 
   @@map("checkout_histories")
+}
+
+model CheckoutIdempotency {
+  id              String    @id @default(cuid())
+  key             String    @unique
+  userId          String
+  orderId         String?   @unique
+  requestHash     String
+  status          String
+  responsePayload Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  expiresAt       DateTime?
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status, expiresAt])
 }
 
 model PasswordResetToken {

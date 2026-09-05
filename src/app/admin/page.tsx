@@ -16,15 +16,13 @@ type Product = {
     id: string;
     name: string;
     slug: string;
-    sku?: string | null;
     price: number;
     stock: number;
-    minimumStock?: number | null;
     rating: number | null;
-    description?: string | null;
     flavor: string | null;
     size: string | null;
     badge: string | null;
+    categoryId: string | null;
     category?: string | null;
     image: string | null;
     isActive: boolean;
@@ -62,16 +60,13 @@ type ProductForm = {
     id?: string;
     name: string;
     slug: string;
-    sku: string;
     price: string;
     stock: string;
-    minimumStock: string;
     rating: string;
-    description: string;
     flavor: string;
     size: string;
     badge: string;
-    category: string;
+    categoryId: string;
     image: string;
     isActive: boolean;
 };
@@ -79,16 +74,13 @@ type ProductForm = {
 const emptyForm: ProductForm = {
     name: "",
     slug: "",
-    sku: "",
     price: "",
     stock: "0",
-    minimumStock: "10",
     rating: "0",
-    description: "",
     flavor: "",
     size: "",
     badge: "",
-    category: "Bawang Goreng",
+    categoryId: "",
     image: "",
     isActive: true,
 };
@@ -205,6 +197,7 @@ export default function AdminPage() {
     const [checkingAuth, setCheckingAuth] = useState(true);
     const [adminEmail, setAdminEmail] = useState("");
     const [products, setProducts] = useState<Product[]>([]);
+    const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -213,15 +206,17 @@ export default function AdminPage() {
 
     const loadData = useCallback(async () => {
         setLoading(true);
-        const [productRes, orderRes] = await Promise.all([
+        const [productRes, orderRes, categoryRes] = await Promise.all([
             supabase.from("products").select("*").order("createdAt", { ascending: false }),
             supabase.from("orders").select("*, items:order_items(name, quantity, productId)").order("createdAt", { ascending: false }),
+            fetch("/api/categories").then((response) => response.json() as Promise<{ data?: { id: string; name: string }[] }>),
         ]);
 
         if (productRes.error) toast(productRes.error.message, "error");
         if (orderRes.error) toast(orderRes.error.message, "error");
         setProducts((productRes.data ?? []) as Product[]);
         setOrders((orderRes.data ?? []) as Order[]);
+        setCategories(categoryRes.data ?? []);
         setLoading(false);
     }, []);
 
@@ -300,20 +295,18 @@ export default function AdminPage() {
         const payload = {
             name: form.name,
             slug: form.slug || slugify(form.name),
-            sku: form.sku || null,
             price: Number(form.price || 0),
             stock: Number(form.stock || 0),
-            minimumStock: Number(form.minimumStock || 0),
             rating: Number(form.rating || 0),
-            description: form.description || null,
             flavor: form.flavor || null,
             size: form.size || null,
             badge: form.badge || null,
-            category: form.category || "Bawang Goreng",
+            categoryId: form.categoryId || null,
             image: form.image || null,
             isActive: form.isActive,
         };
-        const result = form.id ? await supabase.from("products").update(payload).eq("id", form.id) : await supabase.from("products").insert(payload);
+        const response = await fetch(form.id ? `/api/products/${form.id}` : "/api/products", { method: form.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const result = { error: response.ok ? null : new Error((await response.json()).error || "Produk gagal disimpan") };
         setSaving(false);
         if (result.error) return toast(result.error.message, "error");
         setForm(emptyForm);
@@ -327,16 +320,13 @@ export default function AdminPage() {
             id: product.id,
             name: product.name,
             slug: product.slug,
-            sku: product.sku ?? "",
             price: String(product.price),
             stock: String(product.stock),
-            minimumStock: String(product.minimumStock ?? 10),
             rating: String(product.rating ?? 0),
-            description: product.description ?? "",
             flavor: product.flavor ?? "",
             size: product.size ?? "",
             badge: product.badge ?? "",
-            category: product.category ?? "Bawang Goreng",
+            categoryId: product.categoryId ?? "",
             image: product.image ?? "",
             isActive: product.isActive,
         });
@@ -346,11 +336,9 @@ export default function AdminPage() {
     async function deleteProduct(product: Product) {
         const confirm = await Swal.fire({ title: "Hapus produk?", text: product.name, icon: "warning", showCancelButton: true, confirmButtonColor: "#184D47", cancelButtonText: "Batal", confirmButtonText: "Hapus" });
         if (!confirm.isConfirmed) return;
-        const { error } = await supabase.from("products").delete().eq("id", product.id);
-        if (error) return toast(error.message, "error");
-        const path = storagePathFromPublicUrl(product.image, "products");
-        if (path) await supabase.storage.from("products").remove([path]);
-        toast("Produk dihapus");
+        const response = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
+        if (!response.ok) return toast("Produk gagal dinonaktifkan", "error");
+        toast("Produk dinonaktifkan");
         void loadData();
     }
 
@@ -429,7 +417,7 @@ export default function AdminPage() {
                             {activeTab === "home" && <HomePanel summary={summary} adminEmail={adminEmail} />}
                             {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} />}
                             {activeTab === "stock" && <StockPanel />}
-                            {activeTab === "add" && <ProductFormPanel form={form} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUpload={uploadImage} onCancel={() => setForm(emptyForm)} />}
+                            {activeTab === "add" && <ProductFormPanel form={form} categories={categories} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUpload={uploadImage} onCancel={() => setForm(emptyForm)} />}
                             {activeTab === "orders" && <OrdersPanel orders={orders} onStatus={updateOrderStatus} />}
                             {activeTab === "testimonials" && <TestimonialsPanel />}
                             {activeTab === "reports" && <ReportsPanel />}
@@ -499,9 +487,9 @@ function ActionButtons({ product, onEdit, onDelete }: { product: Product; onEdit
     return <div className="flex gap-2"><button onClick={() => onEdit(product)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#184D47] text-white transition active:scale-95"><Edit3 size={17} /></button><button onClick={() => void onDelete(product)} className="grid h-12 w-12 place-items-center rounded-2xl bg-red-600 text-white transition active:scale-95"><Trash2 size={17} /></button></div>;
 }
 
-function ProductFormPanel({ form, saving, onChange, onSubmit, onUpload, onCancel }: { form: ProductForm; saving: boolean; onChange: (field: keyof ProductForm, value: string | boolean) => void; onSubmit: (event: FormEvent) => void; onUpload: (file: File) => void; onCancel: () => void }) {
-    const fields: [keyof ProductForm, string, string][] = [["name", "Nama", "text"], ["slug", "Slug otomatis", "text"], ["sku", "SKU", "text"], ["price", "Harga", "number"], ["stock", "Stok", "number"], ["minimumStock", "Minimum Stok", "number"], ["rating", "Rating", "number"], ["flavor", "Flavor", "text"], ["size", "Size", "text"], ["badge", "Badge", "text"]];
-    return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} placeholder={`Masukkan ${label.toLowerCase()}`} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15" required={["name", "slug", "price"].includes(key)} />{["name", "price"].includes(key) && !form[key] && <p className="text-xs font-bold text-red-500">Wajib diisi.</p>}</label>)}<label className="space-y-2"><span className="text-sm font-bold">Kategori</span><select value={form.category} onChange={(event) => onChange("category", event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 font-bold outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15">{["Bawang Goreng", "Parcel", "Lainnya"].map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white p-4 font-bold"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Status Aktif</label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Deskripsi</span><textarea value={form.description} onChange={(event) => onChange("description", event.target.value)} rows={4} placeholder="Deskripsi produk" className="w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 py-3 outline-none transition focus:border-[#C8A14A] focus:ring-4 focus:ring-[#D4AF37]/15" /></label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Upload Foto</span><div className="flex flex-col gap-3 rounded-3xl border border-dashed border-[#184D47]/25 bg-[#f8f0dd] p-4 sm:flex-row sm:items-center"><Camera className="text-[#C8A14A]" /><input type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} className="min-h-12 text-sm" /><input value={form.image} onChange={(event) => onChange("image", event.target.value)} placeholder="URL image otomatis" className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white px-4" /></div></label><div className="grid gap-3 md:col-span-2 sm:grid-cols-[1fr_auto]"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#184D47] px-5 font-black text-white transition active:scale-95 disabled:opacity-60">{saving ? "Menyimpan..." : "Simpan ke Supabase"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border border-[#184D47]/20 px-5 font-bold transition active:scale-95">Reset</button></div></form></Card>;
+function ProductFormPanel({ form, categories, saving, onChange, onSubmit, onUpload, onCancel }: { form: ProductForm; categories: { id: string; name: string }[]; saving: boolean; onChange: (field: keyof ProductForm, value: string | boolean) => void; onSubmit: (event: FormEvent) => void; onUpload: (file: File) => void; onCancel: () => void }) {
+    const fields: [keyof ProductForm, string, string][] = [["name", "Nama", "text"], ["slug", "Slug otomatis", "text"], ["price", "Harga", "number"], ["stock", "Stok", "number"], ["rating", "Rating", "number"], ["flavor", "Flavor", "text"], ["size", "Size", "text"], ["badge", "Badge", "text"]];
+    return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} min={type === "number" ? 0 : undefined} max={key === "rating" ? 5 : undefined} step={key === "rating" ? "0.1" : undefined} className="min-h-12 w-full rounded-2xl border bg-white px-4" required /></label>)}<label className="space-y-2"><span className="text-sm font-bold">Kategori</span><select value={form.categoryId} onChange={(event) => onChange("categoryId", event.target.value)} className="min-h-12 w-full rounded-2xl border bg-white px-4"><option value="">Tanpa Kategori</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="flex items-center gap-3"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Produk Aktif</label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Foto</span><input type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} /><input value={form.image} onChange={(event) => onChange("image", event.target.value)} className="min-h-12 w-full rounded-2xl bg-white px-4" placeholder="URL image" /></label><div className="grid gap-3 md:col-span-2 sm:grid-cols-[1fr_auto]"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#184D47] px-5 font-black text-white">{saving ? "Menyimpan..." : "Simpan"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border px-5 font-bold">Reset</button></div></form></Card>;
 }
 
 function OrdersPanel({ orders, onStatus }: { orders: Order[]; onStatus: (order: Order, status: string) => void }) {

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { fetchJsonSafe } from "@/lib/api-fetch";
 
@@ -34,6 +34,7 @@ export function PaymentProofForm({ invoice, total, paymentMethod, paymentStatus,
 
     const onFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const selected = event.target.files?.[0] || null;
+        if (preview) URL.revokeObjectURL(preview);
         setFile(selected);
         if (selected) {
             setPreview(URL.createObjectURL(selected));
@@ -41,6 +42,10 @@ export function PaymentProofForm({ invoice, total, paymentMethod, paymentStatus,
             setPreview("");
         }
     };
+
+    useEffect(() => () => {
+        if (preview) URL.revokeObjectURL(preview);
+    }, [preview]);
 
     const submit = async (event: React.FormEvent) => {
         event.preventDefault();

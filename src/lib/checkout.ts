@@ -12,7 +12,7 @@ export type CheckoutItem = {
 export function isCheckoutItem(value: unknown): value is CheckoutItem {
     if (typeof value !== "object" || value === null) return false;
     const item = value as Partial<CheckoutItem>;
-    return typeof item.id === "string" && typeof item.name === "string" && typeof item.price === "number" && typeof item.image === "string" && typeof item.qty === "number" && item.qty > 0;
+    return typeof item.id === "string" && typeof item.name === "string" && typeof item.price === "number" && typeof item.image === "string" && typeof item.qty === "number" && Number.isInteger(item.qty) && item.qty > 0;
 }
 
 export function encodeCheckoutItems(items: CheckoutItem[]) {

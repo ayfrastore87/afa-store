@@ -71,6 +71,47 @@ body[data-theme="dark"] option {
   color: #eef4ed;
 }
 
+.theme-toggle {
+  isolation: isolate;
+}
+
+.theme-tooltip {
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 100;
+  width: max-content;
+  max-width: min(9rem, calc(100vw - 2rem));
+  border: 1px solid rgba(201, 164, 91, 0.28);
+  border-radius: 10px;
+  background: #17251d;
+  color: #fffaf0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  padding: 0.55rem 0.7rem;
+  transform: translateY(-4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover .theme-tooltip,
+.theme-toggle:focus-visible .theme-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+body[data-theme="dark"] .theme-toggle {
+  background: linear-gradient(135deg, rgba(212, 176, 106, 0.16), rgba(15, 23, 19, 0.78));
+  border-color: rgba(212, 176, 106, 0.42);
+  color: #f4e8c9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
 body[data-theme="dark"] button,
 body[data-theme="dark"] a {
   color: inherit;

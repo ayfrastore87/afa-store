@@ -28,6 +28,15 @@ type UserLike = Omit<PublicUser, "createdAt" | "updatedAt" | "phone" | "image"> 
     updatedAt?: Date | string;
 };
 
+function providerStatus(error: unknown) {
+    if (typeof error === "object" && error !== null && "status" in error) {
+        const status = (error as { status?: unknown }).status;
+        return typeof status === "number" ? status : undefined;
+    }
+
+    return undefined;
+}
+
 function getJwtSecret() {
     return new TextEncoder().encode(process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "afa-store-dev-secret");
 }
@@ -77,7 +86,11 @@ export async function ensurePublicUser(user: User, fallbackName?: string) {
         .maybeSingle();
 
     if (existingError) {
-        console.error("Supabase ensurePublicUser lookup failed", existingError);
+        console.error("Supabase ensurePublicUser lookup failed", {
+            category: "public_user_lookup",
+            name: existingError.name || "SupabaseError",
+            status: providerStatus(existingError),
+        });
         throw existingError;
     }
 
@@ -99,7 +112,11 @@ export async function ensurePublicUser(user: User, fallbackName?: string) {
         .single();
 
     if (createError) {
-        console.error("Supabase ensurePublicUser create failed", createError);
+        console.error("Supabase ensurePublicUser create failed", {
+            category: "public_user_create",
+            name: createError.name || "SupabaseError",
+            status: providerStatus(createError),
+        });
         throw createError;
     }
 

@@ -60,7 +60,8 @@ export async function POST(request: Request) {
                 : /already|registered|exists/i.test(error.message)
                     ? "Email sudah digunakan."
                     : "Registrasi gagal. Silakan coba lagi.";
-            return NextResponse.json({ message }, { status: 400 });
+            const status = /already|registered|exists/i.test(error.message) ? 409 : 400;
+            return NextResponse.json({ message }, { status });
         }
 
         const authUser = data.user;

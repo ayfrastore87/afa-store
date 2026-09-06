@@ -66,7 +66,7 @@ export default function Home() {
   const { scrollYProgress } = useScroll();
   const cartItemCount = totalItems;
   const visibleProducts = useMemo(() => products.filter((p) => { const term = query.trim().toLowerCase(); const searchable = [p.name, p.slug, p.flavor, p.size, p.category].filter(Boolean).join(" ").toLowerCase(); return (filter === "Semua" || p.category === filter) && searchable.includes(term); }).sort((a, b) => sort === "low" ? a.price - b.price : sort === "high" ? b.price - a.price : b.rating - a.rating), [filter, products, query, sort]);
-  const parcelProducts = products.filter((p) => typeof p.category === "string" && p.category.trim().toLowerCase() === "parcel").sort((a, b) => sort === "low" ? a.price - b.price : sort === "high" ? b.price - a.price : b.rating - a.rating);
+  const parcelProducts = useMemo(() => products.filter((p) => p.category?.trim().toLowerCase() === "parcel"), [products]);
   const addCart = (item: { id: string; name: string; slug?: string | null; price: number; image: string }) => { addToCart(item); setCartOpen(true); };
   const buyNow = async (item: { id: string; name: string; slug?: string | null; price: number; image: string }) => {
     try {

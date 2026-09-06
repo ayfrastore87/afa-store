@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  --background: #F8F5EE;
+  --foreground: #123524;
+  --muted: #6D6558;
+  --border: rgba(201, 164, 91, 0.2);
+  --accent: #A7833A;
   --cream: #F8F5EE;
   --ivory: #FFFDF8;
   --secondary: #EFE6D5;
@@ -30,6 +35,11 @@ body {
 }
 
 body[data-theme="dark"] {
+  --background: #101713;
+  --foreground: #FFF8E8;
+  --muted: #D8CDB8;
+  --border: rgba(220, 184, 105, 0.3);
+  --accent: #E0B968;
   --cream: #0f1713;
   --ivory: #111c17;
   --secondary: #16231d;
@@ -43,6 +53,19 @@ body[data-theme="dark"] {
     linear-gradient(135deg, #0a100d, #111a16 52%, #132019);
   color: var(--dark-text);
 }
+
+body[data-theme="dark"] main { background: var(--background) !important; color: var(--foreground); }
+body[data-theme="dark"] header { background: rgba(16, 23, 19, 0.94) !important; border-color: var(--border); }
+body[data-theme="dark"] header input::placeholder { color: var(--muted); opacity: 1; }
+body[data-theme="dark"] #beranda {
+  background: radial-gradient(circle at 82% 18%, rgba(220,184,105,.24), transparent 30%), linear-gradient(135deg, #14231b, #101713 58%, #1c2a21) !important;
+  color: var(--foreground) !important;
+}
+body[data-theme="dark"] #beranda h1 { color: var(--foreground) !important; }
+body[data-theme="dark"] #beranda p { color: var(--muted) !important; }
+body[data-theme="dark"] .theme-toggle { color: #FFEBC0; }
+body[data-theme="dark"] .product-card { color: var(--foreground); }
+body[data-theme="dark"] .product-card-actions .product-card-buy-button { color: #F4D995; border-color: var(--accent); }
 
 body[data-theme="dark"] .luxury-card,
 body[data-theme="dark"] .theme-dark-card {
@@ -210,6 +233,14 @@ h3,
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.product-card-info > p:nth-of-type(3) {
+  color: var(--accent);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.3;
+  margin-top: .75rem;
 }
 
 .product-card-title {

@@ -5,6 +5,9 @@ export type CartItem = {
     price: number;
     image: string;
     qty: number;
+    stock?: number;
+    flavor?: string | null;
+    size?: string | null;
 };
 
 export type ProductInput = Omit<CartItem, "qty">;

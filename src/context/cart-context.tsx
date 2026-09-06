@@ -6,6 +6,7 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from "react";
 import { parseJsonResponse } from "@/lib/api-fetch";
@@ -18,7 +19,8 @@ type CartContextValue = {
     subtotal: number;
     totalItems: number;
     grandTotal: number;
-    addToCart: (item: ProductInput) => void;
+    itemState: (id: string) => { pending: boolean; error: string; notice: string };
+    addToCart: (item: ProductInput, quantity?: number) => void;
     increaseQty: (id: string) => void;
     decreaseQty: (id: string) => void;
     removeFromCart: (id: string) => void;
@@ -86,6 +88,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [serverReady, setServerReady] = useState(false);
+    const versions = useRef(new Map<string, number>());
+    const requestedQuantities = useRef(new Map<string, number>());
+    const [states, setStates] = useState<Record<string, { pending: boolean; error: string; notice: string }>>({});
+
+    const beginMutation = useCallback((id: string, qty: number) => {
+        const version = (versions.current.get(id) ?? 0) + 1;
+        versions.current.set(id, version);
+        requestedQuantities.current.set(id, qty);
+        setStates((current) => ({ ...current, [id]: { pending: true, error: "", notice: "" } }));
+        return version;
+    }, []);
+
+    const finishMutation = useCallback((id: string, version: number, data: CartResponse | null, fallback: string) => {
+        if (versions.current.get(id) !== version) return;
+        if (!data) {
+            setStates((current) => ({ ...current, [id]: { pending: false, error: fallback, notice: "" } }));
+            return;
+        }
+        const requested = requestedQuantities.current.get(id);
+        const actual = data.items.find((item) => item.id === id)?.qty;
+        const notice = requested && actual !== undefined && actual < requested
+            ? `Jumlah disesuaikan ke ${actual} karena stok tersedia.`
+            : actual === undefined && requested
+                ? "Produk ini sudah tidak tersedia."
+                : "";
+        setStates((current) => ({ ...current, [id]: { pending: false, error: "", notice } }));
+        setCart(data.items);
+        writeCartToStorage(data.items);
+    }, []);
 
     useEffect(() => {
         const localCart = readCartFromStorage();
@@ -142,21 +173,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const persistQty = useCallback((id: string, qty: number) => {
         if (!serverReady) return;
+        const version = beginMutation(id, qty);
 
         requestCart("/api/cart", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, qty }),
-        }).then(applyServerCart).catch((error) => console.error("Cart update failed", error));
-    }, [applyServerCart, serverReady]);
+        }).then((data) => finishMutation(id, version, data, "Perubahan keranjang belum tersimpan. Silakan coba lagi."))
+            .catch(() => finishMutation(id, version, null, "Perubahan keranjang belum tersimpan. Silakan coba lagi."));
+    }, [beginMutation, finishMutation, serverReady]);
 
     const persistRemove = useCallback((id: string) => {
         if (!serverReady) return;
+        const version = beginMutation(id, 0);
 
         requestCart(`/api/cart?id=${encodeURIComponent(id)}`, { method: "DELETE" })
-            .then(applyServerCart)
-            .catch((error) => console.error("Cart remove failed", error));
-    }, [applyServerCart, serverReady]);
+            .then((data) => finishMutation(id, version, data, "Produk belum berhasil dihapus. Silakan coba lagi."))
+            .catch(() => finishMutation(id, version, null, "Produk belum berhasil dihapus. Silakan coba lagi."));
+    }, [beginMutation, finishMutation, serverReady]);
 
     const persistClear = useCallback(() => {
         if (!serverReady) return;
@@ -166,23 +200,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             .catch((error) => console.error("Cart clear failed", error));
     }, [applyServerCart, serverReady]);
 
-    const addToCart = useCallback((item: ProductInput) => {
-        console.log("ADD CART", item);
-        persistAdd({ ...item, qty: 1 });
+    const addToCart = useCallback((item: ProductInput, quantity = 1) => {
+        const qty = Math.max(1, Math.floor(quantity));
+        persistAdd({ ...item, qty });
         setCart((items) => {
             const existing = items.find((cartItem) => cartItem.id === item.id);
 
             if (existing) {
                 const next = items.map((cartItem) =>
                     cartItem.id === item.id
-                        ? { ...cartItem, qty: cartItem.qty + 1 }
+                        ? { ...cartItem, qty: cartItem.qty + qty }
                         : cartItem
                 );
                 writeCartToStorage(next);
                 return next;
             }
 
-            const next = [...items, { ...item, qty: 1 }];
+            const next = [...items, { ...item, qty }];
             writeCartToStorage(next);
             return next;
         });
@@ -190,7 +224,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const increaseQty = useCallback((id: string) => {
         setCart((items) => {
-            const next = items.map((item) => item.id === id ? { ...item, qty: item.qty + 1 } : item);
+            const next = items.map((item) => item.id === id ? { ...item, qty: item.stock ? Math.min(item.stock, item.qty + 1) : item.qty + 1 } : item);
             const updated = next.find((item) => item.id === id);
             if (updated) persistQty(id, updated.qty);
             writeCartToStorage(next);
@@ -200,10 +234,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const decreaseQty = useCallback((id: string) => {
         setCart((items) => {
-            const next = items
-                .map((item) => item.id === id ? { ...item, qty: Math.max(0, item.qty - 1) } : item)
-                .filter((item) => item.qty > 0);
-            persistQty(id, next.find((item) => item.id === id)?.qty ?? 0);
+            const current = items.find((item) => item.id === id);
+            if (!current || current.qty <= 1) return items;
+            const next = items.map((item) => item.id === id ? { ...item, qty: item.qty - 1 } : item);
+            persistQty(id, current.qty - 1);
             writeCartToStorage(next);
             return next;
         });
@@ -238,13 +272,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             subtotal,
             totalItems,
             grandTotal,
+            itemState: (id: string) => states[id] ?? { pending: false, error: "", notice: "" },
             addToCart,
             increaseQty,
             decreaseQty,
             removeFromCart,
             clearCart,
         }),
-        [cart, subtotal, totalItems, grandTotal, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart]
+        [cart, subtotal, totalItems, grandTotal, states, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart]
     );
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -21,6 +21,12 @@ body {
     radial-gradient(circle at 15% 10%, rgba(201, 164, 91, 0.18), transparent 28rem),
     linear-gradient(135deg, var(--cream), var(--ivory) 52%, var(--secondary));
   color: var(--dark-text);
+  overflow-x: hidden;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
 }
 
 body[data-theme="dark"] {
@@ -113,6 +119,12 @@ h3,
   backdrop-filter: blur(18px);
 }
 
+.section-shell { width: min(1440px, calc(100% - 48px)); margin-inline: auto; }
+.skeleton { background: linear-gradient(100deg, rgba(201,164,91,.12) 30%, rgba(255,255,255,.8) 45%, rgba(201,164,91,.12) 60%); background-size: 200% 100%; animation: skeleton-shimmer 1.5s ease-in-out infinite; }
+@keyframes skeleton-shimmer { to { background-position: -200% 0; } }
+@media (max-width: 767px) { .section-shell { width: calc(100% - 32px); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } .skeleton { background: rgba(201,164,91,.14); } }
+
 .gold-gradient {
   background: linear-gradient(135deg, #E4C982 0%, var(--gold) 48%, #B28D45 100%);
 }
@@ -204,8 +216,8 @@ h3,
   }
 
   .product-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .product-card {

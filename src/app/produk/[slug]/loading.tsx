@@ -1,0 +1,3 @@
+export default function ProductDetailLoading() {
+    return <main aria-label="Memuat detail produk" aria-busy="true" className="min-h-screen bg-[#F8F5EE] px-4 py-8"><div className="mx-auto grid w-full max-w-[1440px] gap-8 lg:grid-cols-2 lg:gap-14"><div className="skeleton aspect-square rounded-[28px]" /><div className="space-y-5 py-6"><div className="skeleton h-5 w-32 rounded-full" /><div className="skeleton h-14 w-4/5 rounded-2xl" /><div className="skeleton h-10 w-44 rounded-xl" /><div className="skeleton h-28 rounded-2xl" /><div className="skeleton h-12 rounded-full" /><div className="skeleton h-12 rounded-full" /></div></div></main>;
+}

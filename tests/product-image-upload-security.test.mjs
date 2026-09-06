@@ -28,6 +28,17 @@ test("admin upload reaches hard-coded public products bucket with safe generated
     assert.doesNotMatch(route, /file\.name/);
 });
 
+test("product upload diagnoses safe server failures and validates the client payload", () => {
+    assert.match(route, /Product image storage failure/);
+    for (const category of ["bucket_not_found", "file_too_large", "storage_permission", "storage_api"]) assert.match(route, new RegExp(category));
+    assert.match(route, /mimeType: file\.type/);
+    assert.match(route, /Unsupported image type/);
+    assert.match(uploadClient, /file instanceof File/);
+    assert.match(uploadClient, /file\.size === 0/);
+    assert.match(uploadClient, /image\/jpeg.*image\/png.*image\/webp/);
+    assert.doesNotMatch(route, /SUPABASE_SERVICE_ROLE_KEY/);
+});
+
 test("missing, empty, unsupported, oversized, and valid WebP files are covered", () => {
     assert.match(route, /!\(file instanceof File\) \|\| file\.size === 0/);
     assert.match(route, /file\.size > MAX_IMAGE_BYTES/);

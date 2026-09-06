@@ -259,6 +259,7 @@ h3,
   flex-shrink: 0;
   gap: 12px;
   margin-top: auto;
+  max-width: 100%;
   min-width: 0;
   padding: 16px;
   position: relative;
@@ -271,15 +272,28 @@ h3,
   border-radius: 16px;
   height: 48px;
   min-height: 48px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.product-card-cart-button {
+  flex: 0 0 48px;
+  width: 48px;
 }
 
 .product-card-buy-button {
+  align-items: center;
+  display: inline-flex;
   flex: 1 1 0;
   font-size: 16px;
   font-weight: 600;
-  max-width: 100%;
-  min-width: 0;
+  justify-content: center;
+  overflow: hidden;
+  padding-left: 10px;
+  padding-right: 10px;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  width: auto;
 }
 
 @media (max-width: 639px) {

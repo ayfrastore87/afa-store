@@ -37,6 +37,30 @@ function providerStatus(error: unknown) {
     return undefined;
 }
 
+function safeProviderText(value: unknown) {
+    if (typeof value !== "string") return undefined;
+
+    return value
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+        .replace(/https?:\/\/[^\s]+/gi, "[redacted-url]")
+        .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, "[redacted-id]")
+        .replace(/\b(jwt|token|refresh_token|access_token|cookie|password|secret|api[_-]?key|service[_-]?role)[=:][^\s,;]+/gi, "$1=[redacted]")
+        .slice(0, 500);
+}
+
+function providerDiagnostic(error: unknown) {
+    const source = typeof error === "object" && error !== null ? error as Record<string, unknown> : {};
+    return {
+        category: "public_user_create",
+        code: safeProviderText(source.code),
+        message: safeProviderText(source.message),
+        details: safeProviderText(source.details),
+        hint: safeProviderText(source.hint),
+        status: providerStatus(error),
+        name: safeProviderText(source.name) || "SupabaseError",
+    };
+}
+
 function getJwtSecret() {
     return new TextEncoder().encode(process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || "afa-store-dev-secret");
 }
@@ -112,11 +136,7 @@ export async function ensurePublicUser(user: User, fallbackName?: string) {
         .single();
 
     if (createError) {
-        console.error("Supabase ensurePublicUser create failed", {
-            category: "public_user_create",
-            name: createError.name || "SupabaseError",
-            status: providerStatus(createError),
-        });
+        console.error("Supabase ensurePublicUser create failed", providerDiagnostic(createError));
         throw createError;
     }
 

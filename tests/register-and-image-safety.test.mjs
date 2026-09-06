@@ -27,6 +27,22 @@ test("registration catches provider and public-user failures without leaking sec
     assert.doesNotMatch(route, /console\.error\([^)]*error\.message/);
 });
 
+test("public-user create diagnostics are allowlisted and redact sensitive values", () => {
+    const auth = read("../src/lib/auth.ts");
+    const diagnostic = auth.slice(auth.indexOf("function safeProviderText"), auth.indexOf("function getJwtSecret"));
+    for (const field of ["code", "message", "details", "hint", "status", "name"]) {
+        assert.match(diagnostic, new RegExp(`${field}:`));
+    }
+    assert.match(auth, /providerDiagnostic\(createError\)/);
+    assert.match(diagnostic, /redacted-email/);
+    assert.match(diagnostic, /redacted-url/);
+    assert.match(diagnostic, /redacted-id/);
+    assert.match(diagnostic, /redacted/);
+    assert.doesNotMatch(diagnostic, /source\.(email|id|auth_id|phone|user_id|auth_id)/i);
+    assert.doesNotMatch(diagnostic, /request\.body|JSON\.stringify\(source\)/i);
+    assert.doesNotMatch(auth, /console\.error\("Supabase ensurePublicUser create failed", createError\)/);
+});
+
 test("Parcel hero uses only the existing local asset", () => {
     const home = read("../src/app/page.tsx");
     assert.match(home, /parcel:\s*\{[\s\S]*?image: "\/products\/parcel\.png"/);

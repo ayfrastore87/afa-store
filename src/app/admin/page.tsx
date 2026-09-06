@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Home, Loader2, LogOut, PackagePlus, PlusCircle, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { uploadProductImage } from "@/lib/product-image-upload-client";
 import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton, AdminWebsiteButton, AdminWebsiteFooterButton } from "@/components/admin/AdminNav";
 import { ReportsPanel, SettingsPanel, StockPanel, TestimonialsPanel } from "@/components/admin/AdminAdvancedPanels";
 
@@ -280,13 +281,13 @@ export default function AdminPage() {
     }
 
     async function uploadImage(file: File) {
-        const ext = file.name.split(".").pop();
-        const path = `${Date.now()}-${slugify(file.name)}.${ext}`;
-        const { error } = await supabase.storage.from("products").upload(path, file, { upsert: true });
-        if (error) return toast(error.message, "error");
-        const { data } = supabase.storage.from("products").getPublicUrl(path);
-        updateForm("image", data.publicUrl);
-        toast("Foto produk berhasil diupload");
+        try {
+            const { url } = await uploadProductImage(file);
+            updateForm("image", url);
+            toast("Foto produk berhasil diupload");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gambar gagal diunggah. Silakan coba lagi.", "error");
+        }
     }
 
     async function saveProduct(event: FormEvent) {

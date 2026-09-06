@@ -9,6 +9,18 @@ const uploadClient = read("../src/lib/product-image-upload-client.ts");
 const studio = read("../src/app/admin/products/new/ProductCreationStudio.tsx");
 const studioCss = read("../src/app/admin/products/new/studio.css");
 const legacy = read("../src/app/admin/page.tsx");
+const productRoute = read("../src/app/api/products/route.ts");
+
+test("product create uses Supabase admin authorization with the required 401/403 contract", () => {
+    assert.match(productRoute, /import \{ getCurrentAdmin, getCurrentUser \} from "@\/lib\/auth"/);
+    assert.match(productRoute, /const authenticated = await getCurrentUser\(\)/);
+    assert.match(productRoute, /if \(!authenticated\).*error: "Unauthorized".*status: 401/);
+    assert.match(productRoute, /const admin = await getCurrentAdmin\(\)/);
+    assert.match(productRoute, /if \(!admin\).*error: "Forbidden".*status: 403/);
+    assert.doesNotMatch(productRoute, /@\/lib\/server-auth/);
+    assert.doesNotMatch(productRoute, /afa_session|JWT_SECRET|NEXTAUTH_SECRET|afa-store-dev-secret/);
+    assert.doesNotMatch(productRoute, /role.*request|request.*role/);
+});
 
 test("upload rejects unauthenticated and non-admin or inactive users before parsing files", () => {
     const auth = route.indexOf("const user = await getCurrentAdmin()");

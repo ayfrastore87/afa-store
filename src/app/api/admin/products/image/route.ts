@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/server-auth";
+import { createSupabaseServerClient, getCurrentAdmin } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 const BUCKET = "products";
@@ -7,9 +7,14 @@ const MAX_IMAGE_BYTES = 1024 * 1024;
 const MIME_EXTENSIONS: Readonly<Record<string, string>> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 export async function POST(request: Request) {
-    const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (user.role !== "admin" || user.isActive === false) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const user = await getCurrentAdmin();
+    if (!user) {
+        // getCurrentAdmin intentionally combines authentication and authorization.
+        // Preserve the public API distinction without exposing internal auth details.
+        const supabase = await createSupabaseServerClient();
+        const { data: { user: authenticated } } = await supabase.auth.getUser();
+        return NextResponse.json({ error: authenticated ? "Forbidden" : "Unauthorized" }, { status: authenticated ? 403 : 401 });
+    }
 
     let formData: FormData;
     try { formData = await request.formData(); }

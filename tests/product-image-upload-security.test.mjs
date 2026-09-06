@@ -7,15 +7,16 @@ const route = read("../src/app/api/admin/products/image/route.ts");
 const adminClient = read("../src/lib/supabase-admin.ts");
 const uploadClient = read("../src/lib/product-image-upload-client.ts");
 const studio = read("../src/app/admin/products/new/ProductCreationStudio.tsx");
+const studioCss = read("../src/app/admin/products/new/studio.css");
 const legacy = read("../src/app/admin/page.tsx");
 
 test("upload rejects unauthenticated and non-admin or inactive users before parsing files", () => {
-    const auth = route.indexOf("const user = await getCurrentUser()");
+    const auth = route.indexOf("const user = await getCurrentAdmin()");
     const parsing = route.indexOf("await request.formData()");
     assert.ok(auth >= 0 && auth < parsing);
-    assert.match(route, /if \(!user\).*status: 401/);
-    assert.match(route, /user\.role !== "admin" \|\| user\.isActive === false/);
-    assert.match(route, /status: 403/);
+    assert.match(route, /authenticated \? "Forbidden" : "Unauthorized"/);
+    assert.match(route, /status: authenticated \? 403 : 401/);
+    assert.match(read("../src/lib/auth.ts"), /admin\.role !== "admin" \|\| admin\.isActive === false/);
 });
 
 test("admin upload reaches hard-coded public products bucket with safe generated path", () => {
@@ -56,6 +57,8 @@ test("service role is server-only and never referenced by client code", () => {
 test("camera and gallery inputs are separate and camera requests the environment lens", () => {
     assert.match(studio, /ref=\{cameraRef\}[^>]*accept="image\/\*"[^>]*capture="environment"/);
     assert.match(studio, /cameraRef\.current\?\.click\(\)/);
+    assert.match(studio, /getUserMedia\(\{ video: \{ facingMode: \{ ideal: "environment" \} \}, audio: false \}\)/);
+    assert.match(studio, /getTracks\(\)\.forEach\(track => track\.stop\(\)\)/);
     assert.match(studio, /📷 Ambil Foto/);
     assert.match(studio, /ref=\{fileRef\}[^>]*accept="image\/\*"/);
     assert.match(studio, /fileRef\.current\?\.click\(\)/);
@@ -67,4 +70,18 @@ test("compression, WebP target, previews, crop, rotation, reset and deletion rem
     assert.match(studio, /canvas\.toBlob\(resolve, "image\/webp"/);
     assert.match(studio, /photo\.file\.size > 1024 \* 1024/);
     for (const marker of ["photo-frame", "product-preview", "Crop", "Putar kiri", "Putar kanan", "Reset editor", "Hapus foto produk"]) assert.match(studio, new RegExp(marker));
+});
+
+test("crop editor uses pointer interaction, square handles, bounds and cancel snapshot", () => {
+    assert.match(studio, /onPointerMove=\{moveCrop\}/);
+    assert.match(studio, /onPointerDown=\{e => updateCrop\(e, "move"\)\}/);
+    assert.match(studio, /setPointerCapture\(event\.pointerId\)/);
+    assert.match(studio, /const min = 0\.2/);
+    assert.match(studio, /Math\.max\(0, Math\.min\(1 - next\.size/);
+    assert.match(studio, /Geser sudut crop kiri atas/);
+    assert.match(studio, /Geser sudut crop kanan bawah/);
+    assert.match(studioCss, /\.crop-preview[^}]*touch-action:none/);
+    assert.match(studio, /setCropBeforeEdit\(initial\)/);
+    assert.match(studio, /setCrop\(cropBeforeEdit\); setCropOpen\(false\)/);
+    assert.match(studio, /onClick=\{beginCrop\}/);
 });

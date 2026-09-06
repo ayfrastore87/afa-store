@@ -38,42 +38,46 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: "Konfirmasi password tidak sama." }, { status: 400 });
     }
 
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-            data: {
-                name,
-                phone,
+    try {
+        const supabase = await createSupabaseServerClient();
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: { name, phone },
+                emailRedirectTo: new URL("/login", request.url).toString(),
             },
-            emailRedirectTo: new URL("/login", request.url).toString(),
-        },
-    });
+        });
 
-    if (error) {
-        console.error("Supabase register error:", error);
-        const message = /email rate limit exceeded/i.test(error.message)
-            ? RATE_LIMIT_MESSAGE
-            : /already|registered|exists/i.test(error.message)
-                ? "Email sudah digunakan."
-                : "Registrasi gagal. Silakan coba lagi.";
-        return NextResponse.json({ message }, { status: 400 });
+        if (error) {
+            console.error("Supabase register failed", {
+                category: "auth_provider",
+                name: error.name || "AuthError",
+                status: error.status,
+            });
+            const message = /email rate limit exceeded/i.test(error.message)
+                ? RATE_LIMIT_MESSAGE
+                : /already|registered|exists/i.test(error.message)
+                    ? "Email sudah digunakan."
+                    : "Registrasi gagal. Silakan coba lagi.";
+            return NextResponse.json({ message }, { status: 400 });
+        }
+
+        const authUser = data.user;
+        if (!authUser || authUser.identities?.length === 0) {
+            return NextResponse.json({ message: "Email sudah digunakan." }, { status: 409 });
+        }
+
+        const user = await ensurePublicUser(authUser, name);
+        return NextResponse.json(
+            { message: "Silakan cek email untuk verifikasi akun.", user: publicUser(user) },
+            { status: 201 }
+        );
+    } catch (error) {
+        console.error("Registration failed", {
+            category: "unexpected_registration_failure",
+            name: error instanceof Error ? error.name : "UnknownError",
+        });
+        return NextResponse.json({ message: "Registrasi gagal. Silakan coba lagi." }, { status: 500 });
     }
-
-    const authUser = data.user;
-
-    if (!authUser || authUser.identities?.length === 0) {
-        return NextResponse.json({ message: "Email sudah digunakan." }, { status: 409 });
-    }
-
-    const user = await ensurePublicUser(authUser, name);
-
-    return NextResponse.json(
-        {
-            message: "Silakan cek email untuk verifikasi akun.",
-            user: publicUser(user),
-        },
-        { status: 201 }
-    );
 }

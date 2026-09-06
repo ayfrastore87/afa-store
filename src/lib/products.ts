@@ -46,7 +46,7 @@ export function mapProduct(row: ProductRow): Product {
         category,
         price: numberValue(row.price),
         stock: numberValue(row.stock),
-        image: stringValue(row.image, "/window.svg"),
+        image: stringValue(row.image, "/products/parcel.png"),
         rating: numberValue(row.rating, 0),
         badge: typeof row.badge === "string" && row.badge.trim() ? row.badge : null,
         flavor: typeof row.flavor === "string" ? row.flavor : null,

@@ -3,13 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useCart } from "@/context/cart-context";
 import { formatRupiah } from "@/lib/products";
+import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 
 export default function CartPage() {
     const router = useRouter();
     const { cart, subtotal, totalItems, itemState, increaseQty, decreaseQty, removeFromCart } = useCart();
+    useEffect(() => { void hasAuthenticatedUser().then((authenticated) => { if (!authenticated) router.replace(loginPath("/cart")); }); }, [router]);
     const unavailable = cart.some((item) => itemState(item.id).notice.includes("tidak tersedia"));
     const startCheckout = async () => {
         if (unavailable) return;

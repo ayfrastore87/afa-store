@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Heart, Minus, Plus, ShoppingBag } from "lucide-react";
 import { useCart } from "@/context/cart-context";
+import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 import { useWishlist } from "@/context/wishlist-context";
 import { formatRupiah } from "@/lib/products";
 
@@ -20,11 +21,15 @@ export default function ProductDetailCta({ product, stock }: Props) {
 
     const addProduct = () => {
         if (!available) return;
+        void hasAuthenticatedUser().then((authenticated) => {
+            if (!authenticated) { router.push(loginPath(`/produk/${product.slug}`)); return; }
         addToCart({ id: product.id, name: product.name, slug: product.slug, price: product.price, image: product.image || "/products/parcel.png" }, quantity);
+        });
         setMessage("Produk ditambahkan ke keranjang");
     };
 
     const buyNow = async () => {
+        if (!(await hasAuthenticatedUser())) { router.push(loginPath(`/produk/${product.slug}`)); return; }
         if (!available || pending) return;
         setPending(true);
         setMessage("");

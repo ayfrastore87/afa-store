@@ -221,7 +221,10 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         const successMessage = data.message || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
         setMessage(successMessage);
         showToast(successMessage);
-        if (mode === "login" && response.ok) router.push("/account");
+        if (mode === "login" && response.ok) {
+            const next = new URLSearchParams(window.location.search).get("next");
+            router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/account");
+        }
     };
 
     const input = (name: string, label: string, type = "text") => <label className="block text-sm font-bold">{label}<input name={name} type={type} value={form[name] || ""} onChange={(e) => setForm({ ...form, [name]: e.target.value })} className="mt-2 w-full rounded-2xl border border-[#184C3A]/15 bg-white/80 px-4 py-3 outline-none focus:ring-2 focus:ring-[#D4AF37]" /></label>;

@@ -1,3 +1,4 @@
-import AdminPage from "../../page";
+import ProductCreationStudio from "./ProductCreationStudio";
+import "./studio.css";
 
-export default AdminPage;
+export default ProductCreationStudio;

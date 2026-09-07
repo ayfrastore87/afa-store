@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 
 import { parseJsonResponse } from "@/lib/api-fetch";
@@ -36,6 +36,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [resetReady, setResetReady] = useState(mode !== "reset");
+    const authRequestInFlight = useRef(false);
 
     useEffect(() => {
         if (mode !== "reset") return;
@@ -172,6 +173,8 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
 
         const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
         const payload = mode === "login" ? { identifier: form.identifier, password: form.password, remember: form.remember === "on" } : form;
+        if (authRequestInFlight.current) return;
+        authRequestInFlight.current = true;
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
         let response: Response;
@@ -196,7 +199,11 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             data = await parseJsonResponse<AuthApiResponse>(response);
         } catch (error) {
             const errorMessage = getErrorMessage(error, "Server tidak merespons.");
-            console.error("Login request failed", error);
+            console.error("Auth request failed", {
+                mode,
+                name: error instanceof Error ? error.name : "UnknownError",
+            });
+            authRequestInFlight.current = false;
             setLoading(false);
             setError(errorMessage);
             showToast(errorMessage, "error");
@@ -211,10 +218,11 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             if (mode === "login") {
                 console.error("Login failed", { status: response.status, message: errorMessage });
             } else {
-                console.error("Supabase register error:", data.message || errorMessage);
+                console.error("Register request rejected", { status: response.status });
             }
             setError(errorMessage);
             showToast(errorMessage, "error");
+            authRequestInFlight.current = false;
             return;
         }
 
@@ -225,6 +233,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             const next = new URLSearchParams(window.location.search).get("next");
             router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/account");
         }
+        authRequestInFlight.current = false;
     };
 
     const input = (name: string, label: string, type = "text") => <label className="block text-sm font-bold">{label}<input name={name} type={type} value={form[name] || ""} onChange={(e) => setForm({ ...form, [name]: e.target.value })} className="mt-2 w-full rounded-2xl border border-[#184C3A]/15 bg-white/80 px-4 py-3 outline-none focus:ring-2 focus:ring-[#D4AF37]" /></label>;

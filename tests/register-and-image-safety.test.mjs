@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const route = read("../src/app/api/auth/register/route.ts");
+const authForm = read("../src/components/account/auth-forms.tsx");
 const image = read("../src/components/product-image.tsx");
 const config = read("../next.config.ts");
 
@@ -12,9 +13,36 @@ test("registration validates input and preserves public HTTP contract", () => {
     assert.match(route, /status: 400/);
     assert.match(route, /password !== confirmPassword/);
     assert.match(route, /status: 409/);
-    assert.match(route, /const status = \/already\|registered\|exists\/i\.test\(error\.message\) \? 409 : 400/);
+    assert.match(route, /const status = isRateLimited \? 429 : isDuplicate \? 409 : 400/);
     assert.match(route, /email rate limit exceeded/);
     assert.match(route, /already\|registered\|exists/);
+});
+
+test("duplicate and rate-limit provider responses return before public-user creation", () => {
+    const providerError = route.indexOf("if (error)");
+    const providerReturn = route.indexOf("return NextResponse.json({ message }, { status });");
+    const emptyIdentities = route.indexOf("authUser.identities?.length === 0");
+    const duplicateReturn = route.indexOf('return NextResponse.json({ message: "Email sudah digunakan." }, { status: 409 });');
+    const ensureUser = route.indexOf("ensurePublicUser(authUser, name)");
+
+    assert.ok(providerError >= 0 && providerError < providerReturn);
+    assert.ok(providerReturn < ensureUser);
+    assert.ok(emptyIdentities >= 0 && emptyIdentities < duplicateReturn);
+    assert.ok(duplicateReturn < ensureUser);
+    assert.match(route, /error\.status === 429/);
+    assert.match(route, /isRateLimited \? 429/);
+});
+
+test("auth form synchronously prevents duplicate register POST requests", () => {
+    const guard = authForm.indexOf("if (authRequestInFlight.current) return;");
+    const lock = authForm.indexOf("authRequestInFlight.current = true;");
+    const request = authForm.indexOf("response = await fetch(endpoint");
+
+    assert.match(authForm, /useRef\(false\)/);
+    assert.ok(guard >= 0 && guard < lock);
+    assert.ok(lock < request);
+    assert.equal(authForm.match(/response = await fetch\(endpoint/g)?.length, 1);
+    assert.doesNotMatch(authForm, /onClick=\{submit\}/);
 });
 
 test("registration catches provider and public-user failures without leaking secrets", () => {
@@ -25,6 +53,8 @@ test("registration catches provider and public-user failures without leaking sec
     assert.doesNotMatch(route, /error\.message.*NextResponse|JSON\.stringify\(error\)/);
     assert.doesNotMatch(route, /password.*console\.|console\..*password|DATABASE_URL|SERVICE_ROLE_KEY/);
     assert.doesNotMatch(route, /console\.error\([^)]*error\.message/);
+    assert.match(authForm, /console\.error\("Auth request failed", \{/);
+    assert.doesNotMatch(authForm, /Login request failed|console\.error\("Supabase register error:", data\.message/);
 });
 
 test("public-user create diagnostics are allowlisted and redact sensitive values", () => {

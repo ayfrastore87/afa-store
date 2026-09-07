@@ -55,12 +55,14 @@ export async function POST(request: Request) {
                 name: error.name || "AuthError",
                 status: error.status,
             });
-            const message = /email rate limit exceeded/i.test(error.message)
+            const isRateLimited = error.status === 429 || /email rate limit exceeded|rate limit/i.test(error.message);
+            const isDuplicate = /already|registered|exists/i.test(error.message);
+            const message = isRateLimited
                 ? RATE_LIMIT_MESSAGE
-                : /already|registered|exists/i.test(error.message)
+                : isDuplicate
                     ? "Email sudah digunakan."
                     : "Registrasi gagal. Silakan coba lagi.";
-            const status = /already|registered|exists/i.test(error.message) ? 409 : 400;
+            const status = isRateLimited ? 429 : isDuplicate ? 409 : 400;
             return NextResponse.json({ message }, { status });
         }
 

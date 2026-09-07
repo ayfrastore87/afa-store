@@ -73,6 +73,15 @@ test("public-user create diagnostics are allowlisted and redact sensitive values
     assert.doesNotMatch(auth, /console\.error\("Supabase ensurePublicUser create failed", createError\)/);
 });
 
+test("public-user insert supplies an application ID distinct from Supabase auth ID", () => {
+    const auth = read("../src/lib/auth.ts");
+    const insert = auth.match(/\.from\("users"\)\s*\.insert\(\{[\s\S]*?\}\)\s*\.select\("\*"\)/)?.[0] || "";
+
+    assert.match(insert, /id: crypto\.randomUUID\(\)/);
+    assert.match(insert, /auth_id: user\.id/);
+    assert.doesNotMatch(insert, /^\s*id: user\.id/m);
+});
+
 test("Parcel hero uses only the existing local asset", () => {
     const home = read("../src/app/page.tsx");
     assert.match(home, /parcel:\s*\{[\s\S]*?image: "\/products\/parcel\.png"/);

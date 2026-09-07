@@ -124,6 +124,7 @@ export async function ensurePublicUser(user: User, fallbackName?: string) {
     const { data: created, error: createError } = await supabase
         .from("users")
         .insert({
+            id: crypto.randomUUID(),
             auth_id: user.id,
             name: fallbackName || String(user.user_metadata?.name || email.split("@")[0] || "Pelanggan"),
             email,

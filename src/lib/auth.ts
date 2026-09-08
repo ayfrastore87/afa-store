@@ -236,29 +236,9 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 export async function getCurrentAdmin() {
-    const user = await getCurrentUser();
-
-    if (!user) {
-        return null;
-    }
-
-    const supabase = await createSupabaseServerClient();
-
-    const { data: admin, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("auth_id", user.id)
-        .maybeSingle();
-
-    if (error || !admin) {
-        if (error) console.error("Supabase getCurrentAdmin failed", error);
-        return null;
-    }
-
-    if (admin.role !== "admin" || admin.isActive === false) {
-        return null;
-    }
-
+    const { getCurrentAdmin: getApplicationAdmin } = await import("@/lib/server-auth");
+    const admin = await getApplicationAdmin();
+    if (!admin || admin.role !== "admin" || admin.isActive === false) return null;
     return admin;
 }
 

@@ -29,7 +29,7 @@ const heroContent: Record<HeroCategory, { badge: string; title: string[]; descri
     badge: "Parcel",
     title: ["Parcel", ""],
     description: "Parcel pilihan untuk momen istimewa dengan tampilan elegan dan rasa berkelas.",
-    image: "/products/parcel.png",
+    image: "/products/parcel 1.png",
     target: "parcel",
   },
   oleh: {

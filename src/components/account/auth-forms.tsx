@@ -17,6 +17,14 @@ type AuthApiResponse = {
     message?: string;
 };
 
+function getLoginErrorMessage(status: number, rawMessage?: string) {
+    if (status === 401) return "Email atau password salah.";
+    if (status === 403) return rawMessage || "Akun tidak memiliki akses.";
+    if (status === 429) return "Terlalu banyak percobaan login. Silakan coba lagi nanti.";
+    if (status >= 500) return "Layanan login sedang bermasalah. Silakan coba lagi.";
+    return rawMessage || "Login gagal. Silakan periksa data Anda.";
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
     if (error instanceof DOMException && error.name === "AbortError") {
         return "Login terlalu lama. Periksa koneksi internet lalu coba lagi.";
@@ -214,7 +222,9 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
 
         setLoading(false);
         if (!response.ok) {
-            const errorMessage = mode === "register" ? getRegisterErrorMessage(data.message || "") : data.message || "Terjadi kesalahan.";
+            const errorMessage = mode === "register"
+                ? getRegisterErrorMessage(data.message || "")
+                : getLoginErrorMessage(response.status, data.message);
             if (mode === "login") {
                 console.error("Login failed", { status: response.status, message: errorMessage });
             } else {
@@ -229,14 +239,16 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         const successMessage = data.message || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
         setMessage(successMessage);
         showToast(successMessage);
-        if (mode === "login" && response.ok) {
+        if (mode === "login") {
             const next = new URLSearchParams(window.location.search).get("next");
-            router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/account");
+            const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/account";
+            router.replace(destination);
+            router.refresh();
         }
         authRequestInFlight.current = false;
     };
 
     const input = (name: string, label: string, type = "text") => <label className="block text-sm font-bold">{label}<input name={name} type={type} value={form[name] || ""} onChange={(e) => setForm({ ...form, [name]: e.target.value })} className="mt-2 w-full rounded-2xl border border-[#184C3A]/15 bg-white/80 px-4 py-3 outline-none focus:ring-2 focus:ring-[#D4AF37]" /></label>;
 
-    return <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fff7df,#f7ead0_45%,#ffffff)] px-4 py-12 text-[#102116]"><form onSubmit={submit} className="mx-auto max-w-xl rounded-4xl border border-white/70 bg-white/70 p-6 shadow-2xl backdrop-blur md:p-10"><Link href="/" className="text-sm font-bold text-[#184C3A]">← Kembali ke AFA STORE</Link><p className="mt-8 text-[#D4AF37]">MY ACCOUNT</p><h1 className="text-4xl font-bold text-[#184C3A]">{mode === "login" ? "Masuk" : mode === "register" ? "Daftar Akun" : mode === "forgot" ? "Lupa Password" : "Reset Password"}</h1><div className="mt-8 grid gap-4">{mode === "register" && <>{input("name", "Nama Lengkap")}{input("email", "Email", "email")}{input("phone", "Nomor WhatsApp")}</>}{mode === "login" && input("identifier", "Email atau Nomor WhatsApp")}{mode === "forgot" && input("email", "Email", "email")}{mode !== "forgot" && <>{input("password", mode === "reset" ? "Password Baru" : "Password", "password")}{mode !== "login" && input("confirmPassword", "Konfirmasi Password", "password")}</>}{mode === "login" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" onChange={(e) => setForm({ ...form, remember: e.target.checked ? "on" : "" })} /> Remember Me</label>}</div>{message && <p className="mt-5 rounded-2xl bg-[#184C3A]/10 p-4 text-sm font-bold text-[#184C3A] wrap-break-word">{message}</p>}{error && <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700 wrap-break-word">{error}</p>}<button disabled={loading || (mode === "reset" && !resetReady)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#184C3A] px-6 py-4 font-bold text-white shadow-xl transition disabled:cursor-not-allowed disabled:opacity-50">{loading && <Loader2 className="animate-spin" size={18} />}{loading ? "Memproses..." : "Lanjutkan"}</button><div className="mt-5 flex flex-wrap gap-4 text-sm font-bold text-[#184C3A]"><Link href="/login">Masuk</Link><Link href="/register">Daftar</Link><Link href="/forgot-password">Lupa Password</Link></div></form></main>;
+    return <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fff7df,#f7ead0_45%,#ffffff)] px-4 py-12 text-[#102116]"><form onSubmit={submit} className="mx-auto max-w-xl rounded-4xl border border-white/70 bg-white/70 p-6 shadow-2xl backdrop-blur md:p-10"><Link href="/" className="text-sm font-bold text-[#184C3A]">← Kembali ke AFA STORE</Link><p className="mt-8 text-[#D4AF37]">MY ACCOUNT</p><h1 className="text-4xl font-bold text-[#184C3A]">{mode === "login" ? "Masuk" : mode === "register" ? "Daftar Akun" : mode === "forgot" ? "Lupa Password" : "Reset Password"}</h1><div className="mt-8 grid gap-4">{mode === "register" && <>{input("name", "Nama Lengkap")}{input("email", "Email", "email")}{input("phone", "Nomor WhatsApp")}</>}{mode === "login" && input("identifier", "Email", "email")}{mode === "forgot" && input("email", "Email", "email")}{mode !== "forgot" && <>{input("password", mode === "reset" ? "Password Baru" : "Password", "password")}{mode !== "login" && input("confirmPassword", "Konfirmasi Password", "password")}</>}{mode === "login" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" onChange={(e) => setForm({ ...form, remember: e.target.checked ? "on" : "" })} /> Remember Me</label>}</div>{message && <p className="mt-5 rounded-2xl bg-[#184C3A]/10 p-4 text-sm font-bold text-[#184C3A] wrap-break-word">{message}</p>}{error && <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700 wrap-break-word">{error}</p>}<button disabled={loading || (mode === "reset" && !resetReady)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#184C3A] px-6 py-4 font-bold text-white shadow-xl transition disabled:cursor-not-allowed disabled:opacity-50">{loading && <Loader2 className="animate-spin" size={18} />}{loading ? "Memproses..." : "Lanjutkan"}</button><div className="mt-5 flex flex-wrap gap-4 text-sm font-bold text-[#184C3A]"><Link href="/login">Masuk</Link><Link href="/register">Daftar</Link><Link href="/forgot-password">Lupa Password</Link></div></form></main>;
 }

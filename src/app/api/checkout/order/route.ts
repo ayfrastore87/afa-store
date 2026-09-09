@@ -163,7 +163,17 @@ export async function POST(request: Request) {
         response.cookies.set(CHECKOUT_COOKIE, "", { path: "/", maxAge: 0 });
         return response;
     } catch (error) {
-        console.error("checkout_failed", { route: "/api/checkout/order", category: "checkout_failure", status: 500, name: error instanceof Error ? error.name : "UnknownError" });
+        const prismaKnownError = error instanceof Prisma.PrismaClientKnownRequestError;
+        console.error("checkout_failed", {
+            route: "/api/checkout/order",
+            category: "checkout_failure",
+            status: 500,
+            name: error instanceof Error ? error.name : "UnknownError",
+            prismaKnownError,
+            code: prismaKnownError ? error.code : undefined,
+            message: error instanceof Error ? error.message : String(error),
+            meta: prismaKnownError ? error.meta : undefined,
+        });
         const safe = productAuthorityResponse(error);
         return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
     }

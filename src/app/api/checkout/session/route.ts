@@ -23,6 +23,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
+        const user = await getCurrentUser();
+        if (!user) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
         const body: unknown = await request.json();
         const values = typeof body === "object" && body !== null && Array.isArray((body as Record<string, unknown>).items) ? (body as { items: unknown[] }).items : [];
         const requested = values.map(parseProductRequestItem);

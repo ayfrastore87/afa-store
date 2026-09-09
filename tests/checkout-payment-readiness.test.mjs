@@ -52,7 +52,10 @@ test("conditional stock decrement allows at most one winner at stock one", async
 test("client payment mutation cannot self-mark PAID", () => {
   assert.match(paymentMutation, /Payment mutation is not permitted/);
   assert.match(paymentMutation, /status: 403/);
-  assert.match(upload, /invoice, userId: user\.id/);
+  assert.match(upload, /if \(!user\).*status: 401/);
+  assert.match(upload, /secure_storage_unavailable/);
+  assert.match(upload, /status: 503/);
+  assert.doesNotMatch(upload, /request\.formData|prisma\.|writeFile|paymentProof/);
 });
 
 test("duplicate and terminal webhooks are conditional and do not touch stock", () => {

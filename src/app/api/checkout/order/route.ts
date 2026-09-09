@@ -65,7 +65,16 @@ export async function POST(request: Request) {
         const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
         const normalizedMethod = isPaymentMethod(paymentMethod) ? paymentMethod : "QRIS";
         const requestHash = checkoutRequestHash(user.id, address, snapshot.map(({ id, qty }) => ({ id, qty })));
-        const existing = await prisma.checkoutIdempotency.findUnique({ where: { key } });
+        let existing;
+        try {
+            existing = await prisma.checkoutIdempotency.findUnique({ where: { key } });
+        } catch (error) {
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+                console.warn("checkout_unavailable", { route: "/api/checkout/order", category: "idempotency_store_unavailable", status: 503 });
+                return NextResponse.json({ success: false, error: "Checkout temporarily unavailable. Please try again after maintenance is complete." }, { status: 503 });
+            }
+            throw error;
+        }
         if (existing) {
             if (existing.userId !== user.id || existing.requestHash !== requestHash) {
                 return NextResponse.json({ message: "Idempotency key has already been used with a different request." }, { status: 409 });
@@ -125,7 +134,8 @@ export async function POST(request: Request) {
         });
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
-                return NextResponse.json({ success: false, error: "Checkout belum tersedia karena komponen idempotensi belum dipasang." }, { status: 503 });
+                console.warn("checkout_unavailable", { route: "/api/checkout/order", category: "idempotency_store_unavailable", status: 503 });
+                return NextResponse.json({ success: false, error: "Checkout temporarily unavailable. Please try again after maintenance is complete." }, { status: 503 });
             }
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
                 const concurrent = await prisma.checkoutIdempotency.findUnique({ where: { key } });
@@ -153,7 +163,7 @@ export async function POST(request: Request) {
         response.cookies.set(CHECKOUT_COOKIE, "", { path: "/", maxAge: 0 });
         return response;
     } catch (error) {
-        console.error("Checkout Error", error);
+        console.error("checkout_failed", { route: "/api/checkout/order", category: "checkout_failure", status: 500, name: error instanceof Error ? error.name : "UnknownError" });
         const safe = productAuthorityResponse(error);
         return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
     }

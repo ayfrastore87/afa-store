@@ -104,7 +104,7 @@ export async function POST(request: Request) {
 
             const now = new Date();
             const todayPrefix = getInvoicePrefix(now);
-            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${todayPrefix}))`;
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${todayPrefix}))`;
             const todayCount = await tx.order.count({ where: { invoice: { startsWith: todayPrefix } } });
             const created = await tx.order.create({
                 data: {

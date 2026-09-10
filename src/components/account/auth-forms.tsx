@@ -12,6 +12,8 @@ import { supabase } from "@/lib/supabase";
 type Mode = "login" | "register" | "forgot" | "reset";
 
 const LOGIN_TIMEOUT_MS = 15000;
+const SESSION_READY_ATTEMPTS = 5;
+const SESSION_READY_DELAY_MS = 50;
 
 type AuthApiResponse = {
     message?: string;
@@ -35,6 +37,18 @@ function getErrorMessage(error: unknown, fallback: string) {
     }
 
     return fallback;
+}
+
+async function waitForSupabaseSession() {
+    for (let attempt = 0; attempt < SESSION_READY_ATTEMPTS; attempt += 1) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) return true;
+        if (attempt < SESSION_READY_ATTEMPTS - 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, SESSION_READY_DELAY_MS));
+        }
+    }
+
+    return false;
 }
 
 export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
@@ -241,9 +255,16 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         showToast(successMessage);
         if (mode === "login") {
             const next = new URLSearchParams(window.location.search).get("next");
-            const destination = next && next.startsWith("/") && !next.startsWith("//") && next !== "/login" ? next : "/account";
+            const destination = next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") && next !== "/login" ? next : "/account";
+            const sessionReady = await waitForSupabaseSession();
+            if (!sessionReady) {
+                const sessionMessage = "Login berhasil, tetapi sesi belum siap. Silakan coba lagi.";
+                setError(sessionMessage);
+                showToast(sessionMessage, "error");
+                authRequestInFlight.current = false;
+                return;
+            }
             router.replace(destination);
-            router.refresh();
         }
         authRequestInFlight.current = false;
     };

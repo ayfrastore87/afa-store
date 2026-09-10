@@ -9,8 +9,8 @@ export async function GET() {
     if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     const orders = await prisma.order.findMany({
         where: { userId: user.id },
-        include: { items: true },
+        include: { items: true, payment: { select: { status: true } } },
         orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json({ orders });
+    return NextResponse.json({ orders: orders.map(({ payment, ...order }) => ({ ...order, paymentStatus: payment?.status ?? order.paymentStatus })) });
 }

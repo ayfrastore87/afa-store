@@ -29,7 +29,7 @@ export default function ProductDetailCta({ product, stock }: Props) {
     };
 
     const buyNow = async () => {
-        if (!(await hasAuthenticatedUser())) { router.push(loginPath(`/produk/${product.slug}`)); return; }
+        if (!(await hasAuthenticatedUser())) { router.push(loginPath("/checkout")); return; }
         if (!available || pending) return;
         setPending(true);
         setMessage("");

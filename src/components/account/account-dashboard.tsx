@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Download, PackageCheck, PackageSearch, Truck, Wallet, XCircle } from "lucide-react";
 import jsPDF from "jspdf";
 import { parseJsonResponse } from "@/lib/api-fetch";
+import { getPaymentStatusPresentation } from "@/lib/payment-status";
 
 type User = { id: string; name: string; email: string; phone: string | null; image: string | null; role: string; createdAt?: string };
 type Address = { id: string; recipientName: string; phone: string; province: string; city: string; district: string; village: string; postalCode: string; detail: string; note?: string | null; isDefault: boolean };
@@ -90,6 +91,7 @@ function Orders({ orders, onUpdate }: { orders: Order[]; onUpdate: (order: Order
 
 function OrderCard({ order, onUpdate }: { order: Order; onUpdate: (order: Order, status: string) => void }) {
     const status = statusText[order.status] || order.status;
+    const paymentPresentation = getPaymentStatusPresentation(order.paymentStatus);
     const tone = statusTone[order.status] || "bg-[#EFE6D5] text-[#2E2A26]";
     const StatusIcon = order.status === "PENDING" || order.status === "pending" ? Wallet : order.status === "PROCESSING" || order.status === "processing" ? PackageSearch : order.status === "PACKED" || order.status === "packed" ? PackageCheck : order.status === "SHIPPED" || order.status === "shipped" ? Truck : order.status === "COMPLETED" || order.status === "completed" ? CheckCircle2 : XCircle;
     const downloadInvoice = () => {
@@ -99,7 +101,7 @@ function OrderCard({ order, onUpdate }: { order: Order; onUpdate: (order: Order,
         let y = 60; order.items.forEach((item) => { doc.text(`${item.name} x${item.quantity} - ${money(item.subtotal)}`, 14, y); y += 8; });
         y += 4; doc.text(`Subtotal: ${money(order.subtotal)}`, 14, y); doc.text(`Ongkir: ${money(order.shipping)}`, 14, y + 8); doc.text(`Diskon: ${money(order.discount || 0)}`, 14, y + 16); doc.setFontSize(14); doc.text(`Total: ${money(order.total)}`, 14, y + 28); doc.save(`${order.invoice}.pdf`);
     };
-    const isPayable = (order.status === "PENDING" || order.status === "pending") && (!order.paymentStatus || order.paymentStatus === "PENDING" || order.paymentStatus === "WAITING_PAYMENT");
+    const isPayable = paymentPresentation.canPay;
     const actions = isPayable
         ? [{ label: "Bayar Sekarang", kind: "link" as const }, { label: "Batalkan Pesanan", kind: "status" as const, status: "CANCELLED" as const }, { label: "Download Invoice PDF", kind: "invoice" as const }, { label: "Beli Lagi", kind: "link" as const }]
         : order.status === "PROCESSING" || order.status === "processing" || order.status === "PACKED" || order.status === "packed"

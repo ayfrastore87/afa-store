@@ -88,7 +88,7 @@ export default function Home() {
   const openCart = async () => { if (await requireAuth("/cart")) setCartOpen(true); };
   const addCart = async (item: { id: string; name: string; slug?: string | null; price: number; image: string }) => { if (await requireAuth("/")) { addToCart(item); setCartOpen(true); } };
   const buyNow = async (item: { id: string; name: string; slug?: string | null; price: number; image: string }) => {
-    if (!(await requireAuth("/"))) return;
+    if (!(await requireAuth("/checkout"))) return;
     try {
       const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, qty: 1 }) });
       const data = await parseJsonResponse<{ redirectTo?: string }>(response);

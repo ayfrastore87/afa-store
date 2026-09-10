@@ -251,22 +251,28 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         }
 
         const successMessage = data.message || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
-        setMessage(successMessage);
-        showToast(successMessage);
         if (mode === "login") {
             const next = new URLSearchParams(window.location.search).get("next");
             const destination = next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") && next !== "/login" ? next : "/account";
-            const sessionReady = await waitForSupabaseSession();
-            if (!sessionReady) {
-                const sessionMessage = "Login berhasil, tetapi sesi belum siap. Silakan coba lagi.";
-                setError(sessionMessage);
-                showToast(sessionMessage, "error");
-                authRequestInFlight.current = false;
-                return;
-            }
-            router.replace(destination);
+            // Redirect langsung tanpa menampilkan pesan
+            authRequestInFlight.current = false;
+            // Tunggu session secara asynchronous, kemudian redirect
+            waitForSupabaseSession().then((sessionReady) => {
+                if (sessionReady) {
+                    router.replace(destination);
+                } else {
+                    const sessionMessage = "Login berhasil, tetapi sesi belum siap. Silakan coba lagi.";
+                    setError(sessionMessage);
+                    showToast(sessionMessage, "error");
+                    authRequestInFlight.current = false;
+                }
+            });
+        } else {
+            // Untuk register mode, tampilkan pesan sukses
+            setMessage(successMessage);
+            showToast(successMessage);
+            authRequestInFlight.current = false;
         }
-        authRequestInFlight.current = false;
     };
 
     const input = (name: string, label: string, type = "text") => <label className="block text-sm font-bold">{label}<input name={name} type={type} value={form[name] || ""} onChange={(e) => setForm({ ...form, [name]: e.target.value })} className="mt-2 w-full rounded-2xl border border-[#184C3A]/15 bg-white/80 px-4 py-3 outline-none focus:ring-2 focus:ring-[#D4AF37]" /></label>;

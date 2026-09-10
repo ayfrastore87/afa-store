@@ -5,6 +5,6 @@ import { AccountDashboard } from "@/components/account/account-dashboard";
 
 export default async function AccountPage() {
     const user = await getCurrentUser();
-    if (!user) redirect("/login?next=/");
+    if (!user) redirect("/login?next=/account");
     return <AccountDashboard initialUser={publicUser(user)} />;
 }

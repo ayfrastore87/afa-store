@@ -22,6 +22,7 @@ import {
     type KasirOrderDetail,
 } from "./kasir-shared";
 import KasirReceipt from "./KasirReceipt";
+import KasirPrinterPanel from "./KasirPrinterPanel";
 
 // TAHAP D: detail transaksi terhubung ke GET /api/admin/kasir/orders/[id].
 // TAHAP E: tombol "Cetak Struk" memicu window.print(); struk dicetak dari data
@@ -184,6 +185,8 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                         </>
                     )}
                 </section>
+
+                <KasirPrinterPanel order={order} />
             </div>
             </Shell>
         </>

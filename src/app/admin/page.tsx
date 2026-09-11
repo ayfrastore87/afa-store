@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Home, Loader2, LogOut, PackagePlus, PlusCircle, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
+import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
 import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton, AdminWebsiteButton, AdminWebsiteFooterButton } from "@/components/admin/AdminNav";
@@ -36,12 +36,18 @@ type OrderItemWithProduct = OrderItem & { productId?: string | null; product_id?
 
 type Order = {
     id: string;
+    invoice?: string;
     customer: string;
     phone: string;
+    address?: string;
     status: string;
     paymentMethod: string;
+    paymentStatus?: string;
     total: number;
     createdAt: string;
+    courier?: string | null;
+    trackingNumber?: string | null;
+    shippedAt?: string | null;
     items?: OrderItemWithProduct[];
 };
 
@@ -118,6 +124,12 @@ const tabs = [
         href: "/admin/orders",
     },
     {
+        id: "kasir",
+        label: "Kasir",
+        icon: Receipt,
+        href: "/admin/kasir",
+    },
+    {
         id: "testimonials",
         label: "Testimoni",
         icon: MessageSquareHeart,
@@ -159,6 +171,8 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
     "/admin/tambah": "add",
     "/admin/orders": "orders",
     "/admin/pesanan": "orders",
+    "/admin/kasir": "kasir",
+    "/admin/kasir/riwayat": "kasir",
     "/admin/testimonials": "testimonials",
     "/admin/testimoni": "testimonials",
     "/admin/reports": "reports",
@@ -170,6 +184,36 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
 };
 
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+
+const STATUS_LABELS: Record<string, string> = {
+    PENDING: "Menunggu",
+    PROCESSING: "Diproses",
+    PACKED: "Dikemas",
+    SHIPPED: "Dikirim",
+    COMPLETED: "Selesai",
+    CANCELLED: "Dibatalkan",
+    CANCELED: "Dibatalkan",
+};
+
+function orderStatusLabel(status: string) {
+    return STATUS_LABELS[String(status).toUpperCase()] ?? String(status);
+}
+
+const DEFAULT_COURIERS = ["JNE", "J&T", "SiCepat"];
+
+function parseCouriers(raw: unknown): string[] {
+    const parseValue = (value: unknown): string => {
+        if (typeof value === "string") return value;
+        if (value && typeof value === "object" && "value" in value) return String((value as { value: unknown }).value ?? "");
+        return "";
+    };
+    const source = parseValue(raw);
+    const list = source
+        .split(/[,\n]/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    return list.length ? Array.from(new Set(list)) : DEFAULT_COURIERS;
+}
 
 function slugify(value: string) {
     return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
@@ -204,13 +248,16 @@ export default function AdminPage() {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<ProductForm>(emptyForm);
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+    const [couriers, setCouriers] = useState<string[]>(DEFAULT_COURIERS);
 
     const loadData = useCallback(async () => {
         setLoading(true);
-        const [productRes, orderRes, categoryRes] = await Promise.all([
+        const [productRes, orderRes, categoryRes, courierRes] = await Promise.all([
             supabase.from("products").select("*").order("createdAt", { ascending: false }),
             supabase.from("orders").select("*, items:order_items(name, quantity, productId)").order("createdAt", { ascending: false }),
             fetch("/api/categories").then((response) => response.json() as Promise<{ data?: { id: string; name: string }[] }>),
+            supabase.from("settings").select("value").eq("key", "couriers").maybeSingle(),
         ]);
 
         if (productRes.error) toast(productRes.error.message, "error");
@@ -218,6 +265,7 @@ export default function AdminPage() {
         setProducts((productRes.data ?? []) as Product[]);
         setOrders((orderRes.data ?? []) as Order[]);
         setCategories(categoryRes.data ?? []);
+        if (!courierRes.error) setCouriers(parseCouriers(courierRes.data?.value));
         setLoading(false);
     }, []);
 
@@ -363,6 +411,27 @@ export default function AdminPage() {
         toast("Status pesanan diperbarui");
     }
 
+    async function saveShipping(order: Order, courier: string, trackingNumber: string) {
+        const response = await fetch(`/api/admin/orders/${order.id}/shipping`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ courier, trackingNumber }),
+        });
+
+        const data = (await response.json()) as { message?: string; order?: Partial<Order> };
+
+        if (!response.ok) {
+            toast(data.message || "Pengiriman gagal disimpan.", "error");
+            return false;
+        }
+
+        const updatedOrder = { ...order, ...data.order };
+        setOrders((items) => items.map((item) => (item.id === order.id ? updatedOrder : item)));
+        setDetailOrder(updatedOrder);
+        toast("Pengiriman berhasil disimpan");
+        return true;
+    }
+
     async function logout() {
         await supabase.auth.signOut();
         router.push("/admin/login");
@@ -394,7 +463,7 @@ export default function AdminPage() {
                             {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} />}
                             {activeTab === "stock" && <StockPanel />}
                             {activeTab === "add" && <ProductFormPanel form={form} categories={categories} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUpload={uploadImage} onCancel={() => setForm(emptyForm)} />}
-                            {activeTab === "orders" && <OrdersPanel orders={orders} onStatus={updateOrderStatus} />}
+                            {activeTab === "orders" && <OrdersPanel orders={orders} onStatus={updateOrderStatus} onDetail={setDetailOrder} />}
                             {activeTab === "testimonials" && <TestimonialsPanel />}
                             {activeTab === "reports" && <ReportsPanel />}
                             {activeTab === "settings" && <SettingsPanel />}
@@ -405,6 +474,7 @@ export default function AdminPage() {
             </div>
 
             <MobileBottomNav activeTab={activeTab} />
+            {detailOrder && <OrderDetailModal order={detailOrder} couriers={couriers} onClose={() => setDetailOrder(null)} onSave={saveShipping} />}
         </main>
     );
 }
@@ -468,10 +538,10 @@ function ProductFormPanel({ form, categories, saving, onChange, onSubmit, onUplo
     return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} min={type === "number" ? 0 : undefined} max={key === "rating" ? 5 : undefined} step={key === "rating" ? "0.1" : undefined} className="min-h-12 w-full rounded-2xl border bg-white px-4" required /></label>)}<label className="space-y-2"><span className="text-sm font-bold">Kategori</span><select value={form.categoryId} onChange={(event) => onChange("categoryId", event.target.value)} className="min-h-12 w-full rounded-2xl border bg-white px-4"><option value="">Tanpa Kategori</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="flex items-center gap-3"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Produk Aktif</label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Foto</span><input type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} /><input value={form.image} onChange={(event) => onChange("image", event.target.value)} className="min-h-12 w-full rounded-2xl bg-white px-4" placeholder="URL image" /></label><div className="grid gap-3 md:col-span-2 sm:grid-cols-[1fr_auto]"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#184D47] px-5 font-black text-white">{saving ? "Menyimpan..." : "Simpan"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border px-5 font-bold">Reset</button></div></form></Card>;
 }
 
-function OrdersPanel({ orders, onStatus }: { orders: Order[]; onStatus: (order: Order, status: string) => void }) {
-    const statuses = ["Menunggu", "Diproses", "Dikirim", "Selesai"];
+function OrdersPanel({ orders, onStatus, onDetail }: { orders: Order[]; onStatus: (order: Order, status: string) => void; onDetail: (order: Order) => void }) {
+    const statuses = ["Menunggu", "Diproses", "Dikemas", "Dikirim", "Selesai"];
     if (!orders.length) return <Card><EmptyState title="Belum ada pesanan" text="Pesanan pelanggan akan muncul realtime di sini." action="Buka Website" href="/" /></Card>;
-    return <Card><h3 className="mb-5 text-2xl font-black">Pesanan</h3><div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-[#184D47]/50"><tr>{["Invoice", "Nama", "Produk", "Status", "Total", "Detail"].map((head) => <th key={head} className="p-3">{head}</th>)}</tr></thead><tbody>{orders.map((order) => <tr key={order.id} className="border-t border-[#184D47]/10"><td className="p-3 font-black">#{order.id.slice(0, 8)}</td><td className="p-3 font-bold">{order.customer}</td><td className="p-3">{order.items?.map((item) => `${item.name} x${item.quantity}`).join(", ") || "-"}</td><td className="p-3"><select value={order.status} onChange={(event) => void onStatus(order, event.target.value)} className="min-h-12 rounded-2xl border border-[#184D47]/15 px-3 font-bold">{statuses.map((status) => <option key={status}>{status}</option>)}</select></td><td className="p-3 font-black">{rupiah.format(order.total)}</td><td className="p-3"><button onClick={() => toast(`Detail ${order.id}`, "info")} className="min-h-12 rounded-2xl bg-[#0F4C45] px-4 font-black text-white">Detail</button></td></tr>)}</tbody></table></div><div className="grid gap-3 lg:hidden">{orders.map((order) => <motion.article key={order.id} whileTap={{ scale: 0.98 }} className="rounded-[24px] bg-white p-4 shadow-lg shadow-[#184D47]/5"><div className="mb-3 flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-black uppercase text-[#184D47]/50">Invoice</p><h4 className="truncate text-lg font-black">#{order.id.slice(0, 10)}</h4></div><span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black">{order.status}</span></div><div className="grid grid-cols-2 gap-3 text-sm"><Info label="Nama" value={order.customer} /><Info label="Qty" value={String(order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0)} /><Info label="Produk" value={order.items?.map((item) => item.name).join(", ") || "-"} wide /><Info label="Total" value={rupiah.format(order.total)} /></div><select value={order.status} onChange={(event) => void onStatus(order, event.target.value)} className="mt-3 min-h-12 w-full rounded-2xl border border-[#184D47]/15 px-3 font-bold">{statuses.map((status) => <option key={status}>{status}</option>)}</select><button onClick={() => toast(`Detail ${order.id}`, "info")} className="mt-3 min-h-12 w-full rounded-2xl bg-[#0F4C45] font-black text-white">Detail</button></motion.article>)}</div></Card>;
+    return <Card><h3 className="mb-5 text-2xl font-black">Pesanan</h3><div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-[#184D47]/50"><tr>{["Invoice", "Nama", "Produk", "Status", "Total", "Detail"].map((head) => <th key={head} className="p-3">{head}</th>)}</tr></thead><tbody>{orders.map((order) => <tr key={order.id} className="border-t border-[#184D47]/10"><td className="p-3 font-black">#{order.invoice || order.id.slice(0, 8)}</td><td className="p-3 font-bold">{order.customer}</td><td className="p-3">{order.items?.map((item) => `${item.name} x${item.quantity}`).join(", ") || "-"}</td><td className="p-3"><select value={order.status} onChange={(event) => void onStatus(order, event.target.value)} className="min-h-12 rounded-2xl border border-[#184D47]/15 px-3 font-bold">{statuses.map((status) => <option key={status}>{status}</option>)}</select></td><td className="p-3 font-black">{rupiah.format(order.total)}</td><td className="p-3"><button onClick={() => onDetail(order)} className="min-h-12 rounded-2xl bg-[#0F4C45] px-4 font-black text-white">Detail</button></td></tr>)}</tbody></table></div><div className="grid gap-3 lg:hidden">{orders.map((order) => <motion.article key={order.id} whileTap={{ scale: 0.98 }} className="rounded-[24px] bg-white p-4 shadow-lg shadow-[#184D47]/5"><div className="mb-3 flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-black uppercase text-[#184D47]/50">Invoice</p><h4 className="truncate text-lg font-black">#{order.invoice || order.id.slice(0, 10)}</h4></div><span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black">{orderStatusLabel(order.status)}</span></div><div className="grid grid-cols-2 gap-3 text-sm"><Info label="Nama" value={order.customer} /><Info label="Qty" value={String(order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0)} /><Info label="Produk" value={order.items?.map((item) => item.name).join(", ") || "-"} wide /><Info label="Total" value={rupiah.format(order.total)} /></div><select value={order.status} onChange={(event) => void onStatus(order, event.target.value)} className="mt-3 min-h-12 w-full rounded-2xl border border-[#184D47]/15 px-3 font-bold">{statuses.map((status) => <option key={status}>{status}</option>)}</select><button onClick={() => onDetail(order)} className="mt-3 min-h-12 w-full rounded-2xl bg-[#0F4C45] font-black text-white">Detail</button></motion.article>)}</div></Card>;
 }
 
 function Info({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
@@ -488,7 +558,110 @@ function AccountPanel({ adminEmail, onLogout }: { adminEmail: string; onLogout: 
 }
 
 
+function OrderDetailModal({ order, couriers, onClose, onSave }: { order: Order; couriers: string[]; onClose: () => void; onSave: (order: Order, courier: string, trackingNumber: string) => Promise<boolean> }) {
+    const initialCourier = order.courier && !couriers.includes(order.courier) ? order.courier : (order.courier || couriers[0] || "JNE");
+    const [courier, setCourier] = useState(initialCourier);
+    const [customCourier, setCustomCourier] = useState(order.courier && !couriers.includes(order.courier) ? order.courier : "");
+    const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || "");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
 
+    const isShipped = String(order.status).toUpperCase() === "SHIPPED";
+    const selectedCourier = courier === "Lainnya" ? customCourier : courier;
+
+    async function submit(event: FormEvent) {
+        event.preventDefault();
+        const trimmedTracking = trackingNumber.trim();
+        const trimmedCourier = selectedCourier.trim();
+        setError("");
+
+        if (!trimmedCourier) {
+            setError("Kurir wajib diisi.");
+            return;
+        }
+        if (!trimmedTracking) {
+            setError("Nomor resi wajib diisi.");
+            return;
+        }
+
+        setSaving(true);
+        const ok = await onSave(order, trimmedCourier, trimmedTracking);
+        setSaving(false);
+        if (ok) onClose();
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="sticky top-0 flex items-center justify-between border-b bg-white/95 p-5 backdrop-blur">
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#D4AF37]">Detail Pesanan</p>
+                        <h3 className="text-2xl font-black">#{order.invoice || order.id.slice(0, 10)}</h3>
+                    </div>
+                    <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-xl bg-[#184D47]/5 font-black hover:bg-[#184D47]/10"><X size={18} /></button>
+                </div>
+                <div className="space-y-5 p-5">
+                    <section className="grid gap-3 sm:grid-cols-2">
+                        <Info label="Nama Pelanggan" value={order.customer} />
+                        <Info label="Nomor HP" value={order.phone} />
+                        <Info label="Alamat" value={order.address || "-"} wide />
+                    </section>
+                    <section className="rounded-2xl bg-[#f8f6f0] p-4">
+                        <p className="mb-2 text-sm font-black">Produk</p>
+                        <div className="grid gap-2">
+                            {order.items?.map((item) => (
+                                <div key={`${item.name}-${item.productId ?? ""}`} className="flex justify-between rounded-xl bg-white p-2 text-sm">
+                                    <span>{item.name} x{item.quantity}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-3 flex justify-between border-t border-[#184D47]/10 pt-3 font-black">
+                            <span>Total</span>
+                            <span>{rupiah.format(order.total)}</span>
+                        </div>
+                    </section>
+                    <section className="grid gap-3 sm:grid-cols-2">
+                        <Info label="Status Pembayaran" value={order.paymentStatus || "-"} />
+                        <Info label="Status Pesanan" value={orderStatusLabel(order.status)} />
+                        {isShipped && (
+                            <>
+                                <Info label="Kurir" value={order.courier || "-"} />
+                                <Info label="Nomor Resi" value={order.trackingNumber || "-"} />
+                                <Info label="Waktu Dikirim" value={order.shippedAt ? new Date(order.shippedAt).toLocaleString("id-ID") : "-"} />
+                            </>
+                        )}
+                    </section>
+
+                    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-[#184D47]/15 p-4">
+                        <p className="text-sm font-black">PENGIRIMAN</p>
+                        <label className="block space-y-2">
+                            <span className="text-sm font-bold">Kurir</span>
+                            <select value={courier} onChange={(event) => setCourier(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 font-bold">
+                                {couriers.map((item) => <option key={item} value={item}>{item}</option>)}
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </label>
+                        {courier === "Lainnya" && (
+                            <label className="block space-y-2">
+                                <span className="text-sm font-bold">Nama Kurir</span>
+                                <input value={customCourier} onChange={(event) => setCustomCourier(event.target.value)} placeholder="Nama kurir" className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4" />
+                            </label>
+                        )}
+                        <label className="block space-y-2">
+                            <span className="text-sm font-bold">Nomor Resi</span>
+                            <input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Nomor resi pengiriman" className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4" />
+                        </label>
+                        {error && <p className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+                        <button disabled={saving} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60">
+                            {saving && <Loader2 className="animate-spin" size={18} />}
+                            {saving ? "Menyimpan..." : "Simpan Pengiriman"}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 
 

@@ -14,7 +14,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: "Payload login tidak valid." }, { status: 400 });
         }
 
-        const { identifier, password, remember } = body;
+        const { identifier, password } = body;
+        // `body.remember` (the "Remember Me" checkbox) is accepted for
+        // forward-compatibility but is intentionally not read here: session
+        // persistence follows the Supabase SSR architecture. @supabase/ssr writes
+        // a persistent httpOnly auth cookie (400-day Max-Age) and exposes no
+        // per-login session-only option, so the checkbox cannot yet toggle
+        // persistence without unsafe manual storage/custom-cookie workarounds.
         if (!identifier || !password) {
             return NextResponse.json({ message: "Email dan password wajib diisi." }, { status: 400 });
         }

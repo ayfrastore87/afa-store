@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { PaymentProofForm } from "@/components/payment/payment-proof-form";
 import { getCurrentUser } from "@/lib/server-auth";
@@ -46,5 +48,33 @@ export default async function PaymentPage({ params }: { params: Promise<{ invoic
     const storedQrUrl = payment?.qrisUrl || actionQrUrl || "";
     const qrisSrc = storedQrUrl;
 
-    return <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(201,164,91,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(18,53,36,0.12),transparent_30%),linear-gradient(135deg,#F8F5EE,#FFFDF8_55%,#EFE6D5)] px-4 py-6 text-[#2E2A26] md:px-6 md:py-8"><div className="mx-auto max-w-6xl"><div className="rounded-[30px] border border-white/70 bg-white/70 p-5 shadow-[0_24px_70px_rgba(18,53,36,0.10)] backdrop-blur md:p-8"><div className="flex flex-col gap-3 text-center"><p className="text-sm font-bold uppercase tracking-[0.22em] text-[#C9A45B]">Pembayaran Pesanan</p><h1 className="font-display text-4xl font-bold text-[#123524] md:text-5xl">Selesaikan Pembayaran Anda</h1><p className="mx-auto max-w-2xl text-[#6D6558]">Invoice <b className="text-[#123524]">{order.invoice}</b> Pesanan Anda telah berhasil dibuat. Silakan selesaikan pembayaran sesuai nominal yang tertera menggunakan QRIS. Setelah pembayaran berhasil, pesanan akan diproses secara otomatis.</p></div><div className="mt-8"><PaymentProofForm invoice={order.invoice} total={order.total} paymentMethod={method} paymentStatus={status} qrisSrc={qrisSrc} expiredAt={payment?.expiredAt?.toISOString() ?? null} /></div><div className="mt-8 flex flex-wrap justify-center gap-3 text-sm font-semibold text-[#123524]"><span className="rounded-full bg-[#F8F5EE] px-4 py-2">1. Scan QRIS</span><span className="rounded-full bg-[#F8F5EE] px-4 py-2">2. Bayar Nominal Tepat</span><span className="rounded-full bg-[#F8F5EE] px-4 py-2">3. Status Otomatis Update</span></div><div className="mt-8 flex flex-wrap justify-center gap-3 text-center"><Link href="/orders" className="inline-flex rounded-full border border-[#C9A45B] px-6 py-3 font-bold text-[#123524] hover:bg-[#C9A45B]/10">Lihat Riwayat Order</Link><Link href="/account" className="inline-flex rounded-full bg-[#C9A45B] px-6 py-3 font-bold text-white shadow-[0_14px_32px_rgba(201,164,91,0.28)] hover:bg-[#A9853F]">Lihat Pesanan</Link></div></div></div></main>;
+    return (
+        <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(201,164,91,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(18,53,36,0.12),transparent_30%),linear-gradient(135deg,#F8F5EE,#FFFDF8_55%,#EFE6D5)] px-4 py-5 text-[#2E2A26] md:px-6 md:py-8">
+            <div className="mx-auto max-w-3xl">
+                <header className="flex items-center justify-between gap-3">
+                    <Link href="/" className="flex items-center gap-2.5" aria-label="AFA FOOD Cilegon - Beranda">
+                        <Image src="/AFA LOGO.svg" alt="AFA FOOD CILEGON" width={40} height={56} className="h-12 w-9 shrink-0 object-contain" />
+                        <span className="leading-tight">
+                            <span className="block font-display text-lg font-bold text-[#123524]">AFA FOOD</span>
+                            <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-[#C9A45B]">Cilegon</span>
+                        </span>
+                    </Link>
+                    <Link href="/" className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#C9A45B]/30 bg-white/70 px-3.5 py-2 text-xs font-bold text-[#123524] shadow-sm transition hover:bg-[#C9A45B]/10">
+                        <ArrowLeft size={14} /> Kembali ke Beranda
+                    </Link>
+                </header>
+
+                <div className="mt-7">
+                    <PaymentProofForm
+                        invoice={order.invoice}
+                        total={order.total}
+                        paymentMethod={method}
+                        paymentStatus={status}
+                        qrisSrc={qrisSrc}
+                        expiredAt={payment?.expiredAt?.toISOString() ?? null}
+                    />
+                </div>
+            </div>
+        </main>
+    );
 }

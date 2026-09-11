@@ -76,8 +76,6 @@ export async function fetchProducts() {
     }
 }
 
-export const productSizes = ["35g", "100g", "250g", "500g", "1 Kg"];
-
 export const testimonials = [
     ["Siti Aisyah", "Cilegon", "Bawang gorengnya benar-benar gurih dan renyah, bikin nagih!"],
     ["Andi Setiawan", "Serang", "Parcelnya cantik dan elegan, cocok untuk hadiah keluarga."],

@@ -13,7 +13,8 @@ export function loginPath(next: string) {
     return `/login?next=${encodeURIComponent(next)}`;
 }
 
-export function whatsappUrl() {
+export function whatsappUrl(message?: string) {
     const number = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER?.replace(/\D/g, "");
-    return number ? `https://wa.me/${number}` : null;
+    if (!number) return null;
+    return message ? `https://wa.me/${number}?text=${encodeURIComponent(message)}` : `https://wa.me/${number}`;
 }

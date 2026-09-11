@@ -253,7 +253,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         const successMessage = data.message || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
         if (mode === "login") {
             const next = new URLSearchParams(window.location.search).get("next");
-            const destination = next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") && next !== "/login" ? next : "/account";
+            const destination = next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") && next !== "/login" ? next : "/";
             // Redirect langsung tanpa menampilkan pesan
             authRequestInFlight.current = false;
             // Tunggu session secara asynchronous, kemudian redirect

@@ -9,8 +9,17 @@ export async function GET() {
     if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     const orders = await prisma.order.findMany({
         where: { userId: user.id },
-        include: { items: true, payment: { select: { status: true } } },
+        include: {
+            items: { include: { product: { select: { image: true } } } },
+            payment: { select: { status: true } },
+        },
         orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json({ orders: orders.map(({ payment, ...order }) => ({ ...order, paymentStatus: payment?.status ?? order.paymentStatus })) });
+    return NextResponse.json({
+        orders: orders.map(({ payment, items, ...order }) => ({
+            ...order,
+            paymentStatus: payment?.status ?? order.paymentStatus,
+            items: items.map(({ product, ...item }) => ({ ...item, image: product?.image ?? null })),
+        })),
+    });
 }

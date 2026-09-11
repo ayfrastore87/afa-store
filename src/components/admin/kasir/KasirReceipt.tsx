@@ -9,55 +9,73 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { formatDate, formatRupiah, paymentMethodLabel, sourceLabel, type KasirOrderDetail } from "./kasir-shared";
+import { formatDate, formatRupiah, paymentMethodLabel, statusLabel, type KasirOrderDetail } from "./kasir-shared";
 
 export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
     // Portal to <body> so the receipt can be the only visible element in print,
     // independent of the admin page tree. Guarded for SSR to avoid hydration mismatch.
     const [mounted, setMounted] = useState(false);
+    const [cashierName, setCashierName] = useState("");
+
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    // Kasir (petugas) dibaca read-only dari sesi aktif. Tanpa perubahan auth/db;
+    // jika gagal, baris "Kasir" cukup tidak ditampilkan (struk tetap valid).
+    useEffect(() => {
+        if (!mounted) return;
+        let cancelled = false;
+        void fetch("/api/auth/me", { cache: "no-store" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data: { user?: { name?: string } | null } | null) => {
+                if (!cancelled && data?.user?.name) setCashierName(data.user.name);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [mounted]);
+
     const isTunai = order.paymentMethod === "TUNAI";
 
     const receipt = (
-        <div id="kasir-receipt" className="text-black">
-            <div className="mx-auto w-[58mm] px-[4mm] py-[4mm] font-mono text-[11px] leading-snug">
+        <div id="kasir-receipt">
+            <div className="receipt-sheet">
                 {/* Header */}
-                <div className="text-center">
+                <div className="receipt-header">
                     <Image
                         src="/AFA LOGO.svg"
                         alt="AFA STORE"
-                        width={48}
-                        height={48}
+                        width={56}
+                        height={56}
                         unoptimized
                         priority
-                        className="mx-auto h-12 w-auto object-contain grayscale"
+                        className="receipt-logo"
                     />
-                    <p className="mt-1 text-base font-black leading-none">AFA STORE</p>
+                    <p className="receipt-store">AFA STORE</p>
                 </div>
 
                 <Divider />
 
                 {/* Meta */}
-                <dl className="space-y-0.5">
+                <dl className="receipt-meta">
                     <Row label="Invoice" value={order.invoice} />
                     <Row label="Tanggal" value={formatDate(order.createdAt)} />
                     <Row label="Pelanggan" value={order.customer || "-"} />
                     {order.phone ? <Row label="WhatsApp" value={order.phone} /> : null}
-                    <Row label="Sumber" value={sourceLabel(order.source)} />
+                    {cashierName ? <Row label="Kasir" value={cashierName} /> : null}
                 </dl>
 
                 <Divider />
 
                 {/* Items */}
-                <div className="space-y-1.5">
+                <div className="receipt-items">
                     {order.items.map((item) => (
-                        <div key={item.id}>
-                            <p className="font-bold leading-tight">{item.name}</p>
-                            {item.size ? <p className="text-[10px] leading-tight">{item.size}</p> : null}
-                            <div className="flex justify-between">
+                        <div key={item.id} className="receipt-item">
+                            <p className="receipt-item-name">{item.name}</p>
+                            {item.size ? <p className="receipt-item-size">{item.size}</p> : null}
+                            <div className="receipt-item-row">
                                 <span>{item.quantity} x {formatRupiah(item.price)}</span>
                                 <span>{formatRupiah(item.subtotal)}</span>
                             </div>
@@ -68,9 +86,9 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
                 <Divider />
 
                 {/* Totals */}
-                <dl className="space-y-0.5">
+                <dl className="receipt-meta">
                     <Row label="Subtotal" value={formatRupiah(order.subtotal)} />
-                    <div className="flex justify-between text-[13px] font-black">
+                    <div className="receipt-total">
                         <span>TOTAL</span>
                         <span>{formatRupiah(order.total)}</span>
                     </div>
@@ -79,24 +97,21 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
                 <Divider />
 
                 {/* Payment */}
-                <dl className="space-y-0.5">
-                    <Row label="Metode Pembayaran" value={paymentMethodLabel(order.paymentMethod)} />
+                <dl className="receipt-meta">
+                    <Row label="Metode" value={paymentMethodLabel(order.paymentMethod)} />
                     {isTunai ? (
                         <>
                             <Row label="Uang Diterima" value={order.cashReceived != null ? formatRupiah(order.cashReceived) : "-"} />
                             <Row label="Kembalian" value={order.change != null ? formatRupiah(order.change) : "-"} />
                         </>
                     ) : null}
-                    <div className="flex justify-between font-black">
-                        <span>Status</span>
-                        <span>LUNAS</span>
-                    </div>
+                    <Row label="Status Bayar" value={statusLabel(order.paymentStatus)} bold />
                 </dl>
 
                 <Divider />
 
                 {/* Footer */}
-                <footer className="pt-1 text-center">
+                <footer className="receipt-footer">
                     <p>Terima kasih telah berbelanja</p>
                     <p>di AFA STORE</p>
                 </footer>
@@ -109,14 +124,14 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
 }
 
 function Divider() {
-    return <div className="my-1.5 border-t border-dashed border-black" />;
+    return <div className="receipt-divider" />;
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
     return (
-        <div className="flex justify-between gap-2">
-            <dt className="shrink-0">{label}</dt>
-            <dd className="text-right">{value}</dd>
+        <div className={bold ? "receipt-row receipt-row-bold" : "receipt-row"}>
+            <dt className="receipt-row-label">{label}</dt>
+            <dd className="receipt-row-value">{value}</dd>
         </div>
     );
 }

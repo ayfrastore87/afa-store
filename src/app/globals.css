@@ -361,10 +361,11 @@ h3,
 }
 
 /* ---------------------------------------------------------------------------
-   TAHAP E — Kasir thermal receipt print.
+   TAHAP E — Kasir thermal receipt print (58mm).
    The receipt is portalled directly under <body> with id="kasir-receipt".
    On screen it is hidden; when printing, every other element is hidden and
-   only the 58mm black-and-white receipt is rendered.
+   only the 58mm black-and-white receipt is rendered. No min-height / transform /
+   scale is applied, so the physical width stays a true 58mm.
 --------------------------------------------------------------------------- */
 #kasir-receipt {
   display: none;
@@ -376,23 +377,139 @@ h3,
     margin: 0;
   }
 
+  html,
   body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 58mm !important;
+    min-height: 0 !important;
     background: #fff !important;
     color: #000 !important;
   }
 
+  /* Sembunyikan seluruh halaman kasir; hanya struk yang dicetak. */
   body > *:not(#kasir-receipt) {
     display: none !important;
   }
 
   #kasir-receipt {
     display: block !important;
-    width: 58mm;
-    margin: 0;
-    padding: 4mm;
-    background: #fff;
-    color: #000;
+    position: static !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* Area cetak: 58mm kertas dikurangi padding kiri/kanan 4mm tiap sisi,
+     menyisakan 50mm untuk konten; teks dibatasi agar tidak menabrak tepi. */
+  #kasir-receipt .receipt-sheet {
+    box-sizing: border-box;
+    width: 58mm;
+    max-width: 58mm;
+    margin: 0;
+    padding: 3mm 4mm 6mm 4mm;
+    background: #fff;
+    color: #000;
+    font-family: "Courier New", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  #kasir-receipt .receipt-header {
+    text-align: center;
+  }
+
+  #kasir-receipt .receipt-logo {
+    display: block;
+    width: 20mm;
+    height: auto;
+    margin: 0 auto;
+    object-fit: contain;
+    filter: grayscale(1);
+  }
+
+  #kasir-receipt .receipt-store {
+    margin-top: 1mm;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: 0.5px;
+  }
+
+  #kasir-receipt .receipt-divider {
+    margin: 2mm 0;
+    border-top: 1px dashed #000;
+  }
+
+  #kasir-receipt .receipt-meta {
+    margin: 0;
+  }
+
+  #kasir-receipt .receipt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 3mm;
+    overflow-wrap: break-word;
+  }
+
+  #kasir-receipt .receipt-row-label {
+    flex-shrink: 0;
+  }
+
+  #kasir-receipt .receipt-row-value {
+    text-align: right;
+    overflow-wrap: break-word;
+    max-width: 34mm;
+  }
+
+  #kasir-receipt .receipt-row-bold {
+    font-weight: 700;
+  }
+
+  #kasir-receipt .receipt-items {
+    display: block;
+  }
+
+  #kasir-receipt .receipt-item {
+    margin-bottom: 1.5mm;
+  }
+
+  #kasir-receipt .receipt-item-name {
+    font-weight: 700;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+  }
+
+  #kasir-receipt .receipt-item-size {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  #kasir-receipt .receipt-item-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 3mm;
+    overflow-wrap: break-word;
+  }
+
+  #kasir-receipt .receipt-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 3mm;
+    margin-top: 1mm;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  #kasir-receipt .receipt-footer {
+    padding-top: 1mm;
+    text-align: center;
+    font-weight: 700;
   }
 }

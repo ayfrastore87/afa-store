@@ -131,6 +131,9 @@ model Order {
   paymentMethod     String            @default("QRIS") @map("payment_method")
   paymentStatus     String            @default("WAITING_PAYMENT") @map("payment_status")
   paymentProof      String?           @map("payment_proof")
+  source            String            @default("ONLINE")
+  cashReceived      Int?
+  change            Int?
   courier           String?
   trackingNumber    String?
   paidAt            DateTime?

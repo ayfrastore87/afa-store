@@ -359,3 +359,40 @@ h3,
     padding-bottom: 208px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   TAHAP E — Kasir thermal receipt print.
+   The receipt is portalled directly under <body> with id="kasir-receipt".
+   On screen it is hidden; when printing, every other element is hidden and
+   only the 58mm black-and-white receipt is rendered.
+--------------------------------------------------------------------------- */
+#kasir-receipt {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body > *:not(#kasir-receipt) {
+    display: none !important;
+  }
+
+  #kasir-receipt {
+    display: block !important;
+    width: 58mm;
+    margin: 0;
+    padding: 4mm;
+    background: #fff;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -21,6 +21,8 @@ const breadcrumbs: Record<string, string> = {
     "/admin/pengaturan": "Pengaturan",
     "/admin/tambah": "Tambah Produk",
     "/admin/akun": "Akun",
+    "/admin/kasir": "Kasir",
+    "/admin/kasir/riwayat": "Riwayat Kasir",
 };
 
 export function AdminDashboardLink({ onClick }: { onClick?: () => void }) {

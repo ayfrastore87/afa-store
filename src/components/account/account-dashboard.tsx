@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
     Ban,
+    ChevronLeft,
     ChevronRight,
     Download,
     Handshake,
@@ -61,19 +62,27 @@ function Alert({ tone, children }: { tone: "success" | "error"; children: ReactN
     return <p className={`rounded-xl p-3 text-xs font-semibold ${cls}`}>{children}</p>;
 }
 
-type Tab = "profil" | "alamat" | "pesanan" | "wishlist" | "password";
+type Section = "pesanan" | "akun";
+type AccountView = "menu" | "profil" | "alamat" | "wishlist" | "password";
 
-const MENU: { key: Tab; label: string; icon: typeof UserIcon }[] = [
-    { key: "profil", label: "Profil Saya", icon: UserIcon },
-    { key: "alamat", label: "Alamat Saya", icon: MapPin },
-    { key: "pesanan", label: "Pesanan Saya", icon: PackageSearch },
-    { key: "wishlist", label: "Wishlist", icon: Heart },
-    { key: "password", label: "Ubah Password", icon: KeyRound },
+const ACCOUNT_MENU: { key: Exclude<AccountView, "menu">; label: string; icon: typeof UserIcon; desc: string }[] = [
+    { key: "profil", label: "Profil Saya", icon: UserIcon, desc: "Kelola nama dan nomor telepon Anda." },
+    { key: "alamat", label: "Alamat Saya", icon: MapPin, desc: "Atur alamat pengiriman dan alamat utama." },
+    { key: "wishlist", label: "Wishlist", icon: Heart, desc: "Produk favorit yang ingin Anda beli." },
+    { key: "password", label: "Ubah Password", icon: KeyRound, desc: "Perbarui kata sandi akun Anda." },
 ];
+
+const ACCOUNT_TITLES: Record<Exclude<AccountView, "menu">, string> = {
+    profil: "Profil Saya",
+    alamat: "Alamat Saya",
+    wishlist: "Wishlist",
+    password: "Ubah Password",
+};
 
 export function AccountDashboard({ initialUser }: { initialUser: User }) {
     const [user, setUser] = useState<User>(initialUser);
-    const [tab, setTab] = useState<Tab>("pesanan");
+    const [section, setSection] = useState<Section>("pesanan");
+    const [accountView, setAccountView] = useState<AccountView>("menu");
     const [message, setMessage] = useState("");
     const [partnerActive, setPartnerActive] = useState(false);
 
@@ -96,6 +105,11 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
         else setMessage("Logout gagal. Silakan coba lagi.");
     };
 
+    const navigate = (s: Section) => {
+        setSection(s);
+        if (s === "akun") setAccountView("menu");
+    };
+
     return (
         <main className="min-h-screen bg-[#f7f4ec] pb-24 text-[#17241d]">
             <header className="sticky top-0 z-30 border-b border-[#173f31]/10 bg-white/95">
@@ -114,50 +128,85 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
             </header>
 
             <div className="mx-auto max-w-4xl px-3.5 py-5">
-                <h1 className="font-display text-2xl font-bold text-[#123d2d]">Akun Saya</h1>
-                <p className="mt-1 text-xs text-[#69736d]">Kelola profil, alamat, pesanan, dan preferensi Anda.</p>
-
                 {message && <div className="mt-3"><Alert tone="error">{message}</Alert></div>}
 
-                <nav className="-mx-3.5 mt-4 overflow-x-auto px-3.5 pb-1 [scrollbar-width:none]">
-                    <div className="flex w-max gap-2">
-                        {MENU.map((m) => (
-                            <button key={m.key} onClick={() => setTab(m.key)} className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-xs font-semibold transition ${tab === m.key ? "border-[#123d2d] bg-[#123d2d] text-white" : "border-[#ded9cc] bg-white text-[#5f6863] hover:border-[#b18a3d]"}`}>
-                                <m.icon size={15} />
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
-                </nav>
-
-                <section className="mt-4">
-                    {tab === "profil" && <ProfileSection user={user} onSaved={(name, phone) => setUser((u) => ({ ...u, name, phone }))} />}
-                    {tab === "alamat" && <AddressSection />}
-                    {tab === "pesanan" && <OrdersSection />}
-                    {tab === "wishlist" && <WishlistSection />}
-                    {tab === "password" && <PasswordSection />}
-                </section>
-
-                <section className="mt-5 overflow-hidden rounded-2xl border border-[#e5e0d5] bg-white shadow-sm">
-                    {partnerActive && (
-                        <Link href="/partner" className="flex items-center gap-3 border-b border-[#f0ece2] p-4 transition hover:bg-[#f7f4ec]">
-                            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f3e3] text-[#29621a]"><Handshake size={20} /></span>
-                            <span className="min-w-0 flex-1">
-                                <b className="block text-sm text-[#123d2d]">Dashboard Mitra</b>
-                                <small className="text-[11px] text-[#7a817c]">Kelola toko, produk, dan penjualan mitra Anda.</small>
-                            </span>
-                            <ChevronRight size={16} className="text-[#b18a3d]" />
-                        </Link>
-                    )}
-                    <button onClick={() => void logout()} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-[#f7f4ec]">
-                        <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f7e9e6] text-[#8c2e25]"><LogOut size={20} /></span>
-                        <b className="text-sm text-[#8c2e25]">Keluar</b>
-                    </button>
-                </section>
+                {section === "pesanan" ? (
+                    <OrdersSection />
+                ) : accountView === "menu" ? (
+                    <AccountMenu
+                        user={user}
+                        partnerActive={partnerActive}
+                        onSelect={(v) => setAccountView(v)}
+                        onLogout={() => void logout()}
+                    />
+                ) : (
+                    <>
+                        <AccountSubheader title={ACCOUNT_TITLES[accountView]} onBack={() => setAccountView("menu")} />
+                        {accountView === "profil" && <ProfileSection user={user} onSaved={(name, phone) => setUser((u) => ({ ...u, name, phone }))} />}
+                        {accountView === "alamat" && <AddressSection />}
+                        {accountView === "wishlist" && <WishlistSection />}
+                        {accountView === "password" && <PasswordSection />}
+                    </>
+                )}
             </div>
 
-            <Bottom />
+            <Bottom section={section} onNavigate={navigate} />
         </main>
+    );
+}
+
+function AccountMenu({ user, partnerActive, onSelect, onLogout }: { user: User; partnerActive: boolean; onSelect: (v: Exclude<AccountView, "menu">) => void; onLogout: () => void }) {
+    return (
+        <div>
+            <div className="flex items-center gap-3 rounded-2xl border border-[#e5e0d5] bg-white p-4 shadow-sm">
+                <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full bg-[#123d2d] text-sm font-bold text-[#e3c77b]">{user.image ? <Image src={user.image} alt={user.name} width={48} height={48} className="h-full w-full object-cover" unoptimized /> : user.name.slice(0, 2).toUpperCase()}</span>
+                <div className="min-w-0">
+                    <b className="block truncate text-sm text-[#123d2d]">{user.name}</b>
+                    <small className="block truncate text-[11px] text-[#7a817c]">{user.email}</small>
+                </div>
+            </div>
+
+            <nav className="mt-4 grid gap-2.5">
+                {ACCOUNT_MENU.map((m) => (
+                    <button key={m.key} onClick={() => onSelect(m.key)} className="flex items-center gap-3 rounded-2xl border border-[#e5e0d5] bg-white p-4 text-left shadow-sm transition hover:border-[#b18a3d]">
+                        <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f0ece2] text-[#123d2d]"><m.icon size={20} /></span>
+                        <span className="min-w-0 flex-1">
+                            <b className="block text-sm text-[#123d2d]">{m.label}</b>
+                            <small className="block text-[11px] text-[#7a817c]">{m.desc}</small>
+                        </span>
+                        <ChevronRight size={16} className="text-[#b18a3d]" />
+                    </button>
+                ))}
+            </nav>
+
+            <section className="mt-4 overflow-hidden rounded-2xl border border-[#e5e0d5] bg-white shadow-sm">
+                {partnerActive && (
+                    <Link href="/partner" className="flex items-center gap-3 border-b border-[#f0ece2] p-4 transition hover:bg-[#f7f4ec]">
+                        <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f3e3] text-[#29621a]"><Handshake size={20} /></span>
+                        <span className="min-w-0 flex-1">
+                            <b className="block text-sm text-[#123d2d]">Dashboard Mitra</b>
+                            <small className="text-[11px] text-[#7a817c]">Kelola toko, produk, dan penjualan mitra Anda.</small>
+                        </span>
+                        <ChevronRight size={16} className="text-[#b18a3d]" />
+                    </Link>
+                )}
+                <button onClick={onLogout} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-[#f7f4ec]">
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f7e9e6] text-[#8c2e25]"><LogOut size={20} /></span>
+                    <b className="text-sm text-[#8c2e25]">Keluar</b>
+                </button>
+            </section>
+        </div>
+    );
+}
+
+function AccountSubheader({ title, onBack }: { title: string; onBack: () => void }) {
+    return (
+        <div className="mb-4 flex items-center gap-2">
+            <button onClick={onBack} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#ded9cc] bg-white text-[#123d2d] transition hover:bg-[#f7f4ec]" aria-label="Kembali ke menu Akun">
+                <ChevronLeft size={18} />
+            </button>
+            <h1 className="font-display text-xl font-bold text-[#123d2d]">{title}</h1>
+        </div>
     );
 }
 
@@ -708,17 +757,27 @@ function Line({ l, v }: { l: string; v: string }) {
     );
 }
 
-function Bottom() {
+function Bottom({ section, onNavigate }: { section: Section; onNavigate: (s: Section) => void }) {
+    const btnCls = (active: boolean) => `relative flex flex-col items-center justify-center text-[10px] font-semibold ${active ? "text-[#123d2d]" : "text-gray-400"}`;
+    const marker = (active: boolean) => active && <span className="absolute top-0 h-0.5 w-8 bg-[#b18a3d]" />;
+
     return (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95">
             <div className="mx-auto grid h-16 max-w-md grid-cols-3">
-                {[["Beranda", "/", Home], ["Pesanan", "/account", PackageSearch], ["Akun", "/account", UserIcon]].map(([l, h, I], i) => (
-                    <Link key={l as string} href={h as string} className={`flex flex-col items-center justify-center text-[10px] font-semibold ${i === 1 ? "text-[#123d2d]" : "text-gray-400"}`}>
-                        {i === 1 && <span className="absolute top-0 h-0.5 w-8 bg-[#b18a3d]" />}
-                        <I size={19} />
-                        {l as string}
-                    </Link>
-                ))}
+                <Link href="/" className={btnCls(false)}>
+                    <Home size={19} />
+                    Beranda
+                </Link>
+                <button onClick={() => onNavigate("pesanan")} className={btnCls(section === "pesanan")}>
+                    {marker(section === "pesanan")}
+                    <PackageSearch size={19} />
+                    Pesanan
+                </button>
+                <button onClick={() => onNavigate("akun")} className={btnCls(section === "akun")}>
+                    {marker(section === "akun")}
+                    <UserIcon size={19} />
+                    Akun
+                </button>
             </div>
         </nav>
     );

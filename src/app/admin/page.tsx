@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
+import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
 import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton, AdminWebsiteButton, AdminWebsiteFooterButton } from "@/components/admin/AdminNav";
@@ -136,6 +136,12 @@ const tabs = [
         href: "/admin/testimonials",
     },
     {
+        id: "mitra",
+        label: "Mitra",
+        icon: Handshake,
+        href: "/admin/mitra",
+    },
+    {
         id: "customers",
         label: "Pelanggan",
         icon: Users,
@@ -175,6 +181,7 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
     "/admin/kasir/riwayat": "kasir",
     "/admin/testimonials": "testimonials",
     "/admin/testimoni": "testimonials",
+    "/admin/mitra": "mitra",
     "/admin/reports": "reports",
     "/admin/laporan": "reports",
     "/admin/settings": "settings",

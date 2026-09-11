@@ -2,6 +2,7 @@ import "server-only";
 
 import { getCurrentUser as getSupabaseUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Partner } from "@prisma/client";
 
 type ApplicationUser = {
     id: string;
@@ -42,4 +43,29 @@ export async function getCurrentUser(): Promise<ApplicationUser | null> {
 export async function getCurrentAdmin() {
     const user = await getCurrentUser();
     return user?.role === "admin" && user.isActive !== false ? user : null;
+}
+
+export type CurrentPartner = {
+    user: ApplicationUser;
+    partner: Partner;
+};
+
+// Partner authorization is derived server-side from the ACTIVE Partner record,
+// never from a browser-supplied role. PENDING / REJECTED / SUSPENDED are not
+// considered active and therefore get no partner access.
+export async function getCurrentPartner(): Promise<CurrentPartner | null> {
+    const user = await getCurrentUser();
+    if (!user) return null;
+
+    try {
+        const partner = await prisma.partner.findUnique({ where: { userId: user.id } });
+        if (!partner || partner.status !== "ACTIVE") return null;
+        return { user, partner };
+    } catch (error) {
+        console.error("Partner lookup failed", {
+            category: "partner_lookup",
+            name: error instanceof Error ? error.name : "DatabaseError",
+        });
+        return null;
+    }
 }

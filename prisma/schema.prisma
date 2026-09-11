@@ -7,24 +7,26 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @default(cuid())
-  name                String
-  email               String               @unique
-  phone               String?              @unique
-  passwordHash        String?
-  image               String?
-  role                String               @default("customer")
-  isActive            Boolean              @default(true)
-  addresses           Address[]
-  wishlists           Wishlist[]
-  cartItems           CartItem[]
-  orders              Order[]
-  userVouchers        UserVoucher[]
-  checkoutHistories   CheckoutHistory[]
+  id                    String                @id @default(cuid())
+  name                  String
+  email                 String                @unique
+  phone                 String?               @unique
+  passwordHash          String?
+  image                 String?
+  role                  String                @default("customer")
+  isActive              Boolean               @default(true)
+  addresses             Address[]
+  wishlists             Wishlist[]
+  cartItems             CartItem[]
+  orders                Order[]
+  userVouchers          UserVoucher[]
+  checkoutHistories     CheckoutHistory[]
   checkoutIdempotencies CheckoutIdempotency[]
-  passwordResetTokens PasswordResetToken[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  passwordResetTokens   PasswordResetToken[]
+  partner               Partner?
+  partnerVisits         PartnerVisit[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   @@map("users")
 }
@@ -59,23 +61,27 @@ model Category {
 }
 
 model Product {
-  id         String      @id
-  categoryId String?
-  category   Category?   @relation(fields: [categoryId], references: [id])
-  name       String
-  slug       String
-  flavor     String?
-  size       String?
-  price      Int
-  stock      Int
-  image      String?
-  badge      String?
-  rating     Float
-  isActive   Boolean
-  orderItems OrderItem[]
-  wishlists  Wishlist[]
-  cartItems  CartItem[]
-  createdAt  DateTime
+  id                    String                 @id
+  categoryId            String?
+  category              Category?              @relation(fields: [categoryId], references: [id])
+  name                  String
+  slug                  String
+  flavor                String?
+  size                  String?
+  price                 Int
+  stock                 Int
+  image                 String?
+  badge                 String?
+  rating                Float
+  isActive              Boolean
+  orderItems            OrderItem[]
+  wishlists             Wishlist[]
+  cartItems             CartItem[]
+  partnerProductPrices  PartnerProductPrice[]
+  partnerStocks         PartnerStock[]
+  partnerStockMovements PartnerStockMovement[]
+  partnerSaleItems      PartnerSaleItem[]
+  createdAt             DateTime
 
   @@map("products")
 }
@@ -114,39 +120,39 @@ model CartItem {
 }
 
 model Order {
-  id                String            @id @default(cuid())
-  userId            String?
-  user              User?             @relation(fields: [userId], references: [id])
-  invoice           String            @unique
-  customer          String
-  phone             String
-  address           String
-  note              String?
-  subtotal          Int
-  shipping          Int               @default(0)
-  voucher           String?
-  discount          Int               @default(0)
-  total             Int
-  status            String            @default("pending")
-  paymentMethod     String            @default("QRIS") @map("payment_method")
-  paymentStatus     String            @default("WAITING_PAYMENT") @map("payment_status")
-  paymentProof      String?           @map("payment_proof")
-  source            String            @default("ONLINE")
-  cashReceived      Int?
-  change            Int?
-  courier           String?
-  trackingNumber    String?
-  paidAt            DateTime?
-  processedAt       DateTime?
-  packedAt          DateTime?
-  shippedAt         DateTime?
-  completedAt       DateTime?
-  cancelledAt       DateTime?
-  items             OrderItem[]
-  checkoutHistories CheckoutHistory[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  payment           Payment?
+  id                  String               @id @default(cuid())
+  userId              String?
+  user                User?                @relation(fields: [userId], references: [id])
+  invoice             String               @unique
+  customer            String
+  phone               String
+  address             String
+  note                String?
+  subtotal            Int
+  shipping            Int                  @default(0)
+  voucher             String?
+  discount            Int                  @default(0)
+  total               Int
+  status              String               @default("pending")
+  paymentMethod       String               @default("QRIS") @map("payment_method")
+  paymentStatus       String               @default("WAITING_PAYMENT") @map("payment_status")
+  paymentProof        String?              @map("payment_proof")
+  source              String               @default("ONLINE")
+  cashReceived        Int?
+  change              Int?
+  courier             String?
+  trackingNumber      String?
+  paidAt              DateTime?
+  processedAt         DateTime?
+  packedAt            DateTime?
+  shippedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  items               OrderItem[]
+  checkoutHistories   CheckoutHistory[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  payment             Payment?
   checkoutIdempotency CheckoutIdempotency?
 
   @@map("orders")
@@ -314,4 +320,159 @@ model Setting {
   value Json
 
   @@map("settings")
+}
+
+model Partner {
+  id             String                 @id @default(cuid())
+  userId         String                 @unique
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  partnerCode    String                 @unique
+  partnerType    String                 @default("INDIVIDUAL")
+  status         String                 @default("PENDING")
+  displayName    String
+  businessName   String?
+  phone          String?
+  address        String?
+  village        String?
+  district       String?
+  city           String?
+  postalCode     String?
+  prices         PartnerProductPrice[]
+  stocks         PartnerStock[]
+  stockMovements PartnerStockMovement[]
+  sales          PartnerSale[]
+  locations      PartnerLocation[]
+  visits         PartnerVisit[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([status])
+  @@map("partners")
+}
+
+model PartnerProductPrice {
+  id            String    @id @default(cuid())
+  partnerId     String
+  productId     String
+  partner       Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price         Int
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([partnerId, productId, effectiveFrom])
+  @@index([productId])
+  @@map("partner_product_prices")
+}
+
+model PartnerStock {
+  id        String   @id @default(cuid())
+  partnerId String
+  productId String
+  partner   Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([partnerId, productId])
+  @@index([productId])
+  @@map("partner_stocks")
+}
+
+model PartnerStockMovement {
+  id            String   @id @default(cuid())
+  partnerId     String
+  productId     String?
+  partner       Partner  @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  type          String
+  quantity      Int
+  unitPrice     Int?
+  referenceType String?
+  referenceId   String?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([partnerId, createdAt])
+  @@index([partnerId, productId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("partner_stock_movements")
+}
+
+model PartnerSale {
+  id             String            @id @default(cuid())
+  partnerId      String
+  saleNumber     String            @unique
+  idempotencyKey String?           @unique
+  partner        Partner           @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  soldAt         DateTime          @default(now())
+  subtotal       Int
+  total          Int
+  grossProfit    Int
+  status         String            @default("COMPLETED")
+  note           String?
+  items          PartnerSaleItem[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([partnerId, soldAt])
+  @@map("partner_sales")
+}
+
+model PartnerSaleItem {
+  id                   String      @id @default(cuid())
+  saleId               String
+  productId            String?
+  sale                 PartnerSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product              Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name                 String
+  quantity             Int
+  costPriceSnapshot    Int
+  sellingPriceSnapshot Int
+  subtotalCost         Int
+  subtotalRevenue      Int
+
+  @@index([saleId])
+  @@map("partner_sale_items")
+}
+
+model PartnerLocation {
+  id         String   @id @default(cuid())
+  partnerId  String
+  partner    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  source     String   @default("MANUAL")
+  consent    Boolean  @default(false)
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([partnerId, recordedAt])
+  @@map("partner_locations")
+}
+
+model PartnerVisit {
+  id            String    @id @default(cuid())
+  partnerId     String
+  visitedBy     String?
+  partner       Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  visitedByUser User?     @relation(fields: [visitedBy], references: [id], onDelete: SetNull)
+  checkInAt     DateTime?
+  checkInLat    Float?
+  checkInLng    Float?
+  checkOutAt    DateTime?
+  checkOutLat   Float?
+  checkOutLng   Float?
+  note          String?
+  photoUrl      String?
+  status        String    @default("IN_PROGRESS")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([partnerId, createdAt])
+  @@map("partner_visits")
 }

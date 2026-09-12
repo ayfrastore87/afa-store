@@ -8,6 +8,10 @@ const buyNowSource = fs.readFileSync(new URL("../src/app/api/cart/buy-now/route.
 const sessionSource = fs.readFileSync(new URL("../src/app/api/checkout/session/route.ts", import.meta.url), "utf8");
 const orderSource = fs.readFileSync(new URL("../src/app/api/checkout/order/route.ts", import.meta.url), "utf8");
 const ctaSource = fs.readFileSync(new URL("../src/components/product-detail-cta.tsx", import.meta.url), "utf8");
+const pageSource = fs.readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+const cartContextSource = fs.readFileSync(new URL("../src/context/cart-context.tsx", import.meta.url), "utf8");
+const clientAuthSource = fs.readFileSync(new URL("../src/lib/client-auth.ts", import.meta.url), "utf8");
+const cartLibSource = fs.readFileSync(new URL("../src/lib/cart.ts", import.meta.url), "utf8");
 
 function parseItem(value) {
     if (!value || typeof value.id !== "string" || !value.id.trim() || typeof value.qty !== "number" || !Number.isInteger(value.qty) || value.qty < 1) return null;
@@ -119,4 +123,48 @@ test("isolated concurrent inserts demonstrate a duplicate conflict", async () =>
     const results = await Promise.allSettled([merge("p"), merge("p")]);
     assert.equal(results.filter((result) => result.status === "rejected").length, 1);
     assert.equal(rows.size, 1);
+});
+
+test("authenticated add posts only id + qty and feeds server cart back into client state", () => {
+    assert.match(cartContextSource, /body:\s*JSON\.stringify\(\{\s*item:\s*\{\s*id:\s*item\.id,\s*qty\s*\}\s*\}\)/);
+    assert.doesNotMatch(cartContextSource, /JSON\.stringify\(\{\s*(price|name|image|slug)/);
+    assert.match(cartContextSource, /setCart\(data\.items\)/);
+    assert.match(cartContextSource, /setCart\(result\.data\.items\)/);
+    assert.doesNotMatch(cartContextSource, /window\.location\.reload/);
+});
+
+test("unauthenticated add returns false and never writes a local/guest cart", () => {
+    assert.match(cartContextSource, /if \(!isAuthenticated\) return false;/);
+    assert.doesNotMatch(cartContextSource, /localStorage/);
+    assert.doesNotMatch(cartContextSource, /guest/i);
+});
+
+test("same product merges quantity via existing /api/cart merge behavior", () => {
+    assert.match(cartRouteSource, /existing\.quantity \+ item\.qty/);
+    assert.match(cartRouteSource, /\.update\(\{\s*quantity:\s*Math\.min\(existing\.quantity \+ item\.qty,\s*item\.stock\)/);
+});
+
+test("badge is derived from total quantity of all items (merge SKU units)", () => {
+    assert.match(cartLibSource, /calculateTotalItems/);
+    assert.match(cartLibSource, /items\.reduce\(\(sum, item\) => sum \+ item\.qty, 0\)/);
+});
+
+test("failed add does not inflate the badge and surfaces a safe error", () => {
+    assert.match(cartContextSource, /if \(!result\.ok\) \{/);
+    assert.match(cartContextSource, /showToast\(\{ title: "Gagal menambahkan produk"/);
+    assert.match(cartContextSource, /result\.error \|\|/);
+    assert.match(cartContextSource, /return false;/);
+});
+
+test("login redirect is safe via loginPath and no guest add happens in catalog", () => {
+    assert.match(pageSource, /await requireAuth\("\/"\)/);
+    assert.match(clientAuthSource, /`\/login\?next=\$\{encodeURIComponent\(next\)\}`/);
+    assert.match(pageSource, /await addToCart\(item\)/);
+});
+
+test("per-product loading prevents rapid double click and disables only that card", () => {
+    assert.match(pageSource, /if \(addState\[item\.id\]\) return;/);
+    assert.match(pageSource, /aria-busy=\{addState === "adding"\}/);
+    assert.match(pageSource, /disabled=\{outOfStock \|\| addState === "adding" \|\| addState === "added"\}/);
+    assert.match(pageSource, /"Menambahkan\.\.\."/);
 });

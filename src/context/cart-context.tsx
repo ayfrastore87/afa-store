@@ -16,6 +16,8 @@ export type { CartItem } from "@/lib/cart";
 
 type ItemState = { pending: boolean; error: string; notice: string };
 
+export type CartToast = { title: string; message: string; variant: "success" | "error" };
+
 type CartContextValue = {
     cart: CartItem[];
     subtotal: number;
@@ -25,8 +27,8 @@ type CartContextValue = {
     loading: boolean;
     /** true once the server confirms an authenticated user owns this cart */
     isAuthenticated: boolean;
-    /** ephemeral UI confirmation message (e.g. "Produk ditambahkan ke keranjang.") */
-    toast: string;
+    /** ephemeral UI confirmation (success or error) with an optional action target */
+    toast: CartToast | null;
     itemState: (id: string) => ItemState;
     addToCart: (item: ProductInput, quantity?: number) => Promise<boolean>;
     increaseQty: (id: string) => void;
@@ -34,6 +36,7 @@ type CartContextValue = {
     removeFromCart: (id: string) => void;
     clearCart: () => void;
     refreshCart: () => Promise<void>;
+    dismissToast: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -51,7 +54,14 @@ async function requestCart(path = "/api/cart", init?: RequestInit): Promise<Cart
         }
 
         if (!response.ok) {
-            return { ok: false, unauthorized: false, error: "Keranjang gagal disinkronkan." };
+            let error = "Keranjang gagal disinkronkan.";
+            try {
+                const body = await response.json() as { error?: unknown };
+                if (body && typeof body.error === "string" && body.error.trim()) error = body.error;
+            } catch {
+                // keep the fallback message when the body is not JSON
+            }
+            return { ok: false, unauthorized: false, error };
         }
 
         return { ok: true, data: await parseJsonResponse<CartResponse>(response) };
@@ -64,18 +74,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [toast, setToast] = useState("");
+    const [toast, setToast] = useState<CartToast | null>(null);
     const versions = useRef(new Map<string, number>());
     const requestedQuantities = useRef(new Map<string, number>());
     const [states, setStates] = useState<Record<string, ItemState>>({});
 
-    const showToast = useCallback((message: string) => {
-        setToast(message);
+    const showToast = useCallback((toast: CartToast) => {
+        setToast(toast);
     }, []);
+
+    const dismissToast = useCallback(() => setToast(null), []);
 
     useEffect(() => {
         if (!toast) return;
-        const timer = window.setTimeout(() => setToast(""), 2200);
+        const timer = window.setTimeout(() => setToast(null), 3000);
         return () => window.clearTimeout(timer);
     }, [toast]);
 
@@ -94,7 +106,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 setCart([]);
                 setIsAuthenticated(false);
             }
-            setStates((current) => ({ ...current, [id]: { pending: false, error: fallback, notice: "" } }));
+            setStates((current) => ({ ...current, [id]: { pending: false, error: result.error || fallback, notice: "" } }));
             return;
         }
         const data = result.data;
@@ -146,10 +158,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             body: JSON.stringify({ item: { id: item.id, qty } }),
         });
 
-        finishMutation(item.id, version, result, "Produk gagal ditambahkan. Silakan coba lagi.");
+        finishMutation(item.id, version, result, "Gagal menambahkan produk. Silakan coba lagi.");
 
-        if (!result.ok) return false;
-        showToast("Produk ditambahkan ke keranjang.");
+        if (!result.ok) {
+            showToast({ title: "Gagal menambahkan produk", message: result.error || "Silakan coba lagi.", variant: "error" });
+            return false;
+        }
+        showToast({ title: "Berhasil ditambahkan", message: `${item.name} masuk ke keranjang.`, variant: "success" });
         return true;
     }, [isAuthenticated, beginMutation, finishMutation, showToast]);
 
@@ -213,8 +228,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             removeFromCart,
             clearCart,
             refreshCart,
+            dismissToast,
         }),
-        [cart, subtotal, totalItems, grandTotal, loading, isAuthenticated, toast, states, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, refreshCart]
+        [cart, subtotal, totalItems, grandTotal, loading, isAuthenticated, toast, states, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, refreshCart, dismissToast]
     );
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

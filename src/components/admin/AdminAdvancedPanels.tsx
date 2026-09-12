@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 
 type Product = { id: string; name: string; slug: string; sku?: string | null; price: number; stock: number; minimumStock?: number | null; image: string | null; category?: string | null; updatedAt?: string | null; createdAt?: string | null };
 type StockHistory = { id?: string; product_id?: string; productId?: string; product_name?: string; productName?: string; type?: string; transaction_type?: string; quantity?: number; previous_stock?: number; previousStock?: number; new_stock?: number; newStock?: number; created_at?: string; createdAt?: string; note?: string | null; admin?: string | null; admin_name?: string | null; order_id?: string | null };
-type OrderItem = { id?: string; orderId?: string; productId?: string | null; name: string; quantity: number; price: number; subtotal: number; product?: { category?: string | null } | null };
+type OrderItem = { id?: string; orderId?: string; productId?: string | null; name: string; quantity: number; price: number; subtotal: number; product?: { categoryId?: string | null } | null };
 type Order = { id: string; customer: string; total: number; status: string; createdAt: string; items?: OrderItem[] };
 type SettingValue = string | boolean;
 type Testimonial = { id: string; name: string; city: string; whatsapp?: string | null; message: string; rating: number; avatar?: string | null; isActive: boolean; isVerified: boolean; createdAt: string; updatedAt?: string | null };
@@ -205,15 +205,30 @@ export function StockPanel() {
 
 export function ReportsPanel() {
     const [orders, setOrders] = useState<Order[]>([]);
+    const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState("bulan");
-    const load = useCallback(async () => { const res = await supabase.from("orders").select("*, items:order_items(*, product:products(category))").order("createdAt", { ascending: false }); if (res.error) toast(res.error.message, "error"); setOrders((res.data ?? []) as Order[]); setLoading(false); }, []);
+    const load = useCallback(async () => {
+        const [res, categoryRes] = await Promise.all([
+            supabase.from("orders").select("*, items:order_items(*, product:products(id, name, categoryId))").order("createdAt", { ascending: false }),
+            fetch("/api/categories").then((response) => response.json() as Promise<{ data?: { id: string; name: string }[] }>).catch(() => ({ data: [] }) as { data?: { id: string; name: string }[] }),
+        ]);
+        if (res.error) toast(res.error.message, "error");
+        setOrders((res.data ?? []) as Order[]);
+        setCategories(categoryRes.data ?? []);
+        setLoading(false);
+    }, []);
     useEffect(() => { void load(); const channel = supabase.channel("afa-reports-panel").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void load()).on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => void load()).subscribe(); return () => { void supabase.removeChannel(channel); }; }, [load]);
     const now = new Date(); const startDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const startWeek = new Date(startDay); startWeek.setDate(startDay.getDate() - startDay.getDay()); const startMonth = new Date(now.getFullYear(), now.getMonth(), 1); const startYear = new Date(now.getFullYear(), 0, 1);
     const sumSince = (date: Date) => orders.filter((o) => new Date(o.createdAt) >= date).reduce((sum, o) => sum + Number(o.total || 0), 0);
     const items = orders.flatMap((o) => o.items ?? []);
     const grouped = (keyer: (i: OrderItem) => string) => Object.entries(items.reduce<Record<string, number>>((acc, item) => { const key = keyer(item); acc[key] = (acc[key] ?? 0) + Number(item.quantity || 0); return acc; }, {})).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-    const bestProducts = grouped((i) => i.name || "Produk").slice(0, 6); const bestCategories = grouped((i) => i.product?.category || "Tanpa Kategori").slice(0, 6);
+    const categoryNameById = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const category of categories) map.set(category.id, category.name);
+        return map;
+    }, [categories]);
+    const bestProducts = grouped((i) => i.name || "Produk").slice(0, 6); const bestCategories = grouped((i) => categoryNameById.get(i.product?.categoryId ?? "") ?? "Tanpa Kategori").slice(0, 6);
     const daily = Object.entries(orders.reduce<Record<string, number>>((acc, o) => { const key = new Date(o.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }); acc[key] = (acc[key] ?? 0) + Number(o.total || 0); return acc; }, {})).map(([name, total]) => ({ name, total })).slice(0, 14).reverse();
     const monthly = Object.entries(orders.reduce<Record<string, number>>((acc, o) => { const key = new Date(o.createdAt).toLocaleDateString("id-ID", { month: "short", year: "2-digit" }); acc[key] = (acc[key] ?? 0) + Number(o.total || 0); return acc; }, {})).map(([name, total]) => ({ name, total })).slice(0, 12).reverse();
     const rows = orders.map((o) => ({ Invoice: o.id, Pembeli: o.customer, Total: o.total, Status: o.status, Tanggal: o.createdAt }));

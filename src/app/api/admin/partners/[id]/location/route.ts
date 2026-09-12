@@ -42,16 +42,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
             },
         });
 
-        return NextResponse.json({
-            partner: {
-                id: partner.id,
-                partnerCode: partner.partnerCode,
-                name: partner.businessName || partner.displayName,
-                partnerType: partner.partnerType,
-                status: partner.status,
+        return NextResponse.json(
+            {
+                partner: {
+                    id: partner.id,
+                    partnerCode: partner.partnerCode,
+                    name: partner.businessName || partner.displayName,
+                    partnerType: partner.partnerType,
+                    status: partner.status,
+                },
+                location,
             },
-            location,
-        });
+            { headers: { "Cache-Control": "no-store" } }
+        );
     } catch (error) {
         console.error("admin_partner_location_failed", {
             category: "admin_partner_location",

@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Loader2, MapPin, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Loader2, MapPin, Play, Radio, Square } from "lucide-react";
+
+import { ACCURACY_QUALITY_LABELS, getAccuracyQuality, getLocationLiveStatus } from "@/lib/location-status";
 
 type Location = {
     id: string;
@@ -27,14 +29,35 @@ function formatWib(value: string) {
     return Number.isNaN(date.getTime()) ? "-" : `${wib.format(date)} WIB`;
 }
 
-// Privacy-first location snapshot. GPS is only requested inside the explicit
-// "Gunakan Lokasi Saya" handler — never on mount, focus, scroll, or a timer.
+// Distance between two coordinates (Haversine) in metres. Used to skip sending
+// tiny GPS drift that hasn't actually moved the device meaningfully.
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
+    const rad = Math.PI / 180;
+    const dLat = (bLat - aLat) * rad;
+    const dLng = (bLng - aLng) * rad;
+    const h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
+// Optional live location sharing. The partner must press "Mulai Bagikan Lokasi"
+// AND the browser must grant permission. No tracking before consent; nothing
+// starts on mount. We use watchPosition for continuous updates but throttle
+// server writes to ~1 / 15s and skip writes when the device hasn't moved
+// meaningfully. clearWatch on stop. This is a web app, so live sharing only
+// works while this page stays open and the browser keeps geolocation alive.
 export function PartnerLocationTab() {
     const [location, setLocation] = useState<Location | null>(null);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
+    const [sharing, setSharing] = useState(false);
+    const [starting, setStarting] = useState(false);
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
+
+    const watchIdRef = useRef<number | null>(null);
+    const lastSentRef = useRef<{ at: number; lat: number; lng: number } | null>(null);
+    const sendingRef = useRef(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -58,71 +81,114 @@ export function PartnerLocationTab() {
     const gpsErrorToMessage = useCallback((err: GeolocationPositionError) => {
         switch (err.code) {
             case err.PERMISSION_DENIED:
-                return "Lokasi tidak diperbarui karena izin lokasi ditolak.";
+                return "Izin lokasi belum diberikan. Aktifkan izin lokasi di browser Anda.";
             case err.POSITION_UNAVAILABLE:
-                return "Lokasi tidak tersedia. Pastikan GPS/perangkat aktif.";
+                return "GPS/lokasi perangkat tidak tersedia. Pastikan GPS aktif.";
             case err.TIMEOUT:
-                return "Pengambilan lokasi terlalu lama. Silakan coba lagi.";
+                return "Pengambilan lokasi terlalu lama. Periksa GPS lalu coba lagi.";
             default:
                 return "Gagal mengambil lokasi. Silakan coba lagi.";
         }
     }, []);
 
-    const save = useCallback(
-        async (coords: { latitude: number; longitude: number; accuracy: number | null }) => {
-            setSaving(true);
+    const sendLocation = useCallback(async (latitude: number, longitude: number, accuracy: number | null) => {
+        if (sendingRef.current) return;
+        sendingRef.current = true;
+        try {
+            const response = await fetch("/api/partner/location", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Accept: "application/json" },
+                body: JSON.stringify({ latitude, longitude, accuracy, consent: true }),
+            });
+            const payload = (await response.json().catch(() => null)) as { location?: Location; message?: string } | null;
+            if (!response.ok) throw new Error(payload?.message || "Lokasi gagal diperbarui.");
+            const saved = payload?.location ?? null;
+            setLocation(saved);
+            setMessage(payload?.message || "Lokasi berhasil diperbarui.");
+        } catch (err) {
+            // Concise id-ID message, never a stack trace. Keep sharing active so a
+            // transient network hiccup recovers on the next throttle tick.
+            setError(err instanceof Error ? err.message : "Lokasi belum dapat diperbarui. Periksa koneksi internet.");
             setMessage("");
-            setError("");
-            try {
-                const response = await fetch("/api/partner/location", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", Accept: "application/json" },
-                    body: JSON.stringify({
-                        latitude: coords.latitude,
-                        longitude: coords.longitude,
-                        accuracy: coords.accuracy,
-                        consent: true,
-                    }),
-                });
-                const payload = (await response.json().catch(() => null)) as { location?: Location; message?: string } | null;
-                if (!response.ok) throw new Error(payload?.message || "Lokasi gagal diperbarui.");
-                setLocation(payload?.location ?? null);
-                setMessage(payload?.message || "Lokasi berhasil diperbarui.");
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Lokasi gagal diperbarui.");
-            } finally {
-                setSaving(false);
+        } finally {
+            sendingRef.current = false;
+        }
+    }, []);
+
+    const stopSharing = useCallback(() => {
+        if (watchIdRef.current != null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+        }
+        lastSentRef.current = null;
+        setSharing(false);
+        setStarting(false);
+        setMessage("");
+        // The last stored location stays; stopping never deletes it.
+    }, []);
+
+    const throttleAndSend = useCallback(
+        (position: GeolocationPosition) => {
+            const { latitude, longitude, accuracy } = position.coords;
+            const last = lastSentRef.current;
+            const now = Date.now();
+            const accuracyNorm = accuracy != null && Number.isFinite(accuracy) ? accuracy : null;
+
+            if (!last) {
+                lastSentRef.current = { at: now, lat: latitude, lng: longitude };
+                void sendLocation(latitude, longitude, accuracyNorm);
+                return;
             }
+            const elapsed = now - last.at;
+            const moved = distanceMeters(last.lat, last.lng, latitude, longitude);
+            // ≥15s AND moved ≥5m before writing, to avoid hammering the server with
+            // every tiny GPS callback (which can be many per second).
+            if (elapsed < 15000 || moved < 5) return;
+            lastSentRef.current = { at: now, lat: latitude, lng: longitude };
+            void sendLocation(latitude, longitude, accuracyNorm);
         },
-        []
+        [sendLocation]
     );
 
-    const handleUpdate = useCallback(() => {
+    const startSharing = useCallback(() => {
         if (!("geolocation" in navigator)) {
-            setError("Perangkat tidak mendukung pengambilan lokasi.");
+            setError("Perangkat/browser ini tidak mendukung geolocation.");
             return;
         }
-        setSaving(true);
-        setMessage("");
+        if (typeof window !== "undefined" && window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
+            setError("Live Location memerlukan HTTPS agar browser mengizinkan GPS.");
+            return;
+        }
+        setStarting(true);
         setError("");
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const { latitude, longitude, accuracy } = position.coords;
-                void save({
-                    latitude,
-                    longitude,
-                    accuracy: accuracy != null && Number.isFinite(accuracy) ? accuracy : null,
-                });
-            },
-            (err) => {
-                setSaving(false);
-                setError(gpsErrorToMessage(err));
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-        );
-    }, [gpsErrorToMessage, save]);
+        setMessage("");
+
+        const onError = (err: GeolocationPositionError) => {
+            setStarting(false);
+            setSharing(false);
+            setError(gpsErrorToMessage(err));
+        };
+
+        watchIdRef.current = navigator.geolocation.watchPosition((position) => {
+            setStarting(false);
+            setSharing(true);
+            throttleAndSend(position);
+        }, onError, {
+            enableHighAccuracy: true,
+            maximumAge: 10000,
+            timeout: 15000,
+        });
+    }, [gpsErrorToMessage, throttleAndSend]);
+
+    // Cleanup watch on unmount.
+    useEffect(() => {
+        return () => {
+            if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
+        };
+    }, []);
 
     const hasLocation = location != null;
+    const liveStatus = hasLocation ? getLocationLiveStatus(location.recordedAt) : "OFFLINE";
 
     return (
         <section className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur">
@@ -131,20 +197,39 @@ export function PartnerLocationTab() {
                     <MapPin size={18} className="text-[#184D47]" />
                     <h2 className="text-lg font-black text-[#184D47]">Lokasi Usaha</h2>
                 </div>
-                <button
-                    type="button"
-                    onClick={handleUpdate}
-                    disabled={saving}
-                    className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-[#184D47] px-4 text-sm font-bold text-white transition hover:bg-[#123a36] active:scale-95 disabled:opacity-60"
-                >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    {hasLocation ? "Perbarui Lokasi" : "Gunakan Lokasi Saya"}
-                </button>
+
+                {sharing ? (
+                    <button
+                        type="button"
+                        onClick={stopSharing}
+                        className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-[#8c2e25] px-4 text-sm font-bold text-white transition hover:bg-[#6f241d] active:scale-95"
+                    >
+                        <Square size={16} /> Berhenti Bagikan Lokasi
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={startSharing}
+                        disabled={starting}
+                        className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-[#184D47] px-4 text-sm font-bold text-white transition hover:bg-[#123a36] active:scale-95 disabled:opacity-60"
+                    >
+                        {starting ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                        Mulai Bagikan Lokasi
+                    </button>
+                )}
+            </div>
+
+            <div className="mt-2 flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-black ${sharing ? "bg-[#e8f3e3] text-[#29621a]" : "bg-[#f0ede4] text-[#69736d]"}`}>
+                    <Radio size={12} className={sharing ? "animate-pulse" : ""} />
+                    {sharing ? "Lokasi Sedang Dibagikan" : liveStatus === "LIVE" ? "Lokasi Baru Saja Diperbarui" : "Tidak Aktif"}
+                </span>
             </div>
 
             <p className="mt-2 text-xs leading-relaxed text-[#184D47]/60">
-                Lokasi Anda akan digunakan untuk membantu AFA STORE mengetahui lokasi Mitra. Lokasi tidak dipantau
-                terus-menerus — lokasi hanya diambil sekali ketika Anda menekan tombol di atas.
+                Live Location aktif selama halaman tetap berjalan dan izin lokasi tersedia. Lokasi hanya dikirim setelah
+                Anda menekan tombol di atas dan browser memberikan izin. Tidak ada pelacakan diam-diam — Anda dapat
+                menghentikan kapan saja.
             </p>
 
             {message ? (
@@ -166,7 +251,14 @@ export function PartnerLocationTab() {
                 ) : (
                     <dl className="grid gap-3 sm:grid-cols-2">
                         <Field label="Terakhir Diperbarui" value={formatWib(location.recordedAt)} />
-                        <Field label="Akurasi" value={location.accuracy != null ? `±${Math.round(location.accuracy)} meter` : "-"} />
+                        <Field
+                            label="Akurasi"
+                            value={
+                                location.accuracy != null
+                                    ? `±${Math.round(location.accuracy)} m · ${ACCURACY_QUALITY_LABELS[getAccuracyQuality(location.accuracy)]}`
+                                    : "-"
+                            }
+                        />
                         <Field label="Latitude" value={String(location.latitude)} />
                         <Field label="Longitude" value={String(location.longitude)} />
                     </dl>

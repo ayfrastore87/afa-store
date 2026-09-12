@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, PackageSearch, Receipt, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 import { formatDate, formatRupiah, type DashboardSummary } from "@/components/partner/partner-shared";
+import { PartnerLiveLocationCard } from "@/components/partner/live-location-card";
 
 type Props = {
     refreshSignal: number;
@@ -67,6 +68,8 @@ export function PartnerSummaryTab({ refreshSignal, onGoToSales }: Props) {
                     </div>
                 ))}
             </div>
+
+            <PartnerLiveLocationCard />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-black text-[#184D47]">Penjualan Terakhir</h2>

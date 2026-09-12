@@ -49,8 +49,9 @@ test("admin location route is read-only and requires an admin", () => {
     assert.doesNotMatch(adminRouteSource, /create\(|update\(|delete\(/);
 });
 
-test("partner location UI uses getCurrentPosition, not watchPosition", () => {
-    assert.match(locationTabSource, /getCurrentPosition/);
-    assert.doesNotMatch(locationTabSource, /watchPosition/);
-    assert.doesNotMatch(locationTabSource, /setInterval/);
+test("partner location UI now uses watchPosition for live sharing", () => {
+    assert.match(locationTabSource, /watchPosition/);
+    assert.match(locationTabSource, /clearWatch/);
+    assert.match(locationTabSource, /Mulai Bagikan Lokasi/);
+    assert.match(locationTabSource, /Berhenti Bagikan Lokasi/);
 });

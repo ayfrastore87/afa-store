@@ -38,7 +38,10 @@ export async function GET() {
             select: locationSelect,
         });
 
-        return NextResponse.json({ location });
+        return NextResponse.json(
+            { location },
+            { headers: { "Cache-Control": "no-store" } }
+        );
     } catch (error) {
         console.error("partner_location_get_failed", {
             category: "partner_location_get",
@@ -80,7 +83,7 @@ export async function POST(request: Request) {
             select: locationSelect,
         });
 
-        return NextResponse.json({ message: "Lokasi berhasil diperbarui.", location }, { status: 201 });
+        return NextResponse.json({ message: "Lokasi berhasil diperbarui.", location }, { status: 201, headers: { "Cache-Control": "no-store" } });
     } catch (error) {
         console.error("partner_location_create_failed", {
             category: "partner_location_create",

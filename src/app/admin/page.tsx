@@ -145,7 +145,7 @@ const tabs = [
         id: "customers",
         label: "Pelanggan",
         icon: Users,
-        href: "/admin/account",
+        href: "/admin/pelanggan",
     },
     {
         id: "reports",
@@ -188,6 +188,7 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
     "/admin/pengaturan": "settings",
     "/admin/account": "account",
     "/admin/akun": "account",
+    "/admin/pelanggan": "customers",
 };
 
 const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });

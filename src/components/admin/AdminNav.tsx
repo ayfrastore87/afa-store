@@ -24,6 +24,7 @@ const breadcrumbs: Record<string, string> = {
     "/admin/kasir": "Kasir",
     "/admin/kasir/riwayat": "Riwayat Kasir",
     "/admin/mitra": "Mitra",
+    "/admin/pelanggan": "Pelanggan",
 };
 
 export function AdminDashboardLink({ onClick }: { onClick?: () => void }) {

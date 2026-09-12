@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import { buildCartResponse, normalizeCartItems, type CartItem } from "@/lib/cart";
+import { buildCartResponse } from "@/lib/cart";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, parseProductRequestItem, productAuthorityResponse, reconcileProductItems } from "@/lib/product-authority";
 
 export const runtime = "nodejs";
 
 type CartItemRow = { id: string; userId: string; productId: string | null; productRef: string; name: string; price: number; image: string | null; quantity: number; createdAt?: string; updatedAt?: string };
-const GUEST_CART_COOKIE = "afa-guest-cart";
 
 function getSupabaseServerClient() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,41 +15,12 @@ function getSupabaseServerClient() {
     return createClient(url, key, { auth: { persistSession: false } });
 }
 
-async function getOptionalUser() {
-    try {
-        return await getCurrentUser();
-    } catch {
-        return null;
-    }
-}
-
-async function getGuestCart() {
-    const store = await cookies();
-    const raw = store.get(GUEST_CART_COOKIE)?.value;
-    if (!raw) return buildCartResponse([]);
-    try {
-        const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as CartItem[];
-        const normalized = normalizeCartItems(Array.isArray(parsed) ? parsed : []);
-        return buildCartResponse(await reconcileProductItems(normalized.map(({ id, qty }) => ({ id, qty }))));
-    } catch {
-        return buildCartResponse([]);
-    }
-}
-
-function withGuestCartCookie(items: CartItem[]) {
-    const response = NextResponse.json(buildCartResponse(items));
-    response.cookies.set(GUEST_CART_COOKIE, Buffer.from(JSON.stringify(normalizeCartItems(items)), "utf8").toString("base64url"), {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 30,
-    });
-    return response;
+function unauthenticatedCartResponse() {
+    return NextResponse.json({ success: false, redirectTo: "/login", error: "Silakan login terlebih dahulu." }, { status: 401 });
 }
 
 function cartErrorResponse(error: unknown) {
-    console.error("Checkout Error:", error);
+    console.error("Cart Error:", error);
     const safe = productAuthorityResponse(error);
     return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
 }
@@ -68,8 +37,9 @@ async function getCart(userId: string) {
 
 export async function GET() {
     try {
-        const user = await getOptionalUser();
-        return user ? NextResponse.json(await getCart(user.id)) : NextResponse.json(await getGuestCart());
+        const user = await getCurrentUser();
+        if (!user) return unauthenticatedCartResponse();
+        return NextResponse.json(await getCart(user.id));
     } catch (error) {
         return cartErrorResponse(error);
     }
@@ -77,8 +47,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
-        const user = await getOptionalUser();
-        const body = await request.json() as { item?: CartItem; items?: CartItem[] };
+        const user = await getCurrentUser();
+        if (!user) return unauthenticatedCartResponse();
+        const body = await request.json() as { item?: { id?: unknown; qty?: unknown }; items?: { id?: unknown; qty?: unknown }[] };
         const rawItems: unknown[] = body.items ? body.items : body.item ? [body.item] : [];
         const requested = rawItems.map((value) => {
             const item = value as Record<string, unknown>;
@@ -86,16 +57,6 @@ export async function POST(request: Request) {
         });
         if (!requested.length || requested.some((item) => item === null)) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
         const incomingItems = await authorizeProductItems(requested.filter((item): item is NonNullable<typeof item> => item !== null));
-
-        if (!user) {
-            const current = await getGuestCart();
-            const incomingById = new Map(incomingItems.map((item) => [item.id, item]));
-            const merged = normalizeCartItems([...current.items, ...incomingItems]).map((item) => {
-                const product = incomingById.get(item.id);
-                return product ? { ...item, qty: Math.min(item.qty, product.stock) } : item;
-            });
-            return withGuestCartCookie(merged);
-        }
 
         const supabase = getSupabaseServerClient();
         const { data: existingData, error: existingError } = await supabase.from("cart_items").select("*").eq("userId", user.id).in("productRef", incomingItems.map((item) => item.id));
@@ -130,16 +91,10 @@ export async function PUT(request: Request) {
 
 async function updateQuantity(request: Request) {
     try {
-        const user = await getOptionalUser();
+        const user = await getCurrentUser();
+        if (!user) return unauthenticatedCartResponse();
         const body = await request.json() as { id?: string; qty?: number };
         if (!body.id || typeof body.qty !== "number" || !Number.isInteger(body.qty)) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
-
-        if (!user) {
-            const current = await getGuestCart();
-            if (body.qty > 0) await authorizeProductItems([{ id: body.id, qty: body.qty }]);
-            const next = body.qty <= 0 ? current.items.filter((item) => item.id !== body.id) : current.items.map((item) => item.id === body.id ? { ...item, qty: body.qty ?? item.qty } : item);
-            return withGuestCartCookie(next);
-        }
 
         const supabase = getSupabaseServerClient();
         if (body.qty > 0) await authorizeProductItems([{ id: body.id, qty: body.qty }]);
@@ -157,14 +112,10 @@ async function updateQuantity(request: Request) {
 
 export async function DELETE(request: Request) {
     try {
-        const user = await getOptionalUser();
+        const user = await getCurrentUser();
+        if (!user) return unauthenticatedCartResponse();
         const { searchParams } = new URL(request.url);
         const id = searchParams.get("id");
-
-        if (!user) {
-            const current = await getGuestCart();
-            return withGuestCartCookie(id ? current.items.filter((item) => item.id !== id) : []);
-        }
 
         const supabase = getSupabaseServerClient();
         const query = supabase.from("cart_items").delete().eq("userId", user.id);

@@ -514,7 +514,7 @@ export default function KasirPOS() {
                                             onClick={() => setSource(item)}
                                             className={`min-h-12 rounded-2xl border px-3 text-xs font-bold transition ${source === item ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]/70 hover:border-[#184D47]/40"}`}
                                         >
-                                            {item === "TATAP_MUKA" ? "Tatap Muka" : "WhatsApp"}
+                                            {item === "TATAP_MUKA" ? "COD" : "WhatsApp"}
                                         </button>
                                     ))}
                                 </div>

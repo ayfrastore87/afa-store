@@ -19,7 +19,7 @@ export const PAYMENT_METHODS: { id: KasirPaymentMethod; label: string }[] = [
 // di tahap migrasi sebelumnya (ONLINE | TATAP_MUKA | WHATSAPP).
 export const SOURCE_LABELS: Record<string, string> = {
     ONLINE: "Online",
-    TATAP_MUKA: "Tatap Muka",
+    TATAP_MUKA: "COD",
     WHATSAPP: "WhatsApp",
 };
 

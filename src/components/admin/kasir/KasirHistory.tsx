@@ -48,7 +48,7 @@ type KasirOrdersResponse = {
 
 const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
     { id: "SEMUA", label: "Semua" },
-    { id: "TATAP_MUKA", label: "Tatap Muka" },
+    { id: "TATAP_MUKA", label: "COD" },
     { id: "WHATSAPP", label: "WhatsApp" },
 ];
 
@@ -233,7 +233,7 @@ function EmptyState() {
                 <Receipt size={30} />
             </div>
             <h2 className="mt-5 text-xl font-black">Belum ada riwayat transaksi</h2>
-            <p className="mt-2 max-w-sm text-sm text-[#184D47]/60">Transaksi tatap muka dan WhatsApp akan muncul di sini setelah transaksi kasir dibuat.</p>
+            <p className="mt-2 max-w-sm text-sm text-[#184D47]/60">Transaksi COD dan WhatsApp akan muncul di sini setelah transaksi kasir dibuat.</p>
             <Link href="/admin/kasir" className="mt-6 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white transition hover:brightness-110 active:scale-95">
                 <ArrowLeft size={18} />
                 Mulai Transaksi

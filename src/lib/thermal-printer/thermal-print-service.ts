@@ -117,4 +117,50 @@ export async function printReceiptBluetooth(
     }
 }
 
+export type UnifiedPrintResult =
+    | { ok: true; message: string; connection?: BluetoothConnection }
+    | { ok: false; allowFallback: boolean; message: string; connection?: BluetoothConnection };
+
+/**
+ * Single entry point for the kasir "Print" button.
+ *
+ * Decides the path automatically:
+ *   - reuse an already-connected BLE printer and print immediately;
+ *   - otherwise, if Web Bluetooth is available, pick + connect + print in one
+ *     user gesture (the `pick` callback MUST be bound to a click);
+ *   - otherwise, report a fallback opportunity (browser print) instead of
+ *     pretending to support Bluetooth.
+ */
+export async function printReceipt(opts: {
+    data: ReceiptData;
+    width: ThermalPaperWidth;
+    connection: BluetoothConnection | null;
+    pick: () => Promise<{ connection?: BluetoothConnection; message: string; canceled?: boolean }>;
+}): Promise<UnifiedPrintResult> {
+    const { data, width, connection, pick } = opts;
+
+    // 1. Reuse an existing live connection.
+    if (connection && connection.device.gatt?.connected) {
+        const outcome = await printReceiptBluetooth(connection, data, width);
+        if (outcome.ok) return { ok: true, message: "Struk berhasil dicetak.", connection };
+        return { ok: false, allowFallback: false, message: outcome.message, connection };
+    }
+
+    // 2. No Web Bluetooth -> browser fallback (never fake Bluetooth support).
+    if (!isBluetoothSupported()) {
+        return { ok: false, allowFallback: true, message: "Browser tidak mendukung Bluetooth langsung." };
+    }
+
+    // 3. Pick + connect, still within the click's user activation.
+    const picked = await pick();
+    if (picked.connection) {
+        const outcome = await printReceiptBluetooth(picked.connection, data, width);
+        if (outcome.ok) return { ok: true, message: "Struk berhasil dicetak.", connection: picked.connection };
+        return { ok: false, allowFallback: false, message: outcome.message, connection: picked.connection };
+    }
+
+    // Canceled picker, no writable characteristic, or Classic/SPP: offer fallback.
+    return { ok: false, allowFallback: true, message: picked.message };
+}
+
 export const THERMAL_FOOTER = DEFAULT_FOOTER;

@@ -1,24 +1,26 @@
 "use client";
 
 // ---------------------------------------------------------------------------
-// PRINTER panel for the kasir transaction detail page.
+// UNIFIED PRINT for the kasir transaction detail page.
 //
-// - "Cetak Browser" keeps the existing window.print() 58mm CSS flow untouched.
-// - "Cetak via Bluetooth" encodes the SAME receipt data via ESC/POS and sends it
-//   over BLE. Paper size (58/80mm) only selects the ESC/POS profile; it never
-//   mutates the order or the database.
-// - Connection lives only in this component's runtime state; no credentials,
-//   tokens, or Bluetooth handles are persisted anywhere.
+// A single "Print" button drives the whole flow:
+//   1. Reuse an already-connected BLE printer -> send ESC/POS immediately.
+//   2. No connection but Web Bluetooth available -> open the device picker,
+//      connect, encode, and send in the same user gesture.
+//   3. Web Bluetooth unsupported / picker canceled / no BLE writable
+//      characteristic / Bluetooth Classic (SPP) -> offer the browser print
+//      fallback via a simple confirm dialog.
+//
+// The orchestration entry point is printReceipt() in thermal-print-service.ts.
+// This component only owns runtime state; the Bluetooth connection lives in
+// memory and is never persisted to any browser storage.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bluetooth, CheckCircle2, Loader2, Printer, Settings2, Unplug } from "lucide-react";
+import { Loader2, Printer } from "lucide-react";
 import {
-    isBluetoothSupported,
     pickAndConnect,
-    printReceiptBluetooth,
-    disconnectBluetoothPrinter,
-    PAPER_WIDTHS,
+    printReceipt,
     type BluetoothConnection,
     type ReceiptData,
     type ThermalPaperWidth,
@@ -31,19 +33,15 @@ import {
     type KasirOrderDetail,
 } from "./kasir-shared";
 
-type ConnectionStatus = "idle" | "connecting" | "connected" | "error";
+// Single source of truth for paper width. No on-page selector: the kasir flow
+// keeps one clean button. Change this to 80 to switch the ESC/POS profile.
+const DEFAULT_PAPER_WIDTH: ThermalPaperWidth = 58;
 
 export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }) {
-    const [paperWidth, setPaperWidth] = useState<ThermalPaperWidth>(58);
     const [connection, setConnection] = useState<BluetoothConnection | null>(null);
-    const [status, setStatus] = useState<ConnectionStatus>("idle");
-    const [statusMessage, setStatusMessage] = useState("");
     const [printing, setPrinting] = useState(false);
-    const [printMessage, setPrintMessage] = useState("");
-    const [bleSupported] = useState<boolean>(() => (typeof window !== "undefined" ? isBluetoothSupported() : false));
+    const [message, setMessage] = useState("");
     const [cashierName, setCashierName] = useState("");
-
-    const deviceName = connection?.device.name?.trim() || "EPPOS";
 
     // Kasir (petugas) dibaca read-only dari sesi aktif untuk baris "Kasir" pada struk.
     useEffect(() => {
@@ -61,160 +59,66 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
 
     const receiptData: ReceiptData = useMemo(() => toReceiptData(order, cashierName), [order, cashierName]);
 
-    const handleConnect = useCallback(async () => {
-        setStatus("connecting");
-        setStatusMessage("Menghubungkan printer...");
-        const result = await pickAndConnect();
-        if (result.connection) {
-            setConnection(result.connection);
-            setStatus("connected");
-            setStatusMessage(result.message);
-        } else {
-            setConnection(null);
-            setStatus("error");
-            setStatusMessage(result.message);
-        }
-    }, []);
-
-    const handleDisconnect = useCallback(() => {
-        disconnectBluetoothPrinter(connection?.device);
-        setConnection(null);
-        setStatus("idle");
-        setStatusMessage("");
-        setPrintMessage("");
-    }, [connection]);
-
-    const handlePrintBluetooth = useCallback(async () => {
-        if (!connection) return;
+    const handlePrint = useCallback(async () => {
+        if (printing) return;
         setPrinting(true);
-        setPrintMessage("");
-        const outcome = await printReceiptBluetooth(connection, receiptData, paperWidth);
-        setPrintMessage(outcome.message);
-        setPrinting(false);
-    }, [connection, receiptData, paperWidth]);
+        setMessage("");
+        try {
+            const result = await printReceipt({
+                data: receiptData,
+                width: DEFAULT_PAPER_WIDTH,
+                connection,
+                pick: pickAndConnect,
+            });
+            if (result.connection) setConnection(result.connection);
+            if (result.ok) {
+                setMessage(result.message);
+                return;
+            }
+            if (result.allowFallback) {
+                const useBrowser = window.confirm(
+                    result.message + "\n\nGunakan Cetak Browser sebagai gantinya?",
+                );
+                if (useBrowser) {
+                    setMessage("");
+                    window.print();
+                    return;
+                }
+            }
+            setMessage(result.message);
+        } finally {
+            setPrinting(false);
+        }
+    }, [connection, printing, receiptData]);
 
-    // Warn if the printer was disconnected behind our back (e.g. powered off).
+    // Clear a stale connection if the printer drops behind our back.
     useEffect(() => {
         if (connection && typeof connection.device.gatt !== "undefined") {
-            const onDisconnect = () => {
-                setConnection(null);
-                setStatus("error");
-                setStatusMessage("Printer terputus.");
-            };
+            const onDisconnect = () => setConnection(null);
             connection.device.addEventListener("gattserverdisconnected", onDisconnect);
             return () => connection.device.removeEventListener("gattserverdisconnected", onDisconnect);
         }
+        return undefined;
     }, [connection]);
 
-    const connected = status === "connected" && connection != null;
-
     return (
-        <section className="rounded-2xl border border-[#184D47]/10 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Printer size={18} className="text-[#C9A45B]" />
-                    <h3 className="text-sm font-black uppercase tracking-[0.15em] text-[#184D47]/70">Printer</h3>
-                </div>
-            </div>
-
-            {/* Pilih printer (user gesture — never auto-scans). */}
+        <div className="flex flex-col items-end gap-1">
             <button
                 type="button"
-                onClick={() => void handleConnect()}
-                disabled={!bleSupported || status === "connecting"}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#184D47]/15 bg-white px-4 font-bold text-[#184D47] transition hover:bg-white/80 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void handlePrint()}
+                disabled={printing}
+                aria-label="Print"
+                className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#184D47] px-4 font-black text-white transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
-                {status === "connecting" ? <Loader2 size={16} className="animate-spin" /> : <Settings2 size={16} />}
-                {connected ? "Hubungkan Ulang" : "Hubungkan Bluetooth"}
+                {printing ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />}
+                <span>Print</span>
             </button>
-
-            {/* Paper size selector (profile only). */}
-            <div className="mt-3 flex items-center gap-2">
-                <span className="text-xs font-bold text-[#184D47]/60">Paper:</span>
-                <select
-                    value={paperWidth}
-                    onChange={(e) => setPaperWidth(Number(e.target.value) as ThermalPaperWidth)}
-                    className="rounded-lg border border-[#184D47]/15 bg-[#f8f6f0] px-2 py-1.5 text-sm font-bold text-[#184D47]"
-                >
-                    {PAPER_WIDTHS.map((w) => (
-                        <option key={w} value={w}>
-                            {w} mm
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Connection status. */}
-            <div className="mt-3 rounded-xl bg-[#f8f6f0] px-3 py-2.5 text-sm">
-                {connected ? (
-                    <p className="flex items-center gap-2 font-bold text-emerald-700">
-                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                        {deviceName}
-                        <span className="text-[#184D47]/60">· Bluetooth Connected</span>
-                    </p>
-                ) : (
-                    <p className="flex items-center gap-2 font-bold text-[#184D47]/60">
-                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
-                        Belum terhubung
-                    </p>
-                )}
-                {statusMessage ? <p className="mt-1 text-xs text-[#184D47]/70">{statusMessage}</p> : null}
-            </div>
-
-            {/* Transport scope — Web Bluetooth only reaches BLE/GATT printers. */}
-            <div className="mt-2 flex items-start gap-2 text-xs text-[#184D47]/55">
-                <Bluetooth size={13} className="mt-0.5 shrink-0" />
-                <span>
-                    Web Bluetooth hanya untuk printer BLE (GATT). Printer Bluetooth Classic
-                    (SPP) butuh aplikasi jembatan (bridge) — tidak bisa dicetak langsung dari browser.
-                </span>
-            </div>
-
-            {/* Actions. */}
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                    type="button"
-                    onClick={() => void handlePrintBluetooth()}
-                    disabled={!connected || printing}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#184D47] px-4 font-black text-white transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    {printing ? <Loader2 size={16} className="animate-spin" /> : <Bluetooth size={16} />}
-                    Cetak via Bluetooth
-                </button>
-                <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#184D47]/15 bg-white px-4 font-bold text-[#184D47] transition hover:bg-white/80 active:scale-[0.99]"
-                >
-                    <Printer size={16} />
-                    Cetak Browser
-                </button>
-            </div>
-
-            {connected ? (
-                <button
-                    type="button"
-                    onClick={handleDisconnect}
-                    className="mt-2 inline-flex h-9 items-center gap-2 px-2 text-xs font-bold text-red-600 transition hover:underline"
-                >
-                    <Unplug size={14} />
-                    Putuskan Bluetooth
-                </button>
-            ) : null}
-
-            {printMessage ? (
-                <p className={`mt-2 flex items-center gap-2 text-sm font-bold ${printMessage.includes("berhasil") ? "text-emerald-700" : "text-amber-700"}`}>
-                    <CheckCircle2 size={15} />
-                    {printMessage}
+            {message ? (
+                <p className="max-w-[220px] text-right text-xs font-semibold leading-snug text-[#184D47]/70">
+                    {message}
                 </p>
             ) : null}
-
-            {!bleSupported ? (
-                <p className="mt-3 text-xs font-semibold text-amber-700">
-                    Browser tidak mendukung Bluetooth langsung. Gunakan Chrome/Edge di desktop atau Android.
-                </p>
-            ) : null}
-        </section>
+        </div>
     );
 }
 
@@ -244,4 +148,3 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],
     };
 }
-

@@ -72,11 +72,11 @@ test("chunking splits ESC/POS bytes sequentially with a configurable size", () =
 
 test("error messages are in Bahasa Indonesia", () => {
     assert.match(bluetooth, /Browser tidak mendukung Bluetooth langsung\./);
-    assert.match(bluetooth, /Printer ini menggunakan Bluetooth yang tidak kompatibel dengan Web Bluetooth\./);
-    assert.match(bluetooth, /Printer terhubung tetapi tidak menyediakan jalur cetak yang kompatibel\./);
+    assert.match(bluetooth, /Printer Bluetooth Classic\/SPP tidak bisa dicetak langsung dari browser\./);
+    assert.match(bluetooth, /Printer Bluetooth ini tidak mendukung koneksi BLE langsung dari browser\./);
     assert.match(service, /Pemilihan printer dibatalkan\./);
     assert.match(service, /Printer tidak dapat terhubung\./);
-    assert.match(service, /Struk berhasil dikirim ke printer\./);
+    assert.match(service, /Struk berhasil dicetak\./);
 });
 
 test("diagnostics log identifiers but never tokens or passwords", () => {
@@ -92,18 +92,26 @@ test("connection is never persisted to storage", () => {
     assert.doesNotMatch(bluetooth + panel, /localStorage|sessionStorage/);
 });
 
-test("UI keeps browser print fallback and both paper sizes", () => {
+test("UI exposes a single print entry point with no separate buttons", () => {
+    assert.match(panel, /printReceipt/);
     assert.match(panel, /window\.print\(\)/);
-    assert.match(panel, /Cetak via Bluetooth/);
-    assert.match(panel, /Cetak Browser/);
-    assert.match(panel, /58/);
-    assert.match(panel, /80/);
-    assert.match(panel, /PAPER_WIDTHS/);
+    assert.match(panel, /DEFAULT_PAPER_WIDTH/);
+    // Exactly one visible button (the unified "Print").
+    assert.equal((panel.match(/<button\b/g) || []).length, 1);
+    assert.match(panel, />\s*Print\s*</);
+    // No separate control buttons remain on the page.
+    assert.doesNotMatch(panel, /Hubungkan Bluetooth/);
+    assert.doesNotMatch(panel, /Cetak via Bluetooth/);
+    assert.doesNotMatch(panel, /Putuskan Bluetooth/);
+    assert.doesNotMatch(panel, /PAPER_WIDTHS/);
 });
 
-test("UI provides connect/disconnect Bluetooth actions", () => {
-    assert.match(panel, /Hubungkan Bluetooth/);
-    assert.match(panel, /Putuskan Bluetooth/);
+test("single print entry point orchestrates BLE then browser fallback", () => {
+    assert.match(service, /export async function printReceipt/);
+    assert.match(service, /isBluetoothSupported\(\)/);
+    assert.match(service, /printReceiptBluetooth\(/);
+    assert.match(service, /allowFallback/);
+    assert.match(service, /Struk berhasil dicetak\./);
 });
 
 test("receipt maps the cashier name from the active session", () => {
@@ -112,10 +120,11 @@ test("receipt maps the cashier name from the active session", () => {
     assert.match(panel, /\/api\/auth\/me/);
 });
 
-test("classic/SPP limitations are explained instead of faked as BLE", () => {
-    assert.match(panel, /Bluetooth Classic/);
-    assert.match(panel, /SPP/);
-    assert.match(panel, /bridge/i);
+test("classic/SPP and non-BLE errors are surfaced as fallbacks, not faked", () => {
+    assert.match(bluetooth + service, /Bluetooth Classic/);
+    assert.match(bluetooth + service, /SPP/);
+    assert.match(bluetooth + service, /jembatan \(bridge\)/);
+    assert.match(bluetooth, /tidak mendukung koneksi BLE langsung dari browser\./);
 });
 
 test("Web Bluetooth type declarations cover the GATT API", () => {

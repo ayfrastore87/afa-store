@@ -51,7 +51,7 @@ export async function requestBluetoothPrinter(): Promise<BluetoothDevice | null>
 
 export async function connectBluetoothPrinter(device: BluetoothDevice): Promise<BluetoothConnection> {
     if (!device.gatt) {
-        throw new Error("Printer ini menggunakan Bluetooth yang tidak kompatibel dengan Web Bluetooth.");
+        throw new Error("Printer Bluetooth Classic/SPP tidak bisa dicetak langsung dari browser. Perlu aplikasi jembatan (bridge) lokal.");
     }
     const server = await device.gatt.connect();
 
@@ -60,7 +60,7 @@ export async function connectBluetoothPrinter(device: BluetoothDevice): Promise<
 
     if (!characteristic) {
         server.disconnect();
-        throw new Error("Printer terhubung tetapi tidak menyediakan jalur cetak yang kompatibel.");
+        throw new Error("Printer Bluetooth ini tidak mendukung koneksi BLE langsung dari browser.");
     }
 
     logBluetoothDiagnostic(device, characteristic);

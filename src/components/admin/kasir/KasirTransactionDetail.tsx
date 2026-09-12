@@ -7,7 +7,6 @@ import {
     ArrowLeft,
     Banknote,
     Loader2,
-    Printer,
     QrCode,
     Receipt,
     Smartphone,
@@ -25,7 +24,8 @@ import KasirReceipt from "./KasirReceipt";
 import KasirPrinterPanel from "./KasirPrinterPanel";
 
 // TAHAP D: detail transaksi terhubung ke GET /api/admin/kasir/orders/[id].
-// TAHAP E: tombol "Cetak Struk" memicu window.print(); struk dicetak dari data
+// TAHAP E: satu tombol "Print" menjalankan alur cetak terpadu (BLE via
+// printReceipt, atau window.print() sebagai fallback). Struk dicetak dari data
 // transaksi yang sama (read-only), tanpa mutasi database.
 
 type KasirOrderDetailResponse = { order: KasirOrderDetail } & { message?: string };
@@ -122,15 +122,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                     <h2 className="text-2xl font-black">{order.invoice}</h2>
                     <p className="text-xs text-[#184D47]/60">{formatDate(order.createdAt)}</p>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#184D47] px-4 font-black text-white transition hover:brightness-110 active:scale-95"
-                >
-                    <Printer size={18} />
-                    <span className="hidden sm:inline">Cetak Struk</span>
-                    <span className="sm:hidden">Cetak</span>
-                </button>
+                <KasirPrinterPanel order={order} />
             </div>
 
             <div className="space-y-5 p-5">
@@ -185,8 +177,6 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                         </>
                     )}
                 </section>
-
-                <KasirPrinterPanel order={order} />
             </div>
             </Shell>
         </>

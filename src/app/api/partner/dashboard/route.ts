@@ -19,11 +19,11 @@ export async function GET() {
     const startOfMonth = wibStartOfMonth(now);
 
     try {
-        const [today, month, profitMonth, stockAgg, lowStock, inStock, outOfStock, recentSales] = await Promise.all([
+        const [today, month, profitMonth, stockAgg, lowStock, inStock, outOfStock, recentSales, bestSellerGroup, lowStockRows] = await Promise.all([
             prisma.partnerSale.aggregate({
                 where: { partnerId, soldAt: { gte: startOfDay } },
                 _count: { _all: true },
-                _sum: { total: true },
+                _sum: { total: true, grossProfit: true },
             }),
             prisma.partnerSale.aggregate({
                 where: { partnerId, soldAt: { gte: startOfMonth } },
@@ -55,12 +55,29 @@ export async function GET() {
                     items: { select: { quantity: true } },
                 },
             }),
+            prisma.partnerSaleItem.groupBy({
+                by: ["name"],
+                where: { sale: { partnerId } },
+                _sum: { quantity: true, subtotalRevenue: true },
+                orderBy: { _sum: { quantity: "desc" } },
+                take: 5,
+            }),
+            prisma.partnerStock.findMany({
+                where: { partnerId, quantity: { gt: 0, lte: PARTNER_LOW_STOCK_THRESHOLD } },
+                orderBy: { quantity: "asc" },
+                select: {
+                    productId: true,
+                    quantity: true,
+                    product: { select: { name: true, image: true } },
+                },
+            }),
         ]);
 
         return NextResponse.json({
             today: {
                 revenue: today._sum.total ?? 0,
                 count: today._count._all,
+                grossProfit: today._sum.grossProfit ?? 0,
             },
             month: {
                 revenue: month._sum.total ?? 0,
@@ -73,7 +90,18 @@ export async function GET() {
                 inStock,
                 lowStock,
                 outOfStock,
+                lowStockItems: lowStockRows.map((row) => ({
+                    productId: row.productId,
+                    name: row.product.name,
+                    image: row.product.image,
+                    quantity: row.quantity,
+                })),
             },
+            bestSellers: bestSellerGroup.map((row) => ({
+                name: row.name,
+                quantity: row._sum.quantity ?? 0,
+                revenue: row._sum.subtotalRevenue ?? 0,
+            })),
             recentSales: recentSales.map((sale) => ({
                 id: sale.id,
                 saleNumber: sale.saleNumber,

@@ -79,9 +79,17 @@ export type SaleRow = {
 };
 
 export type DashboardSummary = {
-    today: { revenue: number; count: number };
+    today: { revenue: number; count: number; grossProfit: number };
     month: { revenue: number; count: number; grossProfit: number };
-    stock: { totalUnits: number; skuCount: number; inStock: number; lowStock: number; outOfStock: number };
+    stock: {
+        totalUnits: number;
+        skuCount: number;
+        inStock: number;
+        lowStock: number;
+        outOfStock: number;
+        lowStockItems: { productId: string; name: string; image: string | null; quantity: number }[];
+    };
+    bestSellers: { name: string; quantity: number; revenue: number }[];
     recentSales: {
         id: string;
         saleNumber: string;

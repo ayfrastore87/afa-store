@@ -94,11 +94,28 @@ test("connection is never persisted to storage", () => {
 
 test("UI keeps browser print fallback and both paper sizes", () => {
     assert.match(panel, /window\.print\(\)/);
-    assert.match(panel, /Cetak Bluetooth/);
+    assert.match(panel, /Cetak via Bluetooth/);
     assert.match(panel, /Cetak Browser/);
     assert.match(panel, /58/);
     assert.match(panel, /80/);
     assert.match(panel, /PAPER_WIDTHS/);
+});
+
+test("UI provides connect/disconnect Bluetooth actions", () => {
+    assert.match(panel, /Hubungkan Bluetooth/);
+    assert.match(panel, /Putuskan Bluetooth/);
+});
+
+test("receipt maps the cashier name from the active session", () => {
+    assert.match(panel, /toReceiptData\(order, cashierName\)/);
+    assert.match(panel, /cashier: cashierName \|\| null/);
+    assert.match(panel, /\/api\/auth\/me/);
+});
+
+test("classic/SPP limitations are explained instead of faked as BLE", () => {
+    assert.match(panel, /Bluetooth Classic/);
+    assert.match(panel, /SPP/);
+    assert.match(panel, /bridge/i);
 });
 
 test("Web Bluetooth type declarations cover the GATT API", () => {

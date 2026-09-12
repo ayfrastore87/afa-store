@@ -4,7 +4,7 @@
 // PRINTER panel for the kasir transaction detail page.
 //
 // - "Cetak Browser" keeps the existing window.print() 58mm CSS flow untouched.
-// - "Cetak Bluetooth" encodes the SAME receipt data via ESC/POS and sends it
+// - "Cetak via Bluetooth" encodes the SAME receipt data via ESC/POS and sends it
 //   over BLE. Paper size (58/80mm) only selects the ESC/POS profile; it never
 //   mutates the order or the database.
 // - Connection lives only in this component's runtime state; no credentials,
@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bluetooth, Cable, CheckCircle2, Loader2, Printer, Settings2, Unplug } from "lucide-react";
+import { Bluetooth, CheckCircle2, Loader2, Printer, Settings2, Unplug } from "lucide-react";
 import {
     isBluetoothSupported,
     pickAndConnect,
@@ -41,10 +41,25 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
     const [printing, setPrinting] = useState(false);
     const [printMessage, setPrintMessage] = useState("");
     const [bleSupported] = useState<boolean>(() => (typeof window !== "undefined" ? isBluetoothSupported() : false));
+    const [cashierName, setCashierName] = useState("");
 
     const deviceName = connection?.device.name?.trim() || "EPPOS";
 
-    const receiptData: ReceiptData = useMemo(() => toReceiptData(order), [order]);
+    // Kasir (petugas) dibaca read-only dari sesi aktif untuk baris "Kasir" pada struk.
+    useEffect(() => {
+        let cancelled = false;
+        void fetch("/api/auth/me", { cache: "no-store" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data: { user?: { name?: string } | null } | null) => {
+                if (!cancelled && data?.user?.name) setCashierName(data.user.name);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const receiptData: ReceiptData = useMemo(() => toReceiptData(order, cashierName), [order, cashierName]);
 
     const handleConnect = useCallback(async () => {
         setStatus("connecting");
@@ -110,7 +125,7 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#184D47]/15 bg-white px-4 font-bold text-[#184D47] transition hover:bg-white/80 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {status === "connecting" ? <Loader2 size={16} className="animate-spin" /> : <Settings2 size={16} />}
-                {connected ? "Ganti Printer" : "Pilih Printer"}
+                {connected ? "Hubungkan Ulang" : "Hubungkan Bluetooth"}
             </button>
 
             {/* Paper size selector (profile only). */}
@@ -146,13 +161,13 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
                 {statusMessage ? <p className="mt-1 text-xs text-[#184D47]/70">{statusMessage}</p> : null}
             </div>
 
-            {/* Transport distinction (BLE direct vs Classic/bridge). */}
-            <div className="mt-2 flex items-center gap-2 text-xs text-[#184D47]/50">
-                <Bluetooth size={13} />
-                <span>BLE Direct (GATT)</span>
-                <span className="text-[#184D47]/30">·</span>
-                <Cable size={13} />
-                <span>Bluetooth Classic → Bridge</span>
+            {/* Transport scope — Web Bluetooth only reaches BLE/GATT printers. */}
+            <div className="mt-2 flex items-start gap-2 text-xs text-[#184D47]/55">
+                <Bluetooth size={13} className="mt-0.5 shrink-0" />
+                <span>
+                    Web Bluetooth hanya untuk printer BLE (GATT). Printer Bluetooth Classic
+                    (SPP) butuh aplikasi jembatan (bridge) — tidak bisa dicetak langsung dari browser.
+                </span>
             </div>
 
             {/* Actions. */}
@@ -164,7 +179,7 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#184D47] px-4 font-black text-white transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {printing ? <Loader2 size={16} className="animate-spin" /> : <Bluetooth size={16} />}
-                    Cetak Bluetooth
+                    Cetak via Bluetooth
                 </button>
                 <button
                     type="button"
@@ -183,7 +198,7 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
                     className="mt-2 inline-flex h-9 items-center gap-2 px-2 text-xs font-bold text-red-600 transition hover:underline"
                 >
                     <Unplug size={14} />
-                    Putuskan koneksi
+                    Putuskan Bluetooth
                 </button>
             ) : null}
 
@@ -204,7 +219,7 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
 }
 
 
-function toReceiptData(order: KasirOrderDetail): ReceiptData {
+function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptData {
     const isTunai = order.paymentMethod === "TUNAI";
     return {
         storeName: "AFA STORE",
@@ -212,7 +227,7 @@ function toReceiptData(order: KasirOrderDetail): ReceiptData {
         date: formatDate(order.createdAt),
         customer: order.customer || "-",
         phone: order.phone || null,
-        cashier: null, // read separately by the browser receipt; kept null here
+        cashier: cashierName || null,
         items: order.items.map((item) => ({
             name: item.name,
             size: item.size,

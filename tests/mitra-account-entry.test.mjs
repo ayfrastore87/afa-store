@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 // AFA MITRA — account entry + header entry + admin approval tests.
-// Asserts the "Jadi Mitra" entrance (header/nav/footer + /account card) reuses
+// Asserts the "MITRA AFA_store" entrance (header/nav/footer + /account card) reuses
 // the existing Partner status flow and admin panel, without any new model/API.
 
 function read(rel) {
@@ -15,9 +15,9 @@ const account = read("../src/components/account/account-dashboard.tsx");
 const adminPanel = read("../src/components/admin/PartnerAdminPanel.tsx");
 const apply = read("../src/app/api/account/partner/apply/route.ts");
 
-test("homepage exposes a 'Jadi Mitra' entrance pointing to /mitra", () => {
+test("homepage exposes a 'MITRA AFA_store' entrance pointing to /mitra", () => {
     assert.ok(home.includes('href="/mitra"'));
-    assert.ok(home.includes("Jadi Mitra"));
+    assert.ok(home.includes("MITRA AFA_store"));
     // never deep-link admin or dashboard from the marketing header
     assert.doesNotMatch(home, /href="\/admin\/mitra"/);
     assert.doesNotMatch(home, /href="\/mitra\/dashboard"/);

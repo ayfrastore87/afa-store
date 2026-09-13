@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServiceClient } from "@/lib/supabase-admin";
 import { buildCartResponse } from "@/lib/cart";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, parseProductRequestItem, productAuthorityResponse, reconcileProductItems } from "@/lib/product-authority";
@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 type CartItemRow = { id: string; userId: string; productId: string | null; productRef: string; name: string; price: number; image: string | null; quantity: number; createdAt?: string; updatedAt?: string };
 
 function getSupabaseServerClient() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) throw new Error("Supabase environment belum lengkap.");
-    return createClient(url, key, { auth: { persistSession: false } });
+    // Server-side reads/writes against cart_items must bypass RLS via the
+    // service-role key only. Never fall back to the anon key: without a user
+    // JWT, RLS (auth.uid() = user_id) rejects every row and surfaces as a 500.
+    return createSupabaseServiceClient();
 }
 
 function unauthenticatedCartResponse() {
@@ -20,7 +20,8 @@ function unauthenticatedCartResponse() {
 }
 
 function cartErrorResponse(error: unknown) {
-    console.error("Cart Error:", error);
+    const source = typeof error === "object" && error !== null ? (error as { code?: unknown; message?: unknown }) : {};
+    console.error("[api/cart]", { code: source.code ?? null, message: typeof source.message === "string" ? source.message : String(error) });
     const safe = productAuthorityResponse(error);
     return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
 }

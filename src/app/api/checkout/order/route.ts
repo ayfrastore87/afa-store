@@ -1,7 +1,7 @@
 ﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServiceClient } from "@/lib/supabase-admin";
 import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
@@ -33,10 +33,8 @@ function requireText(value: string | undefined) {
 }
 
 function getSupabaseServerClient() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) throw new Error("Supabase environment belum lengkap.");
-    return createClient(url, key, { auth: { persistSession: false } });
+    // Cart cleanup after checkout must bypass RLS via the service-role key only.
+    return createSupabaseServiceClient();
 }
 
 export async function POST(request: Request) {

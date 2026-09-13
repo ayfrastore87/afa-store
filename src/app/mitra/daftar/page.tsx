@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Daftar Mitra | AFA MITRA" };
 
-// If the user already has an application, bounce to the correct status view.
-// Only a fresh (not_partner / unauthenticated) user reaches the form.
+// Standalone Mitra registration. Any already-authenticated Mitra account is
+// bounced to the correct status view; only a fresh session reaches the form.
 export default async function MitraDaftarPage() {
     const route = await resolveMitra();
     if (route.kind === "active") redirect("/mitra/dashboard");
@@ -16,6 +16,5 @@ export default async function MitraDaftarPage() {
         redirect("/mitra/pengajuan");
     }
 
-    const user = route.kind === "not_partner" ? route.user : { name: null, phone: null };
-    return <MitraApplication applicant={user} />;
+    return <MitraApplication />;
 }

@@ -11,7 +11,7 @@ import {
     PARTNER_REFERENCE_SALE,
 } from "@/lib/partner-dashboard";
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 
 export const runtime = "nodejs";
 
@@ -36,10 +36,10 @@ class PartnerSaleError extends Error {
 
 
 export async function GET(request: Request) {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
     const { searchParams } = new URL(request.url);
     const limit = Math.min(Number(searchParams.get("limit")) || 50, 200);
 
@@ -83,10 +83,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
 
     let body: unknown;
     try {

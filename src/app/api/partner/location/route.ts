@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { PARTNER_LOCATION_SOURCE_BROWSER_GPS, partnerLocationInputSchema } from "@/lib/partner-location";
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 
 export const runtime = "nodejs";
 
@@ -26,10 +26,10 @@ const locationSelect = {
 
 // Latest snapshot for the current partner only.
 export async function GET() {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
 
     try {
         const location = await prisma.partnerLocation.findFirst({
@@ -52,10 +52,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
 
     let body: unknown;
     try {

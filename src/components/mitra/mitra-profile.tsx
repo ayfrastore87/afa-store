@@ -6,8 +6,10 @@ import { Loader2, Receipt, User, LogOut, Handshake, ChevronRight } from "lucide-
 import { partnerStatusLabels, partnerTypeLabels } from "@/lib/partner";
 import { MITRA_CARD } from "@/components/mitra/mitra-theme";
 
-// AFA MITRA — profile view (Tahap 14). Read-only from /api/account/partner.
-// No fake edit API is rendered because none exists for the partner profile.
+// AFA MITRA — profile view (Fase 2). Read-only from the Mitra session endpoint
+// /api/mitra/auth/me; logout clears only the Mitra cookie (afa_mitra_session),
+// never the customer afa_session. No fake edit API is rendered because none
+// exists for the partner profile.
 
 type PartnerProfile = {
     displayName: string;
@@ -29,11 +31,11 @@ export function MitraProfile() {
 
     useEffect(() => {
         let cancelled = false;
-        fetch("/api/account/partner", { headers: { Accept: "application/json" } })
+        fetch("/api/mitra/auth/me", { headers: { Accept: "application/json" } })
             .then(async (response) => {
-                const data = (await response.json().catch(() => null)) as { partner?: PartnerProfile | null } | null;
+                const data = (await response.json().catch(() => null)) as { user?: { partner?: PartnerProfile | null } | null } | null;
                 if (!response.ok) throw new Error();
-                if (!cancelled) setProfile(data?.partner ?? null);
+                if (!cancelled) setProfile(data?.user?.partner ?? null);
             })
             .catch(() => {
                 if (!cancelled) setMessage("Profil gagal dimuat.");
@@ -47,8 +49,8 @@ export function MitraProfile() {
     }, []);
 
     const logout = async () => {
-        const r = await fetch("/api/auth/logout", { method: "POST" });
-        if (r.ok) window.location.href = "/";
+        const r = await fetch("/api/mitra/auth/logout", { method: "POST" });
+        if (r.ok) window.location.href = "/mitra/login";
         else setMessage("Logout gagal. Silakan coba lagi.");
     };
 

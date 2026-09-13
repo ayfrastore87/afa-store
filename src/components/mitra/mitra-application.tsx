@@ -7,13 +7,17 @@ import { CheckCircle2, Clock, Handshake, Loader2, Store, XCircle } from "lucide-
 import { partnerTypeLabels, PARTNER_TYPES } from "@/lib/partner";
 import { MITRA_BG, MITRA_INPUT, MITRA_PRIMARY_BTN } from "@/components/mitra/mitra-theme";
 
-// AFA MITRA — partner application form (Tahap 4). Reuses the existing
-// POST /api/account/partner/apply endpoint verbatim; fields map 1:1 to the
-// existing schema/API.
+// AFA MITRA — standalone registration form (Fase 2). Creates a MitraAccount +
+// Partner (PENDING) via POST /api/mitra/auth/register. No customer User is
+// created.
 
-type Applicant = { name: string | null; phone: string | null };
+type RegisterResponse = { message?: string; redirectTo?: string };
 
 const emptyForm = {
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
     partnerType: "INDIVIDUAL",
     displayName: "",
     businessName: "",
@@ -25,12 +29,8 @@ const emptyForm = {
     postalCode: "",
 };
 
-export function MitraApplication({ applicant }: { applicant: Applicant }) {
-    const [form, setForm] = useState({
-        ...emptyForm,
-        displayName: applicant.name || "",
-        phone: applicant.phone || "",
-    });
+export function MitraApplication() {
+    const [form, setForm] = useState(emptyForm);
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
@@ -38,13 +38,14 @@ export function MitraApplication({ applicant }: { applicant: Applicant }) {
     const isIndividual = form.partnerType === "INDIVIDUAL";
     const update = (field: keyof typeof emptyForm, value: string) => setForm((c) => ({ ...c, [field]: value }));
 
-    const field = (name: keyof typeof emptyForm, label: string, type = "text") => (
+    const field = (name: keyof typeof emptyForm, label: string, type = "text", placeholder?: string) => (
         <label className="block text-sm font-bold">
             {label}
             <input
                 name={name}
                 type={type}
                 value={form[name]}
+                placeholder={placeholder}
                 onChange={(e) => update(name, e.target.value)}
                 className={MITRA_INPUT}
             />
@@ -57,21 +58,22 @@ export function MitraApplication({ applicant }: { applicant: Applicant }) {
         setMessage("");
         setError("");
         try {
-            const response = await fetch("/api/account/partner/apply", {
+            const response = await fetch("/api/mitra/auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(form),
             });
-            const data = (await response.json().catch(() => null)) as { message?: string; partner?: { status?: string } } | null;
+            const data = (await response.json().catch(() => null)) as RegisterResponse | null;
 
             if (response.ok) {
-                setMessage(data?.message || "Pengajuan mitra berhasil dikirim.");
-                window.setTimeout(() => (window.location.href = "/mitra/pengajuan"), 1200);
+                setMessage(data?.message || "Akun mitra berhasil dibuat.");
+                const redirectTo = data?.redirectTo || "/mitra/pengajuan";
+                window.setTimeout(() => (window.location.href = redirectTo), 1200);
             } else {
-                setError(data?.message || "Pengajuan gagal. Silakan coba lagi.");
+                setError(data?.message || "Pendaftaran gagal. Silakan coba lagi.");
             }
         } catch {
-            setError("Pengajuan gagal. Silakan coba lagi.");
+            setError("Pendaftaran gagal. Silakan coba lagi.");
         } finally {
             setSubmitting(false);
         }
@@ -88,12 +90,21 @@ export function MitraApplication({ applicant }: { applicant: Applicant }) {
                     </div>
                     <p className="text-xs font-black uppercase tracking-[0.35em] text-[#C9A45B]">AFA MITRA</p>
                     <h1 className="mt-2 text-2xl font-black">Daftar Jadi Mitra</h1>
-                    <p className="mt-2 text-sm text-[#184D47]/60">Gunakan akun AFA STORE Anda. Data di bawah memakai field yang sama dengan sistem mitra AFA STORE.</p>
+                    <p className="mt-2 text-sm text-[#184D47]/60">Buat akun AFA MITRA sekaligus ajukan data usaha Anda.</p>
                 </header>
 
                 <form onSubmit={submit} className="rounded-3xl border border-white/70 bg-white/70 p-6 shadow-xl backdrop-blur">
+                    <h2 className="mb-3 text-base font-black text-[#184D47]">Akun Mitra</h2>
                     <div className="grid gap-4">
-                        {field("displayName", "Nama Mitra / Toko")}
+                        {field("username", "Username", "text", "username")}
+                        {field("email", "Email", "email", "nama@email.com")}
+                        {field("password", "Password", "password", "minimal 8 karakter")}
+                        {field("confirmPassword", "Konfirmasi Password", "password")}
+                    </div>
+
+                    <h2 className="mt-6 mb-3 text-base font-black text-[#184D47]">Data Usaha</h2>
+                    <div className="grid gap-4">
+                        {field("displayName", "Nama Mitra")}
                         <label className="block text-sm font-bold">
                             Jenis Mitra
                             <select
@@ -124,7 +135,7 @@ export function MitraApplication({ applicant }: { applicant: Applicant }) {
 
                     <button type="submit" disabled={submitting} className={`${MITRA_PRIMARY_BTN} mt-6 w-full`}>
                         {submitting ? <Loader2 className="animate-spin" size={18} /> : null}
-                        {submitting ? "Mengirim..." : "Ajukan Menjadi Mitra"}
+                        {submitting ? "Mengirim..." : "Daftar Jadi Mitra"}
                     </button>
                 </form>
             </div>

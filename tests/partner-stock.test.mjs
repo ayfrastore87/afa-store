@@ -59,8 +59,8 @@ test("sale decrements partner stock exactly once and emits one OUT movement per 
 
 test("partner stock APIs derive partnerId from session only, ignoring the request", () => {
     for (const source of [movementSource, saleSource, stocksSource, dashboardSource]) {
-        assert.match(source, /getCurrentPartner\(\)/);
-        assert.match(source, /current\.partner\.id/);
+        assert.match(source, /getCurrentPartnerFromMitraSession\(\)/);
+        assert.match(source, /const partnerId = current\.id/);
         assert.doesNotMatch(source, /partnerId\s*=\s*request\./);
         assert.doesNotMatch(source, /body\.partnerId/);
     }

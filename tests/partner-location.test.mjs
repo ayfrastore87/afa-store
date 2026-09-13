@@ -31,8 +31,8 @@ test("consent must be explicitly true", () => {
 });
 
 test("partner location route derives partnerId from session only", () => {
-    assert.match(partnerRouteSource, /getCurrentPartner\(\)/);
-    assert.match(partnerRouteSource, /current\.partner\.id/);
+    assert.match(partnerRouteSource, /getCurrentPartnerFromMitraSession\(\)/);
+    assert.match(partnerRouteSource, /const partnerId = current\.id/);
     assert.doesNotMatch(partnerRouteSource, /body\.partnerId|partnerId\s*=\s*request/);
 });
 

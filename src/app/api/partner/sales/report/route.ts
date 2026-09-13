@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 import { wibDaysAgo, wibStartOfDay, wibStartOfMonth, wibStartOfYear } from "@/lib/wib";
 
 export const runtime = "nodejs";
@@ -30,10 +30,10 @@ function periodStart(period: Period): Date | null {
 // Aggregates PartnerSale / PartnerSaleItem for a WIB-aligned period. The period
 // is the only client input; partnerId is always derived from the session.
 export async function GET(request: Request) {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
     const { searchParams } = new URL(request.url);
     const periodParam = searchParams.get("period") ?? "bulan";
     const period: Period = (PERIODS as readonly string[]).includes(periodParam) ? (periodParam as Period) : "bulan";

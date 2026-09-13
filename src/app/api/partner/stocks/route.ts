@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 
 export const runtime = "nodejs";
 
 // Partner stock ledger + recent movements. `movements` is capped to the latest
 // 100 rows; the client can page further later if needed.
 export async function GET() {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
 
     try {
         const [stocks, movements] = await Promise.all([

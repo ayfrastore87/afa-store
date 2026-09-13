@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 
 export const runtime = "nodejs";
 
@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 // every active product annotated with the partner's current stock and cost
 // price. The POS filters to products with stock > 0 on the client.
 export async function GET() {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
 
     try {
         const [products, stocks, priceRows] = await Promise.all([

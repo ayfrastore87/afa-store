@@ -27,14 +27,13 @@ import {
 } from "@/components/mitra/mitra-theme";
 
 // ---------------------------------------------------------------------------
-// AFA MITRA — login portal (Tahap 3 presentation). Two-column desktop layout:
+// AFA MITRA — standalone login portal (Fase 2). Two-column desktop layout:
 // dark-green branding/benefits on the left, a modern login card on the right.
 //
-// Auth is 100% reused: this component POSTs to the existing /api/auth/login
-// route and relies on the Supabase SSR session. It never writes cookies, tokens
-// or a second session, never stores passwords, and never creates a Partner.
-// Status redirect after login is delegated to the /mitra/* server pages, which
-// already use resolveMitra()/gateMitraActive() as the single source of truth.
+// Auth is dedicated to Mitra: this component POSTs to /api/mitra/auth/login
+// (afa_mitra_session → MitraAccount). It never writes cookies or tokens itself,
+// never stores passwords, and never creates a Partner. The response redirectTo
+// (by status) is the source of truth after login.
 // ---------------------------------------------------------------------------
 
 const LOGIN_TIMEOUT_MS = 15000;
@@ -68,8 +67,8 @@ function safeNext(next: string | null): string {
 }
 
 function loginErrorMessage(status: number): string {
-    if (status === 401) return "Email atau password tidak sesuai.";
-    if (status === 403) return "Akun tidak dapat mengakses Mitra. Hubungi admin AFA STORE.";
+    if (status === 401) return "Username/email atau password tidak sesuai.";
+    if (status === 403) return "Akun mitra tidak aktif. Hubungi admin AFA STORE.";
     if (status === 429) return "Terlalu banyak percobaan login. Silakan coba lagi nanti.";
     if (status >= 500) return "Layanan login sedang bermasalah. Silakan coba lagi.";
     return "Login gagal. Silakan coba lagi.";
@@ -77,7 +76,7 @@ function loginErrorMessage(status: number): string {
 
 export function MitraLogin() {
     const router = useRouter();
-    const [email, setEmail] = useState("");
+    const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [remember, setRemember] = useState(false);
@@ -90,8 +89,8 @@ export function MitraLogin() {
     async function submit(event: React.FormEvent) {
         event.preventDefault();
         if (requestInFlight.current) return;
-        if (!email.trim() || !password) {
-            setError("Email dan password wajib diisi.");
+        if (!identifier.trim() || !password) {
+            setError("Username/email dan password wajib diisi.");
             return;
         }
 
@@ -103,19 +102,26 @@ export function MitraLogin() {
         const timeoutId = window.setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
 
         try {
-            const response = await fetch("/api/auth/login", {
+            const response = await fetch("/api/mitra/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ identifier: email, password, remember }),
+                body: JSON.stringify({ identifier, password, remember }),
                 signal: controller.signal,
             });
 
+            const data = (await response.json().catch(() => null)) as {
+                message?: string;
+                redirectTo?: string;
+            } | null;
+
             if (!response.ok) {
-                setError(loginErrorMessage(response.status));
+                setError(data?.message || loginErrorMessage(response.status));
                 return;
             }
 
-            const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+            const next = safeNext(
+                new URLSearchParams(window.location.search).get("next") || data?.redirectTo || null
+            );
             router.replace(next);
         } catch {
             setError("Gagal terhubung. Silakan coba lagi.");
@@ -203,26 +209,25 @@ export function MitraLogin() {
                         <div className="mt-6 rounded-3xl border border-white/70 bg-white/80 p-6 shadow-[0_24px_60px_rgba(18,53,36,0.12)] backdrop-blur sm:p-8">
                             <h2 className="text-2xl font-black text-[#184D47]">Masuk AFA MITRA</h2>
                             <p className="mt-1 text-sm text-[#184D47]/60">
-                                Masuk menggunakan akun AFA STORE Anda.
+                                Masuk menggunakan akun AFA MITRA Anda.
                             </p>
 
                             <form onSubmit={submit} className="mt-6 grid gap-4" noValidate>
                                 <label className="block text-sm font-bold text-[#184D47]">
-                                    Email
+                                    Username / Email
                                     <span className="relative mt-2 block">
                                         <Mail
                                             size={17}
                                             className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#184D47]/40"
                                         />
                                         <input
-                                            name="email"
-                                            type="email"
-                                            autoComplete="email"
-                                            inputMode="email"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
+                                            name="identifier"
+                                            type="text"
+                                            autoComplete="username"
+                                            value={identifier}
+                                            onChange={(e) => setIdentifier(e.target.value)}
                                             className="w-full rounded-2xl border border-[#184D47]/15 bg-white/90 py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-[#C9A45B]"
-                                            placeholder="nama@email.com"
+                                            placeholder="username atau nama@email.com"
                                         />
                                     </span>
                                 </label>
@@ -292,9 +297,9 @@ export function MitraLogin() {
 
                         {/* Register account */}
                         <p className="mt-6 text-center text-sm text-[#184D47]/70">
-                            Belum punya akun AFA STORE?{" "}
-                            <Link href="/register?next=/mitra/dashboard" className="font-bold text-[#184D47] hover:underline">
-                                Daftar Akun
+                            Belum punya akun AFA MITRA?{" "}
+                            <Link href="/mitra/daftar" className="font-bold text-[#184D47] hover:underline">
+                                Daftar Akun Mitra
                             </Link>
                         </p>
 
@@ -302,7 +307,7 @@ export function MitraLogin() {
                         <div className="mt-6 rounded-2xl border border-dashed border-[#C9A45B]/50 bg-white/50 p-4 text-center">
                             <p className="text-sm font-bold text-[#184D47]">Belum menjadi Mitra?</p>
                             <p className="mt-1 text-xs text-[#184D47]/60">
-                                Akun AFA STORE bisa didaftarkan sebagai Mitra kapan saja.
+                                Daftarkan usaha Anda dan kelola stok, kasir, serta laporan bersama AFA STORE.
                             </p>
                             <Link href="/mitra/daftar" className={`${MITRA_GOLD_BTN} mt-4 w-full`}>
                                 Daftar Jadi Mitra

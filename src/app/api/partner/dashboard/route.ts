@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { PARTNER_LOW_STOCK_THRESHOLD } from "@/lib/partner-dashboard";
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 import { wibStartOfDay, wibStartOfMonth } from "@/lib/wib";
 
 export const runtime = "nodejs";
@@ -10,10 +10,10 @@ export const runtime = "nodejs";
 // WIB calendar helpers moved to lib/wib.ts (shared with the sales report).
 
 export async function GET() {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
     const now = new Date();
     const startOfDay = wibStartOfDay(now);
     const startOfMonth = wibStartOfMonth(now);

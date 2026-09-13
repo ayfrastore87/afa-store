@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getPartnerPriceStatus } from "@/lib/partner-dashboard";
 import { prisma } from "@/lib/prisma";
-import { getCurrentPartner } from "@/lib/server-auth";
+import { getCurrentPartnerFromMitraSession } from "@/lib/mitra-auth";
 
 export const runtime = "nodejs";
 
@@ -10,10 +10,10 @@ export const runtime = "nodejs";
 // comes exclusively from the authenticated session (never from the request), so a
 // partner can never read another partner's prices (IDOR-safe).
 export async function GET() {
-    const current = await getCurrentPartner();
+    const current = await getCurrentPartnerFromMitraSession();
     if (!current) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const partnerId = current.partner.id;
+    const partnerId = current.id;
     const now = new Date();
 
     try {

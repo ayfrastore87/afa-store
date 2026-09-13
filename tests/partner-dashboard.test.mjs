@@ -7,8 +7,8 @@ const sharedSource = fs.readFileSync(new URL("../src/components/partner/partner-
 const mitraDashboardSource = fs.readFileSync(new URL("../src/components/mitra/mitra-dashboard.tsx", import.meta.url), "utf8");
 
 test("ACTIVE partner dashboard is session-scoped, never trusts a client partnerId", () => {
-    assert.match(dashboardSource, /getCurrentPartner\(\)/);
-    assert.match(dashboardSource, /current\.partner\.id/);
+    assert.match(dashboardSource, /getCurrentPartnerFromMitraSession\(\)/);
+    assert.match(dashboardSource, /const partnerId = current\.id/);
     assert.doesNotMatch(dashboardSource, /partnerId\s*=\s*request\./);
     assert.doesNotMatch(dashboardSource, /body\.partnerId/);
     assert.doesNotMatch(dashboardSource, /searchParams/);

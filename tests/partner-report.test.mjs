@@ -10,8 +10,8 @@ const reportsTabSource = fs.readFileSync(new URL("../src/components/partner/repo
 test("partner sales report is read-only and derives partnerId from the session", () => {
     assert.match(reportSource, /export async function GET/);
     assert.doesNotMatch(reportSource, /export async function POST/);
-    assert.match(reportSource, /getCurrentPartner\(\)/);
-    assert.match(reportSource, /current\.partner\.id/);
+    assert.match(reportSource, /getCurrentPartnerFromMitraSession\(\)/);
+    assert.match(reportSource, /const partnerId = current\.id/);
     assert.doesNotMatch(reportSource, /partnerId\s*=\s*request\./);
     assert.doesNotMatch(reportSource, /body\.partnerId/);
     assert.doesNotMatch(reportSource, /updateMany|createMany|decrement|increment|\.create\(/);

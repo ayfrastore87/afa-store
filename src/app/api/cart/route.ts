@@ -19,9 +19,23 @@ function unauthenticatedCartResponse() {
     return NextResponse.json({ success: false, redirectTo: "/login", error: "Silakan login terlebih dahulu." }, { status: 401 });
 }
 
-function cartErrorResponse(error: unknown) {
+function traceStage(stage: string) {
+    console.info(`[api/cart][POST] ${stage}:start`);
+    return Date.now();
+}
+
+function traceStageOk(stage: string, started: number) {
+    console.info(`[api/cart][POST] ${stage}:ok`, { elapsedMs: Date.now() - started });
+}
+
+function cartErrorResponse(error: unknown, stage?: string, elapsedMs?: number) {
     const source = typeof error === "object" && error !== null ? (error as { code?: unknown; message?: unknown }) : {};
-    console.error("[api/cart]", { code: source.code ?? null, message: typeof source.message === "string" ? source.message : String(error) });
+    console.error("[api/cart]", {
+        code: source.code ?? null,
+        message: typeof source.message === "string" ? source.message : String(error),
+        ...(stage ? { stage } : {}),
+        ...(typeof elapsedMs === "number" ? { elapsedMs } : {}),
+    });
     const safe = productAuthorityResponse(error);
     return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });
 }
@@ -48,8 +62,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
+        const authStarted = traceStage("auth");
         const user = await getCurrentUser();
         if (!user) return unauthenticatedCartResponse();
+        traceStageOk("auth", authStarted);
+
         const body = await request.json() as { item?: { id?: unknown; qty?: unknown }; items?: { id?: unknown; qty?: unknown }[] };
         const rawItems: unknown[] = body.items ? body.items : body.item ? [body.item] : [];
         const requested = rawItems.map((value) => {
@@ -57,15 +74,22 @@ export async function POST(request: Request) {
             return parseProductRequestItem({ id: item.id, qty: item.qty });
         });
         if (!requested.length || requested.some((item) => item === null)) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
+
+        const productStarted = traceStage("product");
         const incomingItems = await authorizeProductItems(requested.filter((item): item is NonNullable<typeof item> => item !== null));
+        traceStageOk("product", productStarted);
 
         const supabase = getSupabaseServerClient();
+
+        const cartItemStarted = traceStage("cart-item");
         const { data: existingData, error: existingError } = await supabase.from("cart_items").select("*").eq("userId", user.id).in("productRef", incomingItems.map((item) => item.id));
         if (existingError) throw new Error(existingError.message);
+        traceStageOk("cart-item", cartItemStarted);
 
         const existingMap = new Map(((existingData ?? []) as CartItemRow[]).map((row) => [row.productRef, row]));
         const now = new Date().toISOString();
 
+        const writeStarted = traceStage("write");
         const writes = await Promise.all(incomingItems.map((item) => {
             const existing = existingMap.get(item.id);
             if (existing) {
@@ -75,8 +99,12 @@ export async function POST(request: Request) {
         }));
         const writeError = writes.find((result) => result.error)?.error;
         if (writeError) throw new Error(writeError.message);
+        traceStageOk("write", writeStarted);
 
-        return NextResponse.json(await getCart(user.id));
+        const reloadStarted = traceStage("reload");
+        const response = await getCart(user.id);
+        traceStageOk("reload", reloadStarted);
+        return NextResponse.json(response);
     } catch (error) {
         return cartErrorResponse(error);
     }

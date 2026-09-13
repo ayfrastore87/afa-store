@@ -39,6 +39,25 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
                     <ul className="mt-8 grid gap-3 border-t border-[#C9A45B]/20 pt-6 text-sm text-[#43503f] sm:grid-cols-3"><li className="flex items-center gap-2"><Check size={18} className="shrink-0 text-[#C9A45B]" aria-hidden="true" />{available ? "Produk tersedia" : "Informasi stok aktual"}</li><li className="flex items-center gap-2"><LockKeyhole size={18} className="shrink-0 text-[#C9A45B]" aria-hidden="true" />Pembayaran aman</li><li className="flex items-center gap-2"><ShieldCheck size={18} className="shrink-0 text-[#C9A45B]" aria-hidden="true" />Checkout terlindungi</li></ul>
                 </section>
             </div>
+            <section aria-labelledby="reviews-title" className="mt-16 border-t border-[#C9A45B]/20 pt-10 lg:mt-24 lg:pt-14">
+                <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C9A45B]">Ulasan Pelanggan</p>
+                        <h2 id="reviews-title" className="mt-2 font-display text-3xl font-bold sm:text-4xl">Penilaian Produk</h2>
+                    </div>
+                    <div className="flex items-center gap-3 rounded-2xl border border-[#C9A45B]/20 bg-white/70 px-4 py-3">
+                        <div className="flex items-center gap-0.5" aria-label={product.rating > 0 ? `Rating ${product.rating} dari 5 bintang` : "Belum ada rating"}>
+                            {Array.from({ length: 5 }).map((_, index) => <Star key={index} size={20} className={index < Math.round(product.rating) ? "fill-[#C9A45B] text-[#C9A45B]" : "text-[#C9A45B]/30"} aria-hidden="true" />)}
+                        </div>
+                        <p className="font-display text-2xl font-bold text-[#123524]">{product.rating > 0 ? product.rating.toFixed(1) : "—"}</p>
+                    </div>
+                </div>
+                <div className="luxury-card rounded-[28px] p-8 text-center sm:p-12">
+                    <Star size={40} className="mx-auto text-[#C9A45B]/40" aria-hidden="true" />
+                    <h3 className="mt-4 font-display text-2xl font-bold text-[#123524]">Belum ada ulasan untuk produk ini.</h3>
+                    <p className="mx-auto mt-3 max-w-xl text-[#8B6B3F]">Ulasan tertulis per produk membutuhkan desain data dan API terpisah. Saat ini rating produk bersumber dari data produk AFA STORE.</p>
+                </div>
+            </section>
             {relatedProducts.length > 0 && <section aria-labelledby="related-title" className="mt-16 border-t border-[#C9A45B]/20 pt-10 lg:mt-24 lg:pt-14"><div className="mb-7"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C9A45B]">Pilihan AFA</p><h2 id="related-title" className="mt-2 font-display text-3xl font-bold sm:text-4xl">Mungkin Anda Juga Suka</h2></div><div className="flex snap-x gap-4 overflow-x-auto pb-4 sm:grid sm:grid-cols-2 sm:overflow-visible md:grid-cols-3 lg:grid-cols-4">{relatedProducts.map((related) => <article key={related.id} className="min-w-[72vw] max-w-[290px] snap-start sm:min-w-0 sm:max-w-none"><Link href={`/produk/${related.slug}`} className="group block"><div className="relative aspect-square overflow-hidden rounded-[24px] border border-[#C9A45B]/15 bg-[#F7EEDC]"><ProductImage src={related.image} alt={related.name} sizes="(max-width: 639px) 72vw, (max-width: 1023px) 33vw, 25vw" /></div><div className="px-1 pt-4">{related.category?.name && <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8B6B3F]">{related.category.name}</p>}<h3 className="mt-1 line-clamp-2 min-h-[3rem] font-display text-lg font-bold leading-snug group-hover:text-[#8B6B3F]">{related.name}</h3><div className="mt-2 flex items-center justify-between gap-3"><p className="font-bold text-[#8B6B3F]">{formatRupiah(related.price)}</p><span className={`text-xs font-semibold ${related.stock > 0 ? "text-[#315d45]" : "text-red-700"}`}>{related.stock > 0 ? "Tersedia" : "Habis"}</span></div></div></Link></article>)}</div></section>}
         </div>
     </main>;

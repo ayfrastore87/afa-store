@@ -30,6 +30,7 @@ import { getPaymentStatusPresentation } from "@/lib/payment-status";
 import { useCart } from "@/context/cart-context";
 
 type User = { id: string; name: string; email: string; phone: string | null; image: string | null; role: string; createdAt?: string };
+type AccountPartner = { status?: string | null; partnerCode?: string | null } | null;
 type Item = { id: string; name: string; quantity: number; price?: number; subtotal: number; image?: string | null };
 type Order = { id: string; invoice: string; createdAt: string; subtotal: number; shipping: number; discount?: number; total: number; voucher?: string | null; status: string; paymentStatus?: string; courier?: string | null; trackingNumber?: string | null; paidAt?: string | null; processedAt?: string | null; packedAt?: string | null; shippedAt?: string | null; completedAt?: string | null; cancelledAt?: string | null; items: Item[] };
 type Filter = "Semua" | "Belum Bayar" | "Diproses" | "Selesai" | "Dibatalkan";
@@ -84,14 +85,16 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
     const [section, setSection] = useState<Section>("pesanan");
     const [accountView, setAccountView] = useState<AccountView>("menu");
     const [message, setMessage] = useState("");
-    const [partnerActive, setPartnerActive] = useState(false);
+    const [partner, setPartner] = useState<AccountPartner>(null);
 
     useEffect(() => {
         let active = true;
         fetch("/api/account/partner", { cache: "no-store" })
             .then((r) => (r.ok ? r.json() : null))
             .then((d) => {
-                if (active && d && (d as { partner?: { status?: string } | null }).partner?.status === "ACTIVE") setPartnerActive(true);
+                if (!active) return;
+                const p = (d as { partner?: { status?: string | null; partnerCode?: string | null } | null } | null)?.partner ?? null;
+                setPartner(p);
             })
             .catch(() => undefined);
         return () => {
@@ -135,7 +138,7 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
                 ) : accountView === "menu" ? (
                     <AccountMenu
                         user={user}
-                        partnerActive={partnerActive}
+                        partner={partner}
                         onSelect={(v) => setAccountView(v)}
                         onLogout={() => void logout()}
                     />
@@ -155,7 +158,7 @@ export function AccountDashboard({ initialUser }: { initialUser: User }) {
     );
 }
 
-function AccountMenu({ user, partnerActive, onSelect, onLogout }: { user: User; partnerActive: boolean; onSelect: (v: Exclude<AccountView, "menu">) => void; onLogout: () => void }) {
+function AccountMenu({ user, partner, onSelect, onLogout }: { user: User; partner: AccountPartner; onSelect: (v: Exclude<AccountView, "menu">) => void; onLogout: () => void }) {
     return (
         <div>
             <div className="flex items-center gap-3 rounded-2xl border border-[#e5e0d5] bg-white p-4 shadow-sm">
@@ -165,6 +168,8 @@ function AccountMenu({ user, partnerActive, onSelect, onLogout }: { user: User; 
                     <small className="block truncate text-[11px] text-[#7a817c]">{user.email}</small>
                 </div>
             </div>
+
+            <MitraCard partner={partner} />
 
             <nav className="mt-4 grid gap-2.5">
                 {ACCOUNT_MENU.map((m) => (
@@ -180,22 +185,54 @@ function AccountMenu({ user, partnerActive, onSelect, onLogout }: { user: User; 
             </nav>
 
             <section className="mt-4 overflow-hidden rounded-2xl border border-[#e5e0d5] bg-white shadow-sm">
-                {partnerActive && (
-                    <Link href="/partner" className="flex items-center gap-3 border-b border-[#f0ece2] p-4 transition hover:bg-[#f7f4ec]">
-                        <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f3e3] text-[#29621a]"><Handshake size={20} /></span>
-                        <span className="min-w-0 flex-1">
-                            <b className="block text-sm text-[#123d2d]">Dashboard Mitra</b>
-                            <small className="text-[11px] text-[#7a817c]">Kelola toko, produk, dan penjualan mitra Anda.</small>
-                        </span>
-                        <ChevronRight size={16} className="text-[#b18a3d]" />
-                    </Link>
-                )}
                 <button onClick={onLogout} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-[#f7f4ec]">
                     <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#f7e9e6] text-[#8c2e25]"><LogOut size={20} /></span>
                     <b className="text-sm text-[#8c2e25]">Keluar</b>
                 </button>
             </section>
         </div>
+    );
+}
+
+const PARTNER_STATUS_TONE: Record<string, string> = {
+    PENDING: "bg-[#fff2d6] text-[#8b5e00]",
+    ACTIVE: "bg-[#e8f3e3] text-[#29621a]",
+    REJECTED: "bg-[#f7e9e6] text-[#8c2e25]",
+    SUSPENDED: "bg-[#f5ebd8] text-[#76551d]",
+};
+
+// Single "Jadi Mitra" entry card. Routed by Partner status; never creates a new
+// Partner from the account page (always links to the existing /mitra flows).
+function MitraCard({ partner }: { partner: AccountPartner }) {
+    const status = partner?.status ?? "NONE";
+
+    const config =
+        status === "ACTIVE"
+            ? {
+                title: "Mitra Aktif",
+                desc: partner?.partnerCode ? `Kode Mitra: ${partner.partnerCode}` : "Kelola toko, produk, dan penjualan mitra Anda.",
+                cta: "Buka Dashboard Mitra",
+                href: "/mitra/dashboard",
+            }
+            : status === "PENDING"
+                ? { title: "Pengajuan Mitra", desc: "Sedang Ditinjau", cta: "Lihat Status", href: "/mitra/pengajuan" }
+                : status === "SUSPENDED"
+                    ? { title: "Mitra Ditangguhkan", desc: "Status: Ditangguhkan", cta: "Lihat Status", href: "/mitra/pengajuan" }
+                    : status === "REJECTED"
+                        ? { title: "Pengajuan Mitra", desc: "Status: Ditolak", cta: "Lihat Status", href: "/mitra/pengajuan" }
+                        : { title: "Jadi Mitra AFA STORE", desc: "Dapatkan harga khusus dan peluang usaha bersama AFA STORE.", cta: "Daftar Jadi Mitra", href: "/mitra/daftar" };
+
+    return (
+        <Link href={config.href} className="mt-3 flex items-center gap-3 rounded-2xl border border-[#e5e0d5] bg-white p-4 shadow-sm transition hover:border-[#b18a3d]">
+            <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${status !== "NONE" ? PARTNER_STATUS_TONE[status] ?? "bg-[#f0ece2] text-[#123d2d]" : "bg-[#e8f3e3] text-[#29621a]"}`}>
+                <Handshake size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+                <b className="block text-sm text-[#123d2d]">{config.title}</b>
+                <small className="block truncate text-[11px] text-[#7a817c]">{config.desc}</small>
+            </span>
+            <span className="shrink-0 rounded-full bg-[#123d2d] px-3 py-1.5 text-[11px] font-bold text-white">{config.cta}</span>
+        </Link>
     );
 }
 

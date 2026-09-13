@@ -167,7 +167,7 @@ const SUPPORTS = [
     },
 ];
 
-export function MitraLanding() {
+export function MitraLanding({ isActive = false }: { isActive?: boolean }) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -196,12 +196,25 @@ export function MitraLanding() {
                     </nav>
 
                     <div className="hidden items-center gap-2 lg:flex">
-                        <Link href="/mitra/login" className={BTN_NAV_SOLID}>
-                            Masuk
-                        </Link>
-                        <Link href="/mitra/daftar" className={`${BTN_GOLD} min-h-11 px-5`}>
-                            Daftar
-                        </Link>
+                        {isActive ? (
+                            <>
+                                <Link href="/mitra/dashboard" className={BTN_NAV_SOLID}>
+                                    Dashboard
+                                </Link>
+                                <Link href="/mitra/profil" className={`${BTN_GOLD} min-h-11 px-5`}>
+                                    Akun
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                <Link href="/mitra/login" className={BTN_NAV_SOLID}>
+                                    Masuk
+                                </Link>
+                                <Link href="/mitra/daftar" className={`${BTN_GOLD} min-h-11 px-5`}>
+                                    Daftar
+                                </Link>
+                            </>
+                        )}
                     </div>
 
                     <button
@@ -230,16 +243,33 @@ export function MitraLanding() {
                             ))}
                         </nav>
                         <div className="mt-3 grid grid-cols-2 gap-2">
-                            <Link
-                                href="/mitra/login"
-                                onClick={() => setOpen(false)}
-                                className={`${BTN_NAV_SOLID} justify-center bg-[#184D47]/5 text-center`}
-                            >
-                                Masuk
-                            </Link>
-                            <Link href="/mitra/daftar" onClick={() => setOpen(false)} className={`${BTN_GOLD} justify-center text-center`}>
-                                Daftar
-                            </Link>
+                            {isActive ? (
+                                <>
+                                    <Link
+                                        href="/mitra/dashboard"
+                                        onClick={() => setOpen(false)}
+                                        className={`${BTN_NAV_SOLID} justify-center bg-[#184D47]/5 text-center`}
+                                    >
+                                        Dashboard
+                                    </Link>
+                                    <Link href="/mitra/profil" onClick={() => setOpen(false)} className={`${BTN_GOLD} justify-center text-center`}>
+                                        Akun
+                                    </Link>
+                                </>
+                            ) : (
+                                <>
+                                    <Link
+                                        href="/mitra/login"
+                                        onClick={() => setOpen(false)}
+                                        className={`${BTN_NAV_SOLID} justify-center bg-[#184D47]/5 text-center`}
+                                    >
+                                        Masuk
+                                    </Link>
+                                    <Link href="/mitra/daftar" onClick={() => setOpen(false)} className={`${BTN_GOLD} justify-center text-center`}>
+                                        Daftar
+                                    </Link>
+                                </>
+                            )}
                         </div>
                     </div>
                 ) : null}
@@ -267,9 +297,6 @@ export function MitraLanding() {
                         <div className="mx-auto mt-8 flex max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
                             <Link href="/mitra/daftar" className={BTN_PRIMARY}>
                                 Daftar AFA MITRA <ArrowRight size={18} />
-                            </Link>
-                            <Link href="/mitra/login" className={BTN_GOLD}>
-                                Masuk Mitra
                             </Link>
                         </div>
 

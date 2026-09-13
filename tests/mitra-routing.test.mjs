@@ -92,3 +92,38 @@ test("mitra profile is Mitra-session based and never touches customer auth", () 
     assert.doesNotMatch(profile, /\/api\/account\/partner/);
     assert.doesNotMatch(profile, /\/api\/auth\/logout/);
 });
+
+test("/mitra resolves ACTIVE -> dashboard, ACTIVE+view=business -> landing, unauthenticated -> landing", () => {
+    const page = read("../src/app/mitra/page.tsx");
+    assert.ok(page.includes("resolveMitra()"));
+    assert.ok(page.includes('route.kind === "active"'));
+    assert.ok(page.includes('params.view !== "business"'));
+    assert.ok(page.includes('redirect("/mitra/dashboard")'));
+    assert.ok(page.includes("<MitraLanding"));
+});
+
+test("authenticated logo/brand points to /mitra?view=business (business concept)", () => {
+    const shell = read("../src/components/mitra/mitra-shell.tsx");
+    assert.ok(shell.includes('href="/mitra?view=business"'));
+    assert.ok(shell.includes("AFA MITRA"));
+    assert.ok(shell.includes("Partner Bisnis AFA STORE"));
+});
+
+test("business concept page shows Dashboard/Akun (not Daftar) for ACTIVE partners", () => {
+    const landing = read("../src/components/mitra/mitra-landing.tsx");
+    assert.ok(landing.includes("isActive"));
+    assert.ok(landing.includes('href="/mitra/dashboard"'));
+    assert.ok(landing.includes('href="/mitra/profil"'));
+    assert.ok(landing.includes("Dashboard"));
+    assert.ok(landing.includes("Akun"));
+});
+
+test("public landing hero keeps a single CTA (no duplicated 'Masuk Mitra' in hero)", () => {
+    const landing = read("../src/components/mitra/mitra-landing.tsx");
+    assert.ok(landing.includes("Daftar AFA MITRA"));
+    assert.ok(landing.includes("Pelajari Cara Kerjanya"));
+    // "Masuk Mitra" was removed from the hero; it now only remains in the final
+    // conversion CTA and the footer (2 occurrences) instead of 3.
+    const occurrences = landing.split("Masuk Mitra").length - 1;
+    assert.equal(occurrences, 2, "hero should no longer duplicate 'Masuk Mitra'");
+});

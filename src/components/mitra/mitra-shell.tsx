@@ -49,11 +49,22 @@ export function MitraShell({
         <div className={`min-h-screen ${MITRA_BG} pb-28 text-[#184D47]`}>
             <header className="sticky top-0 z-30 border-b border-[#C9A45B]/20 bg-[#F8F5EE]/90 shadow-[0_8px_28px_rgba(18,53,36,0.06)] backdrop-blur-xl">
                 <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-                    <Link href="/mitra" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#184D47] text-[#D4AF37]" aria-label="AFA MITRA">
-                        <LayoutDashboard size={20} />
+                    <Link
+                        href="/mitra?view=business"
+                        className="flex min-w-0 items-center gap-3"
+                        aria-label="Konsep Bisnis AFA MITRA"
+                    >
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#184D47] text-[#D4AF37]">
+                            <LayoutDashboard size={20} />
+                        </span>
+                        <span className="min-w-0 leading-tight">
+                            <span className="block text-base font-black tracking-tight">AFA MITRA</span>
+                            <span className="block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C9A45B]">
+                                Partner Bisnis AFA STORE
+                            </span>
+                        </span>
                     </Link>
-                    <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#C9A45B]">AFA MITRA</p>
+                    <div className="min-w-0 flex-1 text-right">
                         <h1 className="truncate text-lg font-black leading-tight">{title}</h1>
                     </div>
                     {badge ? (

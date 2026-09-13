@@ -324,8 +324,8 @@ model Setting {
 
 model Partner {
   id             String                 @id @default(cuid())
-  userId         String                 @unique
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId         String?                @unique
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: Restrict)
   partnerCode    String                 @unique
   partnerType    String                 @default("INDIVIDUAL")
   status         String                 @default("PENDING")
@@ -343,11 +343,27 @@ model Partner {
   sales          PartnerSale[]
   locations      PartnerLocation[]
   visits         PartnerVisit[]
+  mitraAccount   MitraAccount?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
   @@index([status])
   @@map("partners")
+}
+
+model MitraAccount {
+  id           String    @id @default(cuid())
+  partnerId    String    @unique
+  username     String    @unique
+  email        String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  partner      Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("mitra_accounts")
 }
 
 model PartnerProductPrice {

@@ -21,12 +21,13 @@ export async function POST(
 
     if (!partner) return NextResponse.json({ message: "Pengajuan mitra tidak ditemukan." }, { status: 404 });
     if (partner.status !== "PENDING") return NextResponse.json({ message: "Hanya pengajuan berstatus PENDING yang dapat disetujui." }, { status: 409 });
-    if (!partner.user || partner.user.isActive === false) return NextResponse.json({ message: "Akun pengguna tidak aktif atau tidak ditemukan." }, { status: 409 });
 
     const updated = await prisma.$transaction(async (tx) => {
-        // Only promote role for users who are still plain customers. Admins keep
-        // their role; the ACTIVE partner record is the authorization source.
-        if (partner.user.role === "customer") {
+        // Partner approval no longer depends on a customer User. A standalone
+        // partner (userId = null, driven by MitraAccount) must still be
+        // approvable. Role promotion is only a legacy compatibility step and is
+        // performed solely when a linked user exists and is active.
+        if (partner.user && partner.userId && partner.user.role === "customer" && partner.user.isActive !== false) {
             await tx.user.update({ where: { id: partner.userId }, data: { role: "partner" } });
         }
         return tx.partner.update({

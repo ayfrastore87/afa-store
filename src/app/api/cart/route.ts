@@ -28,11 +28,22 @@ function traceStageOk(stage: string, started: number) {
     console.info(`[api/cart][POST] ${stage}:ok`, { elapsedMs: Date.now() - started });
 }
 
+type SupabaseErrorLike = { code?: unknown; message?: unknown; details?: unknown; hint?: unknown; status?: unknown };
+
 function cartErrorResponse(error: unknown, stage?: string, elapsedMs?: number) {
-    const source = typeof error === "object" && error !== null ? (error as { code?: unknown; message?: unknown }) : {};
+    // Preserve the original PostgREST/Prisma error fields (code, status, details,
+    // hint) so the exact failing call is identifiable in logs. The previous code
+    // wrapped everything in `new Error(error.message)`, which discarded `code`
+    // and left `{ code: null, message: "Gateway Timeout" }` unidentifiable.
+    const source = typeof error === "object" && error !== null ? (error as SupabaseErrorLike) : {};
+    const details = typeof source.details === "string" && source.details.trim() ? { details: source.details } : {};
+    const hint = typeof source.hint === "string" && source.hint.trim() ? { hint: source.hint } : {};
     console.error("[api/cart]", {
         code: source.code ?? null,
+        status: typeof source.status === "number" ? source.status : null,
         message: typeof source.message === "string" ? source.message : String(error),
+        ...details,
+        ...hint,
         ...(stage ? { stage } : {}),
         ...(typeof elapsedMs === "number" ? { elapsedMs } : {}),
     });
@@ -43,7 +54,7 @@ function cartErrorResponse(error: unknown, stage?: string, elapsedMs?: number) {
 async function getCart(userId: string) {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase.from("cart_items").select("*").eq("userId", userId).order("updatedAt", { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) throw error;
 
     const rows = (data ?? []) as CartItemRow[];
     const items = await reconcileProductItems(rows.map((row) => ({ id: row.productRef, qty: row.quantity })));
@@ -61,11 +72,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+    let stage = "parse";
+    let stageStarted = Date.now();
     try {
-        const authStarted = traceStage("auth");
+        stage = "auth";
+        stageStarted = traceStage(stage);
         const user = await getCurrentUser();
         if (!user) return unauthenticatedCartResponse();
-        traceStageOk("auth", authStarted);
+        traceStageOk(stage, stageStarted);
 
         const body = await request.json() as { item?: { id?: unknown; qty?: unknown }; items?: { id?: unknown; qty?: unknown }[] };
         const rawItems: unknown[] = body.items ? body.items : body.item ? [body.item] : [];
@@ -75,21 +89,24 @@ export async function POST(request: Request) {
         });
         if (!requested.length || requested.some((item) => item === null)) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
 
-        const productStarted = traceStage("product");
+        stage = "product";
+        stageStarted = traceStage(stage);
         const incomingItems = await authorizeProductItems(requested.filter((item): item is NonNullable<typeof item> => item !== null));
-        traceStageOk("product", productStarted);
+        traceStageOk(stage, stageStarted);
 
         const supabase = getSupabaseServerClient();
 
-        const cartItemStarted = traceStage("cart-item");
+        stage = "cart-item";
+        stageStarted = traceStage(stage);
         const { data: existingData, error: existingError } = await supabase.from("cart_items").select("*").eq("userId", user.id).in("productRef", incomingItems.map((item) => item.id));
-        if (existingError) throw new Error(existingError.message);
-        traceStageOk("cart-item", cartItemStarted);
+        if (existingError) throw existingError;
+        traceStageOk(stage, stageStarted);
 
         const existingMap = new Map(((existingData ?? []) as CartItemRow[]).map((row) => [row.productRef, row]));
         const now = new Date().toISOString();
 
-        const writeStarted = traceStage("write");
+        stage = "write";
+        stageStarted = traceStage(stage);
         const writes = await Promise.all(incomingItems.map((item) => {
             const existing = existingMap.get(item.id);
             if (existing) {
@@ -98,15 +115,16 @@ export async function POST(request: Request) {
             return supabase.from("cart_items").insert({ userId: user.id, productId: item.id, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
         }));
         const writeError = writes.find((result) => result.error)?.error;
-        if (writeError) throw new Error(writeError.message);
-        traceStageOk("write", writeStarted);
+        if (writeError) throw writeError;
+        traceStageOk(stage, stageStarted);
 
-        const reloadStarted = traceStage("reload");
+        stage = "reload";
+        stageStarted = traceStage(stage);
         const response = await getCart(user.id);
-        traceStageOk("reload", reloadStarted);
+        traceStageOk(stage, stageStarted);
         return NextResponse.json(response);
     } catch (error) {
-        return cartErrorResponse(error);
+        return cartErrorResponse(error, stage, Date.now() - stageStarted);
     }
 }
 
@@ -131,7 +149,7 @@ async function updateQuantity(request: Request) {
             ? supabase.from("cart_items").delete().eq("userId", user.id).eq("productRef", body.id)
             : supabase.from("cart_items").update({ quantity: body.qty, updatedAt: new Date().toISOString() }).eq("userId", user.id).eq("productRef", body.id);
         const { error } = await cartRequest;
-        if (error) throw new Error(error.message);
+        if (error) throw error;
 
         return NextResponse.json(await getCart(user.id));
     } catch (error) {
@@ -149,7 +167,7 @@ export async function DELETE(request: Request) {
         const supabase = getSupabaseServerClient();
         const query = supabase.from("cart_items").delete().eq("userId", user.id);
         const { error } = id ? await query.eq("productRef", id) : await query;
-        if (error) throw new Error(error.message);
+        if (error) throw error;
 
         return NextResponse.json(await getCart(user.id));
     } catch (error) {

@@ -112,7 +112,12 @@ export async function POST(request: Request) {
             if (existing) {
                 return supabase.from("cart_items").update({ quantity: Math.min(existing.quantity + item.qty, item.stock), updatedAt: now }).eq("id", existing.id);
             }
-            return supabase.from("cart_items").insert({ userId: user.id, productId: item.id, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
+            // cart_items.id is a TEXT primary key with no DB default (see
+            // supabase/migrations/20260726171200_create_cart_items.sql), and this
+            // route writes via the Supabase client (not Prisma), so Prisma's
+            // client-side @default(cuid()) never applies. Without a server-side id,
+            // PostgREST sends NULL and Postgres raises 23502 not-null violation.
+            return supabase.from("cart_items").insert({ id: crypto.randomUUID(), userId: user.id, productId: item.id, productRef: item.id, name: item.name, price: item.price, image: item.image, quantity: item.qty, createdAt: now, updatedAt: now });
         }));
         const writeError = writes.find((result) => result.error)?.error;
         if (writeError) throw writeError;

@@ -144,6 +144,27 @@ test("same product merges quantity via existing /api/cart merge behavior", () =>
     assert.match(cartRouteSource, /\.update\(\{\s*quantity:\s*Math\.min\(existing\.quantity \+ item\.qty,\s*item\.stock\)/);
 });
 
+test("new cart INSERT always supplies a non-null server-generated id", () => {
+    // cart_items.id is a TEXT primary key with no DB default, so the INSERT path
+    // must set id explicitly or Postgres raises 23502 (null in column \"id\").
+    assert.match(cartRouteSource, /\.insert\(\{\s*id:\s*crypto\.randomUUID\(\)/);
+});
+
+test("INSERT id uses UUID format compatible with the TEXT primary key column", () => {
+    // crypto.randomUUID() yields a 36-char UUIDv4 string, valid for the `id text` column.
+    assert.match(cartRouteSource, /id:\s*crypto\.randomUUID\(\)/);
+    // No non-UUID fallback like Date.now() or Math.random() for the cart item id.
+    assert.doesNotMatch(cartRouteSource, /\.insert\(\{\s*id:\s*(Date\.now|Math\.random)/);
+});
+
+test("existing cart UPDATE keeps its own id and never generates a new one", () => {
+    // The update payload contains only quantity + updatedAt; it must not set id.
+    assert.match(cartRouteSource, /\.update\(\{\s*quantity:/);
+    assert.doesNotMatch(cartRouteSource, /\.update\(\{\s*id:/);
+    // It targets the existing row by id, preserving the original primary key.
+    assert.match(cartRouteSource, /\.eq\("id",\s*existing\.id\)/);
+});
+
 test("badge is derived from total quantity of all items (merge SKU units)", () => {
     assert.match(cartLibSource, /calculateTotalItems/);
     assert.match(cartLibSource, /items\.reduce\(\(sum, item\) => sum \+ item\.qty, 0\)/);

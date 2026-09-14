@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
     AlertCircle,
     ArrowLeft,
@@ -54,7 +55,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
             }
             setOrder(payload.order);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Detail transaksi gagal dimuat.");
+            setError(getUserFacingMessage(err, "Detail transaksi gagal dimuat."));
         } finally {
             setLoading(false);
         }

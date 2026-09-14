@@ -6,6 +6,7 @@ import { Boxes, Handshake, Loader2, MapPin, MessageCircle, Store, User } from "l
 
 import { partnerStatusLabels } from "@/lib/partner";
 import { whatsappLink } from "@/lib/whatsapp";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type PartnerInfo = {
     id: string;
@@ -126,7 +127,7 @@ export function CustomerAdminDetailPanel({ customerId }: Props) {
                 if (!response.ok) throw new Error(payload?.message || "Detail pelanggan gagal dimuat.");
                 setData(payload as CustomerDetail);
             } catch (err) {
-                setError(err instanceof Error ? err.message : "Detail pelanggan gagal dimuat.");
+                setError(getUserFacingMessage(err, "Detail pelanggan gagal dimuat."));
             } finally {
                 setLoading(false);
             }

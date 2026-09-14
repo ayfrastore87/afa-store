@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
     AlertCircle,
     ArrowLeft,
@@ -83,7 +84,7 @@ export default function KasirHistory() {
             setTotal(payload.total ?? 0);
             setTotalPages(payload.totalPages ?? 1);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Riwayat gagal dimuat.");
+            setError(getUserFacingMessage(err, "Riwayat gagal dimuat."));
         } finally {
             setLoading(false);
         }

@@ -24,6 +24,7 @@ import {
 import { formatDate, formatRupiah, type DashboardSummary } from "@/components/partner/partner-shared";
 import { PartnerLiveLocationCard } from "@/components/partner/live-location-card";
 import { MITRA_CARD } from "@/components/mitra/mitra-theme";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type Props = { name: string; code: string };
 
@@ -60,7 +61,7 @@ export function MitraDashboard({ name, code }: Props) {
                 if (!cancelled) setSummary(data as DashboardSummary);
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Ringkasan gagal dimuat.");
+                if (!cancelled) setError(getUserFacingMessage(err, "Ringkasan gagal dimuat."));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

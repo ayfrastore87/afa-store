@@ -6,6 +6,7 @@ import { Loader2, PackageSearch, Search } from "lucide-react";
 
 import { formatRupiah, type PartnerProduct } from "@/components/partner/partner-shared";
 import { MITRA_CARD, MITRA_INPUT } from "@/components/mitra/mitra-theme";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 type PartnerPrice = { productId: string; price: number; costPrice: number };
 type ProductsResponse = { products: PartnerProduct[] };
@@ -28,14 +29,14 @@ export function MitraProduk() {
             .then(async ([productsRes, pricesRes]) => {
                 const productsData = (await productsRes.json().catch(() => null)) as ProductsResponse | null;
                 const pricesData = (await pricesRes.json().catch(() => null)) as PricesResponse | null;
-                if (!productsRes.ok) throw new Error((productsData as { message?: string } | null)?.message || "Produk gagal dimuat.");
+                if (!productsRes.ok) throw new Error(safeApiMessage(productsData) || "Produk gagal dimuat.");
                 if (!cancelled) {
                     setProducts(productsData?.products ?? []);
                     setPrices(pricesData?.prices ?? []);
                 }
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Produk gagal dimuat.");
+                if (!cancelled) setError(getUserFacingMessage(err, "Produk gagal dimuat."));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

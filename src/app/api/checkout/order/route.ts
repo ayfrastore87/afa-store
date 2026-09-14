@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         const user = await getCurrentUser();
         if (!user) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
         const key = normalizeIdempotencyKey(request.headers.get("Idempotency-Key"));
-        if (!key) return NextResponse.json({ message: "Idempotency-Key is required and must be 255 characters or fewer." }, { status: 400 });
+        if (!key) return NextResponse.json({ message: "Permintaan tidak valid. Silakan muat ulang halaman checkout." }, { status: 400 });
 
         const store = await cookies();
         const snapshot = decodeCheckoutItems(store.get(CHECKOUT_COOKIE)?.value);
@@ -69,16 +69,16 @@ export async function POST(request: Request) {
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
                 console.warn("checkout_unavailable", { route: "/api/checkout/order", category: "idempotency_store_unavailable", status: 503 });
-                return NextResponse.json({ success: false, error: "Checkout temporarily unavailable. Please try again after maintenance is complete." }, { status: 503 });
+                return NextResponse.json({ success: false, error: "Checkout sedang dalam pemeliharaan. Silakan coba lagi nanti." }, { status: 503 });
             }
             throw error;
         }
         if (existing) {
             if (existing.userId !== user.id || existing.requestHash !== requestHash) {
-                return NextResponse.json({ message: "Idempotency key has already been used with a different request." }, { status: 409 });
+                return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
             }
             if (existing.responsePayload) return NextResponse.json(existing.responsePayload, { status: 201 });
-            return NextResponse.json({ success: false, status: "PROCESSING", message: "Checkout is already being processed." }, { status: 409 });
+            return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
         }
         const paymentStatus = paymentMethod === "COD" ? "PENDING" : "PENDING";
         const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -133,13 +133,13 @@ export async function POST(request: Request) {
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
                 console.warn("checkout_unavailable", { route: "/api/checkout/order", category: "idempotency_store_unavailable", status: 503 });
-                return NextResponse.json({ success: false, error: "Checkout temporarily unavailable. Please try again after maintenance is complete." }, { status: 503 });
+                return NextResponse.json({ success: false, error: "Checkout sedang dalam pemeliharaan. Silakan coba lagi nanti." }, { status: 503 });
             }
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
                 const concurrent = await prisma.checkoutIdempotency.findUnique({ where: { key } });
                 if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash && concurrent.responsePayload) return NextResponse.json(concurrent.responsePayload, { status: 201 });
-                if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash) return NextResponse.json({ success: false, status: "PROCESSING", message: "Checkout is already being processed." }, { status: 409 });
-                return NextResponse.json({ message: "Idempotency key has already been used with a different request." }, { status: 409 });
+                if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash) return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
+                return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
             }
             throw error;
         }

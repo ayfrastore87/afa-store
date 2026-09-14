@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 const LOGIN_TIMEOUT_MS = 15000;
 
@@ -37,7 +38,7 @@ export default function LoginForm() {
             );
 
             if (error) {
-                setToast(error.message || "Email atau Password salah");
+                setToast(getUserFacingMessage(error, "Email atau Password salah"));
                 return;
             }
 
@@ -68,7 +69,7 @@ export default function LoginForm() {
             router.refresh();
             window.location.assign("/admin");
         } catch (error) {
-            setToast(error instanceof Error ? error.message : "Login gagal. Silakan coba lagi.");
+            setToast(getUserFacingMessage(error, "Login gagal. Silakan coba lagi."));
         } finally {
             setIsLoading(false);
         }

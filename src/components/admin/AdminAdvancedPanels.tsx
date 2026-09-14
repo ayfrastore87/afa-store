@@ -8,6 +8,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieCh
 import { CheckCircle2, Download, Edit3, Eye, EyeOff, FileSpreadsheet, FileText, History, Loader2, PackageMinus, PackagePlus, Printer, Save, Search, Settings2, ShieldCheck, Star, Trash2, UploadCloud } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 type Product = { id: string; name: string; slug: string; sku?: string | null; price: number; stock: number; minimumStock?: number | null; image: string | null; category?: string | null; updatedAt?: string | null; createdAt?: string | null };
 type StockHistory = { id?: string; product_id?: string; productId?: string; product_name?: string; productName?: string; type?: string; transaction_type?: string; quantity?: number; previous_stock?: number; previousStock?: number; new_stock?: number; newStock?: number; created_at?: string; createdAt?: string; note?: string | null; admin?: string | null; admin_name?: string | null; order_id?: string | null };
@@ -99,7 +100,7 @@ export function TestimonialsPanel() {
         setLoading(true);
         const response = await fetch("/api/admin/testimonials", { cache: "no-store" });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) toast(data.message || "Gagal memuat testimoni", "error");
+        if (!response.ok) toast(safeApiMessage(data) || "Gagal memuat testimoni", "error");
         setItems((data.testimonials ?? []) as Testimonial[]);
         setLoading(false);
     }, []);
@@ -116,7 +117,7 @@ export function TestimonialsPanel() {
     async function mutate(payload: Record<string, unknown>, success: string) {
         const response = await fetch("/api/admin/testimonials", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) return toast(data.message || "Aksi gagal", "error");
+        if (!response.ok) return toast(safeApiMessage(data) || "Aksi gagal", "error");
         toast(success);
         void load();
     }
@@ -126,7 +127,7 @@ export function TestimonialsPanel() {
         if (!confirm.isConfirmed) return;
         const response = await fetch(`/api/admin/testimonials?id=${item.id}`, { method: "DELETE" });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) return toast(data.message || "Gagal menghapus", "error");
+        if (!response.ok) return toast(safeApiMessage(data) || "Gagal menghapus", "error");
         toast("Testimoni dihapus");
         void load();
     }
@@ -155,7 +156,10 @@ export function StockPanel() {
             supabase.from("products").select("*").order("createdAt", { ascending: false }),
             supabase.from("stock_history").select("*").order("created_at", { ascending: false }).limit(80),
         ]);
-        if (productRes.error) toast(productRes.error.message, "error");
+        if (productRes.error) {
+            console.error("Stok temp fail: products load", productRes.error);
+            toast(getUserFacingMessage(productRes.error, "Produk gagal dimuat. Silakan coba lagi."), "error");
+        }
         if (historyRes.error) toast("Tabel stock_history belum tersedia atau belum diberi RLS policy", "info");
         setProducts((productRes.data ?? []) as Product[]);
         setHistory((historyRes.data ?? []) as StockHistory[]);
@@ -191,7 +195,10 @@ export function StockPanel() {
         const nextStock = Math.max(0, Number(product.stock || 0) + delta);
         setProducts((items) => items.map((item) => item.id === product.id ? { ...item, stock: nextStock } : item));
         const update = await supabase.from("products").update({ stock: nextStock }).eq("id", product.id);
-        if (update.error) return toast(update.error.message, "error");
+        if (update.error) {
+            console.error("Stok temp fail: update", update.error);
+            return toast(getUserFacingMessage(update.error, "Stok gagal diperbarui."), "error");
+        }
         const { data: auth } = await supabase.auth.getUser();
         const historyPayload = { product_id: product.id, product_name: product.name, type: delta > 0 ? "IN" : "OUT", quantity: qty, previous_stock: product.stock, new_stock: nextStock, note: delta > 0 ? "Tambah stok admin" : "Kurangi stok admin", admin: auth.user?.email || "Admin AFA STORE" };
         const insert = await supabase.from("stock_history").insert(historyPayload);
@@ -213,7 +220,10 @@ export function ReportsPanel() {
             supabase.from("orders").select("*, items:order_items(*, product:products(id, name, categoryId))").order("createdAt", { ascending: false }),
             fetch("/api/categories").then((response) => response.json() as Promise<{ data?: { id: string; name: string }[] }>).catch(() => ({ data: [] }) as { data?: { id: string; name: string }[] }),
         ]);
-        if (res.error) toast(res.error.message, "error");
+        if (res.error) {
+            console.error("Laporan gagal: orders load", res.error);
+            toast(getUserFacingMessage(res.error, "Laporan gagal dimuat. Silakan coba lagi."), "error");
+        }
         setOrders((res.data ?? []) as Order[]);
         setCategories(categoryRes.data ?? []);
         setLoading(false);
@@ -246,7 +256,7 @@ export function SettingsPanel() {
     const load = useCallback(async () => { const [settingsRes, adminRes] = await Promise.all([supabase.from("settings").select("*"), supabase.from("users").select("id,name,email,role").in("role", ["Owner", "Administrator", "Operator", "Viewer", "admin"])]); const mapped = Object.fromEntries((settingsRes.data ?? []).map((s: { key: string; value: unknown }) => { const raw = typeof s.value === "object" && s.value && "value" in s.value ? (s.value as { value: unknown }).value : s.value; return [s.key, typeof raw === "boolean" ? raw : String(raw ?? "")]; })) as Record<string, SettingValue>; setValues({ ...defaultSettings, ...mapped }); setAdmins((adminRes.data ?? []) as { id: string; name?: string; email?: string; role?: string }[]); }, []);
     useEffect(() => { void load(); const channel = supabase.channel("afa-settings-panel").on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => void load()).on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => void load()).subscribe(); return () => { void supabase.removeChannel(channel); }; }, [load]);
     function setValue(key: string, value: string | boolean) { setValues((v) => ({ ...v, [key]: value })); }
-    async function save(event: FormEvent) { event.preventDefault(); const parsed = settingSchema.safeParse(values); if (!parsed.success) return toast("Pengaturan tidak valid", "error"); setSaving(true); const rows = Object.entries(values).map(([key, value]) => ({ key, value: { value } })); const res = await supabase.from("settings").upsert(rows, { onConflict: "key" }); setSaving(false); if (res.error) return toast(res.error.message, "error"); toast("Pengaturan tersimpan realtime"); }
+    async function save(event: FormEvent) { event.preventDefault(); const parsed = settingSchema.safeParse(values); if (!parsed.success) return toast("Pengaturan tidak valid", "error"); setSaving(true); const rows = Object.entries(values).map(([key, value]) => ({ key, value: { value } })); const res = await supabase.from("settings").upsert(rows, { onConflict: "key" }); setSaving(false); if (res.error) { console.error("Pengaturan gagal disimpan", res.error); return toast(getUserFacingMessage(res.error, "Pengaturan gagal disimpan. Silakan coba lagi."), "error"); } toast("Pengaturan tersimpan realtime"); }
     async function adminAction(action: string) { toast(`${action} admin siap dihubungkan ke tabel profiles/users`, "info"); }
     const sections = [{ title: "Informasi Toko", keys: ["storeName", "logo", "favicon", "address", "whatsapp", "email", "instagram", "facebook", "tiktok", "maps"] }, { title: "Pengiriman", keys: ["shippingEnabled", "couriers", "defaultWeight", "freeShipping"] }, { title: "Pembayaran", keys: ["qris", "bankTransfer", "cod", "virtualAccount", "accountNumber", "bankName"] }, { title: "Website", keys: ["websiteTitle", "metaDescription", "seoKeywords", "homeBanner", "footerLogo", "themeColor", "darkMode"] }, { title: "Keamanan", keys: ["twoFA", "session"] }];
     return <form onSubmit={save} className="space-y-5"><Card className="bg-[#0F4C45] text-white"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.3em] text-[#D4AF37]">Control Center</p><h3 className="text-3xl font-black">Pengaturan AFA STORE</h3></div><button disabled={saving} className="rounded-2xl bg-[#D4AF37] px-5 py-3 font-black text-[#0F4C45] disabled:opacity-60"><Save className="mr-2 inline" size={18} />{saving ? "Menyimpan..." : "Simpan Semua"}</button></div></Card><div className="grid gap-5 xl:grid-cols-2">{sections.map((section) => <Card key={section.title}><h4 className="mb-4 flex items-center gap-2 text-xl font-black"><Settings2 size={20} />{section.title}</h4><div className="grid gap-3">{section.keys.map((key) => typeof values[key] === "boolean" ? <label key={key} className="flex items-center justify-between rounded-2xl bg-[#f8f0dd] p-4 font-bold"><span>{key}</span><input type="checkbox" checked={Boolean(values[key])} onChange={(e) => setValue(key, e.target.checked)} /></label> : <label key={key} className="space-y-2"><span className="text-sm font-bold text-[#184D47]/70">{key}</span><input value={String(values[key] ?? "")} onChange={(e) => setValue(key, e.target.value)} className="h-12 w-full rounded-2xl border border-[#184D47]/15 px-4 outline-none focus:border-[#D4AF37]" /></label>)}</div></Card>)}</div><div className="grid gap-5 xl:grid-cols-3"><Card><h4 className="mb-4 text-xl font-black">Admin</h4><div className="mb-3 flex flex-wrap gap-2">{["Tambah", "Edit", "Hapus"].map((a) => <button type="button" key={a} onClick={() => void adminAction(a)} className="rounded-xl bg-[#0F4C45] px-3 py-2 font-bold text-white">{a} Admin</button>)}</div><select className="mb-3 h-12 w-full rounded-2xl bg-[#f8f0dd] px-4 font-bold">{["Owner", "Administrator", "Operator", "Viewer"].map((r) => <option key={r}>{r}</option>)}</select>{admins.length ? admins.map((a) => <p key={a.id} className="rounded-xl border p-3 text-sm font-bold">{a.email} - {a.role}</p>) : <p className="text-sm font-bold text-[#184D47]/60">Belum ada data admin/profiles.</p>}</Card><Card><h4 className="mb-4 flex items-center gap-2 text-xl font-black"><ShieldCheck /> Keamanan</h4>{["Ganti Password", "2FA", "Logout Semua Device", "Session"].map((a) => <button type="button" key={a} onClick={() => toast(`${a} diproses melalui auth Supabase`, "info")} className="mb-2 w-full rounded-2xl bg-[#f8f0dd] p-3 text-left font-bold">{a}</button>)}</Card><Card><h4 className="mb-4 flex items-center gap-2 text-xl font-black"><UploadCloud /> Backup</h4>{["Backup Database", "Restore Database", "Download Backup"].map((a) => <button type="button" key={a} onClick={() => toast(`${a} membutuhkan service role/server action`, "info")} className="mb-2 w-full rounded-2xl bg-[#f8f0dd] p-3 text-left font-bold">{a}</button>)}</Card></div></form>;

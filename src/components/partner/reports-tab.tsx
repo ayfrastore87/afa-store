@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Loader2, Printer, Receipt, TrendingUp, Wallet } from "lucide-react";
 
 import { formatDate, formatRupiah, type SaleRow } from "@/components/partner/partner-shared";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type Period = "hari" | "minggu" | "bulan" | "tahun" | "semua";
 
@@ -71,7 +72,7 @@ export function PartnerReportsTab({ refreshSignal }: { refreshSignal: number }) 
                 if (!cancelled) setReport(data as Report);
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Laporan gagal dimuat.");
+                if (!cancelled) setError(getUserFacingMessage(err, "Laporan gagal dimuat."));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

@@ -23,6 +23,7 @@ import {
     User,
 } from "lucide-react";
 import { fetchProducts, type Product } from "@/lib/products";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
     PAYMENT_METHODS,
     formatRupiah,
@@ -94,7 +95,7 @@ export default function KasirPOS() {
             setProducts(productList);
             setCategories(categoryRes.data ?? []);
         } catch (error) {
-            setLoadError(error instanceof Error ? error.message : "Produk belum dapat dimuat.");
+            setLoadError(getUserFacingMessage(error, "Produk belum dapat dimuat."));
         } finally {
             setLoading(false);
         }
@@ -153,7 +154,7 @@ export default function KasirPOS() {
         } catch (error) {
             await Swal.fire({
                 title: "Transaksi Gagal",
-                text: error instanceof Error ? error.message : "Terjadi kesalahan.",
+                text: getUserFacingMessage(error, "Terjadi kesalahan."),
                 icon: "error",
                 confirmButtonColor: "#184D47",
             });

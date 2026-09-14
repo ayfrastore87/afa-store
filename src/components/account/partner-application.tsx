@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Clock, Handshake, Loader2, Store, XCircle } from "lucide-react";
 
 import { partnerStatusLabels, partnerTypeLabels, PARTNER_TYPES } from "@/lib/partner";
+import { safeApiMessage } from "@/lib/user-facing-error";
 
 type Partner = {
     id: string;
@@ -90,10 +91,10 @@ export function PartnerApplication({ initialUser, initialPartner }: { initialUse
             const data = (await response.json().catch(() => null)) as { message?: string; partner?: Partner } | null;
 
             if (response.ok) {
-                setMessage(data?.message || "Pengajuan mitra berhasil dikirim.");
+                setMessage(safeApiMessage(data) || "Pengajuan mitra berhasil dikirim.");
                 if (data?.partner) setPartner(data.partner);
             } else {
-                setError(data?.message || "Pengajuan gagal. Silakan coba lagi.");
+                setError(safeApiMessage(data) || "Pengajuan gagal. Silakan coba lagi.");
                 if (data?.partner) setPartner(data.partner);
             }
         } catch {

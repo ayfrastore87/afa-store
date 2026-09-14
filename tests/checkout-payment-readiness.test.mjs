@@ -16,7 +16,8 @@ test("same key and same request returns the stored checkout response", () => {
 });
 
 test("same key with a different request safely conflicts", () => {
-  assert.match(order, /different request/);
+  assert.match(order, /existing\.userId !== user\.id \|\| existing\.requestHash !== requestHash/);
+  assert.match(order, /Permintaan checkout tidak valid/);
   assert.match(order, /status: 409/);
 });
 
@@ -27,7 +28,7 @@ test("a cross-user idempotency key safely conflicts", () => {
 
 test("PROCESSING state returns a retry-safe conflict", () => {
   assert.match(order, /status: "PROCESSING"/);
-  assert.match(order, /already being processed/);
+  assert.match(order, /Pesanan sedang diproses/);
 });
 
 test("completed retry is backed by stored response and unique order binding", () => {

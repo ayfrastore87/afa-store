@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logServerError } from "@/lib/user-facing-error";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
 
@@ -16,7 +17,10 @@ export async function GET(request: NextRequest) {
     if (rating >= 1 && rating <= 5) query = query.eq("rating", rating);
     if (search) query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,message.ilike.%${search}%`);
     const { data, error } = await query;
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+    if (error) {
+        logServerError("testimonials_list", error);
+        return NextResponse.json({ message: "Testimoni gagal dimuat. Silakan coba lagi." }, { status: 500 });
+    }
     return NextResponse.json({ testimonials: data ?? [] });
 }
 
@@ -41,6 +45,9 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
     const { error } = await supabase.from("testimonials").insert({ id: crypto.randomUUID(), name, city, whatsapp, message, rating, avatar, isActive: false, isVerified: false, createdAt: now, updatedAt: now });
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+    if (error) {
+        logServerError("testimonials_create", error);
+        return NextResponse.json({ message: "Testimoni gagal dikirim. Silakan coba lagi." }, { status: 500 });
+    }
     return NextResponse.json({ message: "Testimoni berhasil dikirim dan menunggu verifikasi admin." }, { status: 201 });
 }

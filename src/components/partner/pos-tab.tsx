@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Minus, PackageSearch, Plus, ShoppingCart, Trash2 } from "lucide-react";
 
 import { formatRupiah, type PartnerProduct } from "@/components/partner/partner-shared";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 // One idempotency key per sale attempt. Reused across automatic HTTP retries for
 // the same attempt so a timeout + retry cannot create duplicate sales (F-3).
@@ -43,7 +44,7 @@ export function PartnerPosTab({ onSold }: { onSold: () => void }) {
             if (!response.ok) throw new Error((data as { message?: string } | null)?.message || "Produk gagal dimuat.");
             setProducts((data as { products: PartnerProduct[] }).products ?? []);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Produk gagal dimuat.");
+            setError(getUserFacingMessage(err, "Produk gagal dimuat."));
         } finally {
             setLoading(false);
         }
@@ -111,14 +112,14 @@ export function PartnerPosTab({ onSold }: { onSold: () => void }) {
                 }),
             });
             const data = (await response.json().catch(() => null)) as SaleResponse | null;
-            if (!response.ok) throw new Error(data?.message || "Penjualan gagal diproses.");
+            if (!response.ok) throw new Error(safeApiMessage(data) || "Penjualan gagal diproses.");
             setMessage(`Penjualan ${data?.sale?.saleNumber} berhasil · ${formatRupiah(data?.sale?.total ?? 0)}.`);
             setCart([]);
             setNote("");
             await load();
             onSold();
         } catch (err) {
-            setMessage(err instanceof Error ? err.message : "Penjualan gagal diproses.");
+            setMessage(getUserFacingMessage(err, "Penjualan gagal diproses."));
         } finally {
             setSubmitting(false);
         }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
     ArrowLeft,
     BarChart3,
@@ -43,7 +44,7 @@ export default function LaporanPenjualan() {
             if (!response.ok || !payload) throw new Error(payload?.message || "Laporan gagal dimuat.");
             setReport(payload);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Laporan gagal dimuat.");
+            setError(getUserFacingMessage(err, "Laporan gagal dimuat."));
         } finally {
             setLoading(false);
         }

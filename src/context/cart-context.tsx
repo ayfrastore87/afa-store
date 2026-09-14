@@ -11,6 +11,7 @@ import {
 } from "react";
 import { parseJsonResponse } from "@/lib/api-fetch";
 import { calculateSubtotal, calculateTotalItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 export type { CartItem } from "@/lib/cart";
 
@@ -56,8 +57,9 @@ async function requestCart(path = "/api/cart", init?: RequestInit): Promise<Cart
         if (!response.ok) {
             let error = "Keranjang gagal disinkronkan.";
             try {
-                const body = await response.json() as { error?: unknown };
-                if (body && typeof body.error === "string" && body.error.trim()) error = body.error;
+                const body = await response.json() as unknown;
+                const safe = safeApiMessage(body);
+                if (safe) error = safe;
             } catch {
                 // keep the fallback message when the body is not JSON
             }
@@ -66,7 +68,7 @@ async function requestCart(path = "/api/cart", init?: RequestInit): Promise<Cart
 
         return { ok: true, data: await parseJsonResponse<CartResponse>(response) };
     } catch (error) {
-        return { ok: false, unauthorized: false, error: error instanceof Error ? error.message : "Keranjang gagal disinkronkan." };
+        return { ok: false, unauthorized: false, error: getUserFacingMessage(error, "Keranjang gagal disinkronkan.") };
     }
 }
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2, MapPin, Play, Radio, Square } from "lucide-react";
 
 import { ACCURACY_QUALITY_LABELS, getAccuracyQuality, getLocationLiveStatus } from "@/lib/location-status";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 type Location = {
     id: string;
@@ -65,10 +66,10 @@ export function PartnerLocationTab() {
         try {
             const response = await fetch("/api/partner/location", { headers: { Accept: "application/json" } });
             const payload = (await response.json().catch(() => null)) as { location?: Location | null; message?: string } | null;
-            if (!response.ok) throw new Error(payload?.message || "Lokasi gagal dimuat.");
+            if (!response.ok) throw new Error(safeApiMessage(payload) || "Lokasi gagal dimuat.");
             setLocation(payload?.location ?? null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Lokasi gagal dimuat.");
+            setError(getUserFacingMessage(err, "Lokasi gagal dimuat."));
         } finally {
             setLoading(false);
         }
@@ -101,14 +102,14 @@ export function PartnerLocationTab() {
                 body: JSON.stringify({ latitude, longitude, accuracy, consent: true }),
             });
             const payload = (await response.json().catch(() => null)) as { location?: Location; message?: string } | null;
-            if (!response.ok) throw new Error(payload?.message || "Lokasi gagal diperbarui.");
+            if (!response.ok) throw new Error(safeApiMessage(payload) || "Lokasi gagal diperbarui.");
             const saved = payload?.location ?? null;
             setLocation(saved);
-            setMessage(payload?.message || "Lokasi berhasil diperbarui.");
+            setMessage(safeApiMessage(payload) || "Lokasi berhasil diperbarui.");
         } catch (err) {
             // Concise id-ID message, never a stack trace. Keep sharing active so a
             // transient network hiccup recovers on the next throttle tick.
-            setError(err instanceof Error ? err.message : "Lokasi belum dapat diperbarui. Periksa koneksi internet.");
+            setError(getUserFacingMessage(err, "Lokasi belum dapat diperbarui. Periksa koneksi internet."));
             setMessage("");
         } finally {
             sendingRef.current = false;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2, Receipt } from "lucide-react";
 
 import { formatDate, formatRupiah, type SaleRow } from "@/components/partner/partner-shared";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 export function PartnerHistoryTab({ refreshSignal }: { refreshSignal: number }) {
     const [sales, setSales] = useState<SaleRow[]>([]);
@@ -22,7 +23,7 @@ export function PartnerHistoryTab({ refreshSignal }: { refreshSignal: number }) 
                 if (!cancelled) setSales((data as { sales: SaleRow[] }).sales ?? []);
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Riwayat gagal dimuat.");
+                if (!cancelled) setError(getUserFacingMessage(err, "Riwayat gagal dimuat."));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

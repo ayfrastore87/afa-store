@@ -6,6 +6,7 @@ import { ExternalLink, Loader2, LocateFixed, MapPin, Navigation } from "lucide-r
 
 import { partnerStatusLabels, partnerTypeLabels } from "@/lib/partner";
 import { ACCURACY_QUALITY_LABELS, getAccuracyQuality, getLocationLiveStatus, relativeTimeAgo } from "@/lib/location-status";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type Location = {
     id: string;
@@ -69,7 +70,7 @@ export function PartnerLocationPanel({ partnerId, partnerName, partnerCode, part
             if (!response.ok) throw new Error(payload?.message || "Lokasi mitra gagal dimuat.");
             setData(payload as Response);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Lokasi mitra gagal dimuat.");
+            setError(getUserFacingMessage(err, "Lokasi mitra gagal dimuat."));
         } finally {
             setLoading(false);
         }

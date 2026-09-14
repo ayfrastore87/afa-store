@@ -15,6 +15,7 @@ import {
     type StockRow,
 } from "@/components/partner/partner-shared";
 import { partnerStatusLabels } from "@/lib/partner";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type StocksResponse = {
     partner: { id: string; partnerCode: string; name: string; status: string };
@@ -49,7 +50,7 @@ export function PartnerStockPanel({ partnerId, partnerName, partnerCode, partner
             if (!response.ok) throw new Error(payload?.message || "Stok mitra gagal dimuat.");
             setData(payload as StocksResponse);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Stok mitra gagal dimuat.");
+            setError(getUserFacingMessage(err, "Stok mitra gagal dimuat."));
         } finally {
             setLoading(false);
         }

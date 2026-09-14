@@ -5,6 +5,7 @@ import { Loader2, PackageSearch, Receipt, TrendingDown, TrendingUp, Wallet } fro
 
 import { formatDate, formatRupiah, type DashboardSummary } from "@/components/partner/partner-shared";
 import { PartnerLiveLocationCard } from "@/components/partner/live-location-card";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type Props = {
     refreshSignal: number;
@@ -27,7 +28,7 @@ export function PartnerSummaryTab({ refreshSignal, onGoToSales }: Props) {
                 if (!cancelled) setSummary(data as DashboardSummary);
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Ringkasan gagal dimuat.");
+                if (!cancelled) setError(getUserFacingMessage(err, "Ringkasan gagal dimuat."));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

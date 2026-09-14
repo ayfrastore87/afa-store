@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
 
-import { parseJsonResponse } from "@/lib/api-fetch";
 import { supabase } from "@/lib/supabase";
+import { getUserFacingMessage, parseSafeBody, safeApiMessage } from "@/lib/user-facing-error";
 
 type Mode = "login" | "register" | "forgot" | "reset";
 
@@ -32,12 +32,7 @@ function getErrorMessage(error: unknown, fallback: string) {
     if (error instanceof DOMException && error.name === "AbortError") {
         return "Login terlalu lama. Periksa koneksi internet lalu coba lagi.";
     }
-
-    if (error instanceof Error) {
-        return error.message || fallback;
-    }
-
-    return fallback;
+    return getUserFacingMessage(error, fallback);
 }
 
 async function waitForSupabaseSession() {
@@ -74,7 +69,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             supabase.auth.exchangeCodeForSession(code).then(({ error: sessionError }) => {
                 if (sessionError) {
                     console.error("Supabase reset password code exchange error:", sessionError);
-                    setError(sessionError.message);
+                    setError(getUserFacingMessage(sessionError, "Link reset password tidak valid atau sudah kedaluwarsa."));
                     setResetReady(false);
                     return;
                 }
@@ -94,7 +89,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error: sessionError }) => {
             if (sessionError) {
                 console.error("Supabase reset password session error:", sessionError);
-                setError(sessionError.message);
+                setError(getUserFacingMessage(sessionError, "Link reset password tidak valid atau sudah kedaluwarsa."));
                 setResetReady(false);
                 return;
             }
@@ -147,8 +142,9 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             setLoading(false);
             if (resetError) {
                 console.error("Supabase forgot password error:", resetError);
-                setError(resetError.message);
-                showToast(resetError.message, "error");
+                const errorMessage = getUserFacingMessage(resetError, "Gagal mengirim email reset. Silakan coba lagi.");
+                setError(errorMessage);
+                showToast(errorMessage, "error");
                 return;
             }
 
@@ -184,8 +180,9 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             setLoading(false);
             if (updateError) {
                 console.error("Supabase reset password update error:", updateError);
-                setError(updateError.message);
-                showToast(updateError.message, "error");
+                const errorMessage = getUserFacingMessage(updateError, "Gagal memperbarui password. Silakan coba lagi.");
+                setError(errorMessage);
+                showToast(errorMessage, "error");
                 return;
             }
 
@@ -219,7 +216,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
                 console.log("Login response received", { ok: response.ok, status: response.status });
             }
 
-            data = await parseJsonResponse<AuthApiResponse>(response);
+            data = parseSafeBody(await response.text());
         } catch (error) {
             const errorMessage = getErrorMessage(error, "Server tidak merespons.");
             console.error("Auth request failed", {
@@ -250,9 +247,10 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
                 }
             }
 
+            const safeMessage = safeApiMessage(data) || "";
             const errorMessage = mode === "register"
-                ? getRegisterErrorMessage(data.message || "")
-                : getLoginErrorMessage(response.status, data.message);
+                ? getRegisterErrorMessage(safeMessage)
+                : getLoginErrorMessage(response.status, safeMessage);
             if (mode === "login") {
                 console.error("Login failed", { status: response.status, message: errorMessage });
             } else {
@@ -264,7 +262,7 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
             return;
         }
 
-        const successMessage = data.message || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
+        const successMessage = safeApiMessage(data) || (mode === "register" ? "Registrasi berhasil. Cek email verifikasi Anda." : "Login berhasil.");
         if (mode === "login") {
             const next = new URLSearchParams(window.location.search).get("next");
             const destination = next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") && next !== "/login" && !next.startsWith("/account") ? next : "/";

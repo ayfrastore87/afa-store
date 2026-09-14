@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { safeApiMessage } from "@/lib/user-facing-error";
 
 export default function CreateTestimonialPage() {
     const [rating, setRating] = useState(5);
@@ -14,8 +15,8 @@ export default function CreateTestimonialPage() {
         formData.set("rating", String(rating));
         formData.set("consent", formData.get("consent") ? "true" : "false");
         const response = await fetch("/api/testimonials", { method: "POST", body: formData });
-        const data = await response.json();
-        setMessage(data.message || "Selesai");
+        const data = await response.json().catch(() => ({}));
+        setMessage(safeApiMessage(data) || "Selesai");
         if (response.ok) event.currentTarget.reset();
     }
 

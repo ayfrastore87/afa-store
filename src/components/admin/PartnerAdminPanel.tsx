@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { partnerStatusLabels, partnerTypeLabels, PARTNER_STATUSES } from "@/lib/partner";
+import { safeApiMessage } from "@/lib/user-facing-error";
 
 type PartnerRow = {
     id: string;
@@ -181,10 +182,10 @@ export function PartnerAdminPanel() {
                     reactivate: "Mitra diaktifkan kembali.",
                     rereview: "Pengajuan dibuka kembali.",
                 };
-                setMessage(data?.message || fallback[action]);
+                setMessage(safeApiMessage(data) || fallback[action]);
                 await Promise.all([load(), loadDashboard(period)]);
             } else {
-                setMessage(data?.message || "Aksi gagal.");
+                setMessage(safeApiMessage(data) || "Aksi gagal.");
             }
         } catch {
             setMessage("Aksi gagal. Silakan coba lagi.");

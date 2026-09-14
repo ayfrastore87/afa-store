@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { whatsappUrl } from "@/lib/client-auth";
+import { safeApiMessage } from "@/lib/user-facing-error";
 import {
     MITRA_BG,
     MITRA_GOLD_BTN,
@@ -115,7 +116,7 @@ export function MitraLogin() {
             } | null;
 
             if (!response.ok) {
-                setError(data?.message || loginErrorMessage(response.status));
+                setError(safeApiMessage(data) || loginErrorMessage(response.status));
                 return;
             }
 

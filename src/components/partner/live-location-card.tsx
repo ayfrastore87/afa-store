@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2, MapPin, Play, Radio, Square } from "lucide-react";
 
 import { ACCURACY_QUALITY_LABELS, getAccuracyQuality, getLocationLiveStatus } from "@/lib/location-status";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 type Location = {
     id: string;
@@ -54,13 +55,13 @@ export function PartnerLiveLocationCard() {
                 body: JSON.stringify({ latitude, longitude, accuracy, consent: true }),
             });
             const payload = (await res.json().catch(() => null)) as { location?: Location; message?: string } | null;
-            if (!res.ok) throw new Error(payload?.message || "Gagal memperbarui lokasi.");
+            if (!res.ok) throw new Error(safeApiMessage(payload) || "Gagal memperbarui lokasi.");
             setLocation(payload?.location ?? null);
-            setNotice(payload?.message || "Lokasi berhasil diperbarui.");
+            setNotice(safeApiMessage(payload) || "Lokasi berhasil diperbarui.");
             setError("");
         } catch (err) {
             setNotice("");
-            setError(err instanceof Error ? err.message : "Lokasi belum dapat diperbarui. Periksa koneksi internet.");
+            setError(getUserFacingMessage(err, "Lokasi belum dapat diperbarui. Periksa koneksi internet."));
         } finally {
             sendingRef.current = false;
         }

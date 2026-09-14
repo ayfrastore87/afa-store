@@ -14,6 +14,7 @@ import {
     type StockMovement,
     type StockRow,
 } from "@/components/partner/partner-shared";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type Props = {
     refreshSignal: number;
@@ -61,7 +62,7 @@ export function PartnerStockTab({ refreshSignal, onChanged }: Props) {
             setMovements(stocksData?.movements ?? []);
             setProducts(productsData?.products ?? []);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Stok gagal dimuat.");
+            setError(getUserFacingMessage(err, "Stok gagal dimuat."));
         } finally {
             setLoading(false);
         }
@@ -120,7 +121,7 @@ export function PartnerStockTab({ refreshSignal, onChanged }: Props) {
             await load();
             onChanged();
         } catch (err) {
-            setMessage(err instanceof Error ? err.message : "Gagal memperbarui stok.");
+            setMessage(getUserFacingMessage(err, "Gagal memperbarui stok."));
         } finally {
             setSubmitting(false);
         }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Loader2, PackageSearch, Plus, Tags } from "lucide-react";
 
 import { partnerStatusLabels } from "@/lib/partner";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 
 type PriceProduct = {
     id: string;
@@ -83,7 +84,7 @@ export function PartnerPricePanel({ partnerId, partnerName, partnerCode, partner
             setProducts(data?.products ?? []);
             setHistory(data?.history ?? []);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Harga gagal dimuat.");
+            setError(getUserFacingMessage(err, "Harga gagal dimuat."));
         } finally {
             setLoading(false);
         }
@@ -105,11 +106,11 @@ export function PartnerPricePanel({ partnerId, partnerName, partnerCode, partner
             });
             const data = (await response.json().catch(() => null)) as { message?: string } | null;
             if (response.ok) {
-                setMessage(data?.message || "Harga modal disimpan.");
+                setMessage(safeApiMessage(data) || "Harga modal disimpan.");
                 setPrice("");
                 await load();
             } else {
-                setMessage(data?.message || "Harga gagal disimpan.");
+                setMessage(safeApiMessage(data) || "Harga gagal disimpan.");
             }
         } catch {
             setMessage("Harga gagal disimpan. Silakan coba lagi.");

@@ -7,6 +7,7 @@ import { Boxes, Clock, Loader2, MapPin, Package, Store, Tags, TrendingUp, Wallet
 import { partnerStatusLabels, partnerTypeLabels } from "@/lib/partner";
 import { movementTypeLabel, referenceLabel } from "@/components/partner/partner-shared";
 import { ACCURACY_QUALITY_LABELS, getAccuracyQuality, getLocationLiveStatus, relativeTimeAgo } from "@/lib/location-status";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type DetailUser = { id: string; name: string; email: string; phone: string | null; isActive: boolean; role: string };
 
@@ -67,7 +68,7 @@ export function PartnerAdminDetailPanel({ partnerId }: Props) {
             if (!response.ok) throw new Error(payload?.message || "Detail mitra gagal dimuat.");
             setData(payload as PartnerDetail);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Detail mitra gagal dimuat.");
+            setError(getUserFacingMessage(err, "Detail mitra gagal dimuat."));
         } finally {
             setLoading(false);
         }

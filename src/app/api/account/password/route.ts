@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/auth";
+import { logServerError } from "@/lib/user-facing-error";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,10 @@ export async function PATCH(request: Request) {
     if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) return NextResponse.json({ message: error.message }, { status: 400 });
+    if (error) {
+        logServerError("account_password_update", error);
+        return NextResponse.json({ message: "Gagal mengubah password. Silakan coba lagi." }, { status: 400 });
+    }
 
     return NextResponse.json({ message: "Password berhasil diubah." });
 }

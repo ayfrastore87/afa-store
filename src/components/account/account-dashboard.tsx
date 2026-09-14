@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { parseJsonResponse } from "@/lib/api-fetch";
+import { safeApiMessage } from "@/lib/user-facing-error";
 import { getPaymentStatusPresentation } from "@/lib/payment-status";
 import { useCart } from "@/context/cart-context";
 
@@ -270,7 +271,7 @@ function ProfileSection({ user, onSaved }: { user: User; onSaved: (name: string,
                 onSaved(name.trim(), phone.trim());
                 setOk("Profil berhasil diperbarui.");
                 setEditing(false);
-            } else setErr(data.message || "Gagal memperbarui profil.");
+            } else setErr(safeApiMessage(data) || "Gagal memperbarui profil.");
         } catch {
             setErr("Gagal memperbarui profil. Silakan coba lagi.");
         } finally {
@@ -367,7 +368,7 @@ function AddressSection() {
             if (r.ok) {
                 setOpen(false);
                 await load();
-            } else setErr(data.message || "Gagal menyimpan alamat.");
+            } else setErr(safeApiMessage(data) || "Gagal menyimpan alamat.");
         } catch {
             setErr("Gagal menyimpan alamat. Silakan coba lagi.");
         } finally {
@@ -576,7 +577,7 @@ function PasswordSection() {
                 setCurrentPassword("");
                 setPassword("");
                 setConfirmPassword("");
-            } else setErr(data.message || "Gagal mengubah password.");
+            } else setErr(safeApiMessage(data) || "Gagal mengubah password.");
         } catch {
             setErr("Gagal mengubah password. Silakan coba lagi.");
         } finally {

@@ -6,6 +6,7 @@ import { CheckCircle2, Clock, Handshake, Loader2, Store, XCircle } from "lucide-
 
 import { partnerTypeLabels, PARTNER_TYPES } from "@/lib/partner";
 import { MITRA_BG, MITRA_INPUT, MITRA_PRIMARY_BTN } from "@/components/mitra/mitra-theme";
+import { safeApiMessage } from "@/lib/user-facing-error";
 
 // AFA MITRA — standalone registration form (Fase 2). Creates a MitraAccount +
 // Partner (PENDING) via POST /api/mitra/auth/register. No customer User is
@@ -66,11 +67,11 @@ export function MitraApplication() {
             const data = (await response.json().catch(() => null)) as RegisterResponse | null;
 
             if (response.ok) {
-                setMessage(data?.message || "Akun mitra berhasil dibuat.");
+                setMessage(safeApiMessage(data) || "Akun mitra berhasil dibuat.");
                 const redirectTo = data?.redirectTo || "/mitra/pengajuan";
                 window.setTimeout(() => (window.location.href = redirectTo), 1200);
             } else {
-                setError(data?.message || "Pendaftaran gagal. Silakan coba lagi.");
+                setError(safeApiMessage(data) || "Pendaftaran gagal. Silakan coba lagi.");
             }
         } catch {
             setError("Pendaftaran gagal. Silakan coba lagi.");

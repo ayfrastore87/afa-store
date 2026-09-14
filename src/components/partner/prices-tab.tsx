@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, PackageSearch, Tags } from "lucide-react";
 
 import { formatDate, formatRupiah } from "@/components/partner/partner-shared";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type PartnerPrice = {
     productId: string;
@@ -55,7 +56,7 @@ export function PartnerPricesTab() {
                 }
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : "Harga modal gagal dimuat.");
+                if (!cancelled) setError(getUserFacingMessage(err, "Harga modal gagal dimuat."));
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);

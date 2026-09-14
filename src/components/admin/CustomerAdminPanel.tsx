@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Handshake, Loader2, Search, Store, User, Users } from "lucide-react";
+import { getUserFacingMessage } from "@/lib/user-facing-error";
 
 type CustomerPartner = {
     id: string;
@@ -85,7 +86,7 @@ export function CustomerAdminPanel() {
             if (!response.ok) throw new Error(payload?.message || "Data pelanggan gagal dimuat.");
             setData(payload as CustomerResponse);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Data pelanggan gagal dimuat.");
+            setError(getUserFacingMessage(err, "Data pelanggan gagal dimuat."));
         } finally {
             setLoading(false);
         }

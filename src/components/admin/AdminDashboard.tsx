@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
 import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton, AdminWebsiteButton, AdminWebsiteFooterButton } from "@/components/admin/AdminNav";
 import { ReportsPanel, SettingsPanel, StockPanel, TestimonialsPanel } from "@/components/admin/AdminAdvancedPanels";
@@ -243,7 +244,10 @@ function storagePathFromPublicUrl(url: string | null | undefined, bucket: string
 
 async function saveStockHistory(payload: StockHistoryPayload) {
     const { error } = await supabase.from("stock_history").insert(payload);
-    if (error) toast(`Riwayat stok gagal disimpan: ${error.message}`, "info");
+    if (error) {
+        console.error("saveStockHistory", error);
+        toast("Riwayat stok gagal disimpan.", "info");
+    }
 }
 
 export default function AdminPage() {
@@ -271,8 +275,14 @@ export default function AdminPage() {
             supabase.from("settings").select("value").eq("key", "couriers").maybeSingle(),
         ]);
 
-        if (productRes.error) toast(productRes.error.message, "error");
-        if (orderRes.error) toast(orderRes.error.message, "error");
+        if (productRes.error) {
+            console.error("loadData products", productRes.error);
+            toast(getUserFacingMessage(productRes.error, "Produk gagal dimuat. Silakan coba lagi."), "error");
+        }
+        if (orderRes.error) {
+            console.error("loadData orders", orderRes.error);
+            toast(getUserFacingMessage(orderRes.error, "Pesanan gagal dimuat. Silakan coba lagi."), "error");
+        }
         setProducts((productRes.data ?? []) as Product[]);
         setOrders((orderRes.data ?? []) as Order[]);
         setCategories(categoryRes.data ?? []);
@@ -345,7 +355,7 @@ export default function AdminPage() {
             updateForm("image", url);
             toast("Foto produk berhasil diupload");
         } catch (error) {
-            toast(error instanceof Error ? error.message : "Gambar gagal diunggah. Silakan coba lagi.", "error");
+            toast(getUserFacingMessage(error, "Gambar gagal diunggah. Silakan coba lagi."), "error");
         }
     }
 
@@ -367,9 +377,14 @@ export default function AdminPage() {
             isActive: form.isActive,
         };
         const response = await fetch(form.id ? `/api/products/${form.id}` : "/api/products", { method: form.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        const result = { error: response.ok ? null : new Error((await response.json()).error || "Produk gagal disimpan") };
+        let resultError: string | null = null;
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            console.error("saveProduct", data);
+            resultError = safeApiMessage(data) || "Produk gagal disimpan. Silakan coba lagi.";
+        }
         setSaving(false);
-        if (result.error) return toast(result.error.message, "error");
+        if (resultError) return toast(resultError, "error");
         setForm(emptyForm);
         setActiveTab("products");
         toast(form.id ? "Produk berhasil diperbarui" : "Produk berhasil ditambahkan");
@@ -408,7 +423,10 @@ export default function AdminPage() {
         const nextStock = Math.max(0, Number(product.stock || 0) + delta);
         setProducts((items) => items.map((item) => (item.id === product.id ? { ...item, stock: nextStock } : item)));
         const { error } = await supabase.from("products").update({ stock: nextStock }).eq("id", product.id);
-        if (error) toast(error.message, "error");
+        if (error) {
+            console.error("updateStock", error);
+            toast(getUserFacingMessage(error, "Stok gagal diperbarui. Silakan coba lagi."), "error");
+        }
         else await saveStockHistory({ product_id: product.id, product_name: product.name, type: delta > 0 ? "IN" : "OUT", quantity: Math.abs(delta), previous_stock: Number(product.stock || 0), new_stock: nextStock, note: delta > 0 ? "Tambah stok admin" : "Kurangi stok admin", admin: adminEmail || "Admin AFA STORE" });
     }
 
@@ -420,7 +438,10 @@ export default function AdminPage() {
         if (normalizedStatus === "selesai" || normalizedStatus === "completed") orderPatch.completedAt = new Date().toISOString();
         if (["dibatalkan", "batal", "cancelled", "canceled"].includes(normalizedStatus)) orderPatch.cancelledAt = new Date().toISOString();
         const { error } = await supabase.from("orders").update(orderPatch).eq("id", order.id);
-        if (error) return toast(error.message, "error");
+        if (error) {
+            console.error("updateOrderStatus", error);
+            return toast(getUserFacingMessage(error, "Status pesanan gagal diperbarui. Silakan coba lagi."), "error");
+        }
         toast("Status pesanan diperbarui");
     }
 
@@ -431,10 +452,10 @@ export default function AdminPage() {
             body: JSON.stringify({ courier, trackingNumber }),
         });
 
-        const data = (await response.json()) as { message?: string; order?: Partial<Order> };
+        const data = (await response.json().catch(() => ({}))) as { message?: string; order?: Partial<Order> };
 
         if (!response.ok) {
-            toast(data.message || "Pengiriman gagal disimpan.", "error");
+            toast(safeApiMessage(data) || "Pengiriman gagal disimpan.", "error");
             return false;
         }
 

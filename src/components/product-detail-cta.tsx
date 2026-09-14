@@ -7,6 +7,7 @@ import { useCart } from "@/context/cart-context";
 import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 import { useWishlist } from "@/context/wishlist-context";
 import { formatRupiah } from "@/lib/products";
+import { safeApiMessage } from "@/lib/user-facing-error";
 
 type Props = { product: { id: string; name: string; slug: string; price: number; image: string | null }; stock: number };
 
@@ -48,7 +49,7 @@ export default function ProductDetailCta({ product, stock }: Props) {
         try {
             const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: product.id, qty: quantity }) });
             const data = await response.json().catch(() => null) as { redirectTo?: string; error?: string } | null;
-            if (!response.ok) { setMessageTone("error"); setMessage(data?.error || "Produk tidak dapat dibeli saat ini."); return; }
+            if (!response.ok) { setMessageTone("error"); setMessage(safeApiMessage(data) || "Produk tidak dapat dibeli saat ini."); return; }
             router.push(data?.redirectTo || "/checkout");
         } catch {
             setMessageTone("error");

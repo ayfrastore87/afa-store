@@ -6,9 +6,9 @@ const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const route = read("../src/app/api/admin/products/image/route.ts");
 const adminClient = read("../src/lib/supabase-admin.ts");
 const uploadClient = read("../src/lib/product-image-upload-client.ts");
-const studio = read("../src/app/admin/products/new/ProductCreationStudio.tsx");
-const studioCss = read("../src/app/admin/products/new/studio.css");
-const legacy = read("../src/app/admin/page.tsx");
+const studio = read("../src/app/admin/(protected)/products/new/ProductCreationStudio.tsx");
+const studioCss = read("../src/app/admin/(protected)/products/new/studio.css");
+const legacy = read("../src/components/admin/AdminDashboard.tsx");
 const productRoute = read("../src/app/api/products/route.ts");
 
 test("product create uses Supabase admin authorization with the required 401/403 contract", () => {

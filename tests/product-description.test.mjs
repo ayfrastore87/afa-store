@@ -5,8 +5,8 @@ import fs from "node:fs";
 const schemaSource = fs.readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
 const validationSource = fs.readFileSync(new URL("../src/lib/product-validation.ts", import.meta.url), "utf8");
 const detailPageSource = fs.readFileSync(new URL("../src/app/produk/[slug]/page.tsx", import.meta.url), "utf8");
-const adminPageSource = fs.readFileSync(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
-const studioSource = fs.readFileSync(new URL("../src/app/admin/products/new/ProductCreationStudio.tsx", import.meta.url), "utf8");
+const adminPageSource = fs.readFileSync(new URL("../src/components/admin/AdminDashboard.tsx", import.meta.url), "utf8");
+const studioSource = fs.readFileSync(new URL("../src/app/admin/(protected)/products/new/ProductCreationStudio.tsx", import.meta.url), "utf8");
 
 test("Product Prisma model has an optional description field", () => {
     assert.match(schemaSource, /model Product \{[\s\S]*?description\s+String\?/);

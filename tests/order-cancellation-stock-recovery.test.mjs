@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const customerOrder = read("../src/app/api/account/orders/[id]/route.ts");
-const adminPage = read("../src/app/admin/page.tsx");
+const adminPage = read("../src/components/admin/AdminDashboard.tsx");
 const schema = read("../prisma/schema.prisma");
 const webhook = read("../src/app/api/midtrans/webhook/route.ts");
 

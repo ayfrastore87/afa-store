@@ -39,6 +39,33 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
                     <ul className="mt-8 grid gap-3 border-t border-[#C9A45B]/20 pt-6 text-sm text-[#43503f] sm:grid-cols-3"><li className="flex items-center gap-2"><Check size={18} className="shrink-0 text-[#C9A45B]" aria-hidden="true" />{available ? "Produk tersedia" : "Informasi stok aktual"}</li><li className="flex items-center gap-2"><LockKeyhole size={18} className="shrink-0 text-[#C9A45B]" aria-hidden="true" />Pembayaran aman</li><li className="flex items-center gap-2"><ShieldCheck size={18} className="shrink-0 text-[#C9A45B]" aria-hidden="true" />Checkout terlindungi</li></ul>
                 </section>
             </div>
+            <section aria-labelledby="description-title" className="mt-16 lg:mt-24">
+                <div className="luxury-card overflow-hidden rounded-[28px]">
+                    <div className="border-b border-[#C9A45B]/15 px-6 py-5 sm:px-8">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C9A45B]">Detail Produk</p>
+                        <h2 id="description-title" className="mt-2 font-display text-3xl font-bold text-[#123524] sm:text-4xl">Deskripsi Produk</h2>
+                    </div>
+                    <div className="px-6 py-6 sm:px-8 sm:py-8">
+                        {product.description ? (
+                            <p className="whitespace-pre-line text-[15px] leading-relaxed text-[#43503f] sm:text-base">{product.description}</p>
+                        ) : (
+                            <p className="text-[15px] italic text-[#8B6B3F] sm:text-base">Deskripsi produk belum tersedia.</p>
+                        )}
+                    </div>
+                </div>
+                <div className="luxury-card mt-6 overflow-hidden rounded-[28px]">
+                    <div className="border-b border-[#C9A45B]/15 px-6 py-5 sm:px-8">
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C9A45B]">Spesifikasi</p>
+                        <h3 className="mt-2 font-display text-2xl font-bold text-[#123524] sm:text-3xl">Informasi Produk</h3>
+                    </div>
+                    <dl className="grid gap-x-8 gap-y-5 px-6 py-6 sm:grid-cols-2 sm:px-8 sm:py-8 lg:grid-cols-4">
+                        <div><dt className="text-[#8B6B3F]">Kategori</dt><dd className="mt-1 font-bold text-[#123524]">{product.category?.name ?? "Tanpa Kategori"}</dd></div>
+                        {product.size && <div><dt className="text-[#8B6B3F]">Ukuran</dt><dd className="mt-1 font-bold text-[#123524]">{product.size}</dd></div>}
+                        {product.flavor && <div><dt className="text-[#8B6B3F]">Rasa</dt><dd className="mt-1 font-bold text-[#123524]">{product.flavor}</dd></div>}
+                        <div><dt className="text-[#8B6B3F]">Stok</dt><dd className={`mt-1 font-bold ${available ? "text-[#315d45]" : "text-red-700"}`}>{available ? `${product.stock} tersedia` : "Stok habis"}</dd></div>
+                    </dl>
+                </div>
+            </section>
             <section aria-labelledby="reviews-title" className="mt-16 border-t border-[#C9A45B]/20 pt-10 lg:mt-24 lg:pt-14">
                 <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
                     <div>

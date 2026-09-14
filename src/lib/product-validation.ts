@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+export const PRODUCT_DESCRIPTION_MAX_LENGTH = 1000;
+
+const optionalText = (max: number) =>
+    z
+        .string()
+        .trim()
+        .max(max)
+        .nullable()
+        .optional()
+        .transform((value) => (value && value.length > 0 ? value : null));
+
 export const productSchema = z.object({
     name: z.string().trim().min(1),
     slug: z.string().trim().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -10,6 +21,7 @@ export const productSchema = z.object({
     stock: z.number().int().min(0),
     image: z.string().trim().nullable(),
     badge: z.string().trim().nullable(),
+    description: optionalText(PRODUCT_DESCRIPTION_MAX_LENGTH),
     rating: z.number().min(0).max(5),
     isActive: z.boolean(),
 });
@@ -26,6 +38,7 @@ export function productPayload(input: unknown) {
         stock: value.stock,
         image: value.image || null,
         badge: value.badge || null,
+        description: value.description ?? null,
         rating: value.rating,
         isActive: value.isActive,
     });

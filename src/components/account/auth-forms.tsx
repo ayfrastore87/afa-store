@@ -17,6 +17,7 @@ const SESSION_READY_DELAY_MS = 50;
 
 type AuthApiResponse = {
     message?: string;
+    redirectTo?: string;
 };
 
 function getLoginErrorMessage(status: number, rawMessage?: string) {
@@ -236,6 +237,19 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
 
         setLoading(false);
         if (!response.ok) {
+            // Admin accounts are refused by the customer login route. Follow its
+            // redirect hint (a safe internal path) to the admin portal instead of
+            // surfacing a generic "access denied" error to an admin.
+            if (mode === "login" && data.redirectTo) {
+                const target = data.redirectTo;
+                if (target.startsWith("/") && !target.startsWith("//") && !target.includes("\\")) {
+                    authRequestInFlight.current = false;
+                    router.replace(target);
+                    router.refresh();
+                    return;
+                }
+            }
+
             const errorMessage = mode === "register"
                 ? getRegisterErrorMessage(data.message || "")
                 : getLoginErrorMessage(response.status, data.message);

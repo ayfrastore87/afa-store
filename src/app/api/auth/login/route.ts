@@ -56,6 +56,20 @@ export async function POST(request: Request) {
         const metadata = data.user.user_metadata || {};
         const user = await ensurePublicUser(data.user, String(metadata.name || data.user.email?.split("@")[0] || "Pelanggan"));
 
+        // Admin rows are returned as-is by ensurePublicUser (never downgraded,
+        // never duplicated). They must not enter the customer account flow.
+        if (user.role === "admin") {
+            await supabase.auth.signOut();
+            console.warn("Customer login blocked for admin user", { category: "customer_login_admin_rejected" });
+            return NextResponse.json(
+                {
+                    message: "Akun ini adalah akun admin. Silakan masuk melalui halaman admin.",
+                    redirectTo: "/admin/login",
+                },
+                { status: 403 }
+            );
+        }
+
         if (!user.isActive) {
             await supabase.auth.signOut();
             console.warn("Login blocked for inactive application user");

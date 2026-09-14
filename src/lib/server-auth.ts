@@ -40,6 +40,17 @@ export async function getCurrentUser(): Promise<ApplicationUser | null> {
     }
 }
 
+// Customer authorization is derived server-side from the ACTIVE application user
+// whose role is exactly "customer". Admin / partner / inactive rows never satisfy
+// this predicate, so they can never be mistaken for a customer account.
+export async function getCurrentCustomer(): Promise<ApplicationUser | null> {
+    const user = await getCurrentUser();
+    if (!user) return null;
+    if (user.role !== "customer") return null;
+    if (user.isActive === false) return null;
+    return user;
+}
+
 export async function getCurrentAdmin() {
     const user = await getCurrentUser();
     return user?.role === "admin" && user.isActive !== false ? user : null;

@@ -21,7 +21,7 @@ test("customer authentication uses Supabase session and auth_id mapping", () => 
 });
 
 test("me and account consumers resolve the same active application user", () => {
-    assert.match(me, /getCurrentUser.*@\/lib\/server-auth/);
+    assert.match(me, /getCurrentCustomer.*@\/lib\/server-auth/);
     assert.match(me, /status: 401/);
     assert.match(serverAuth, /user\.isActive === false/);
     assert.match(serverAuth, /SELECT id, auth_id, name, email, phone, image, role/);

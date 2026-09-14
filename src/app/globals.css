@@ -34,6 +34,45 @@ body {
   outline-offset: 3px;
 }
 
+/* ------------------------------------------------------------------ */
+/* Global interaction affordances.                                     */
+/* Tailwind v4 preflight does not set `cursor: pointer` on buttons,    */
+/* so controls otherwise render with the browser-default arrow cursor. */
+/* Scope is limited to genuinely actionable elements only — never      */
+/* static divs, plain cards, labels, text or informational panels.     */
+/* ------------------------------------------------------------------ */
+:where(
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  [data-clickable="true"]
+) {
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease,
+    filter 150ms ease;
+}
+
+:where(button:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+}
+
+/* Subtle shared tap/active feedback. Opacity-only so it never fights  */
+/* element-level scale/translate reveals from utilities or motion libs. */
+:where(
+  a[href]:active,
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  summary:active,
+  [data-clickable="true"]:active
+) {
+  opacity: 0.82;
+}
+
 body[data-theme="dark"] {
   --background: #101713;
   --foreground: #FFF8E8;

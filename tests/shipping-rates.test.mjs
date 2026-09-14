@@ -12,6 +12,7 @@ const schema = read("../prisma/schema.prisma");
 const validation = read("../src/lib/product-validation.ts");
 const orderRoute = read("../src/app/api/checkout/order/route.ts");
 const ratesRoute = read("../src/app/api/shipping/rates/route.ts");
+const areasRoute = read("../src/app/api/shipping/areas/route.ts");
 const biteshipLib = read("../src/lib/biteship.ts");
 const midtrans = read("../src/lib/midtrans.ts");
 const webhook = read("../src/app/api/midtrans/webhook/route.ts");
@@ -190,4 +191,44 @@ test("checkout UI renders rates + courier/service selection", () => {
     assert.match(checkoutPage, /api\/shipping\/rates/);
     assert.match(checkoutPage, /api\/shipping\/areas/);
     assert.match(checkoutPage, /ShippingRates/);
+});
+
+// 15. Areas endpoint must NOT require BITESHIP_ORIGIN_AREA_ID
+test("areas route never reads or requires origin area ID", () => {
+    assert.doesNotMatch(areasRoute, /BITESHIP_ORIGIN_AREA_ID/);
+    assert.doesNotMatch(areasRoute, /getBiteshipOriginAreaId/);
+});
+
+test("areas search does not require origin area ID (config only needs API key)", () => {
+    // getBiteshipConfig must NOT throw on a missing origin area ID.
+    const configFn = biteshipLib.match(/export function getBiteshipConfig\(\) \{[\s\S]*?\n\}/)?.[0] ?? "";
+    assert.ok(configFn, "getBiteshipConfig must exist");
+    assert.doesNotMatch(configFn, /!originAreaId/);
+    // origin area ID is enforced only by getBiteshipOriginAreaId().
+    assert.match(biteshipLib, /if \(!originAreaId\) throw new BiteshipUnavailableError/);
+});
+
+test("areas search defaults to type=single with countries=ID", () => {
+    assert.match(biteshipLib, /countries: "ID"/);
+    assert.match(biteshipLib, /type: type \|\| "single"/);
+    assert.match(biteshipLib, /\/v1\/maps\/areas\?/);
+});
+
+test("areas authorization header is the raw API key (no Bearer prefix)", () => {
+    assert.match(biteshipLib, /Authorization: apiKey/);
+    assert.doesNotMatch(biteshipLib, /Authorization: `?Bearer/);
+});
+
+// 16. Rates still fail-safe when origin area ID is empty
+test("rates fail-safe when origin area ID is empty", () => {
+    // getBiteshipRates uses getBiteshipOriginAreaId(), which throws when empty.
+    assert.match(biteshipLib, /const configuredOrigin = getBiteshipOriginAreaId\(\)/);
+    assert.match(ratesRoute, /BiteshipUnavailableError/);
+});
+
+// 17. Checkout must not compute shipping without origin area ID
+test("checkout order route still requires origin area ID for shipping", () => {
+    assert.match(orderRoute, /getBiteshipOriginAreaId/);
+    assert.match(orderRoute, /BiteshipUnavailableError/);
+    assert.match(orderRoute, /getBiteshipRates\(/);
 });

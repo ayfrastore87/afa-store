@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         if (input.length > 120) return NextResponse.json({ message: "Pencarian terlalu panjang." }, { status: 400 });
 
         const rawType = url.searchParams.get("type");
-        const type = rawType === "single" || rawType === "double" ? rawType : "double";
+        const type = rawType === "single" || rawType === "double" ? rawType : "single";
 
         const areas = await searchBiteshipAreas(input, type);
         return NextResponse.json({ success: true, areas });

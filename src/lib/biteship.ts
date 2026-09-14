@@ -51,12 +51,16 @@ export function getBiteshipConfig() {
     const originAreaId = process.env.BITESHIP_ORIGIN_AREA_ID?.trim();
     const baseUrl = (process.env.BITESHIP_BASE_URL?.trim() || "https://api.biteship.com").replace(/\/+$/, "");
     if (!apiKey) throw new BiteshipUnavailableError("Konfigurasi pengiriman belum lengkap. Silakan hubungi admin.");
-    if (!originAreaId) throw new BiteshipUnavailableError("Lokasi pengiriman toko belum diatur. Silakan hubungi admin.");
+    // NOTE: origin area ID is intentionally NOT required here — area search
+    // (`/api/shipping/areas`) only needs the API key. Rates/checkout enforce it
+    // separately via getBiteshipOriginAreaId().
     return { apiKey, originAreaId, baseUrl };
 }
 
 export function getBiteshipOriginAreaId() {
-    return getBiteshipConfig().originAreaId;
+    const originAreaId = getBiteshipConfig().originAreaId;
+    if (!originAreaId) throw new BiteshipUnavailableError("Lokasi pengiriman toko belum diatur. Silakan hubungi admin.");
+    return originAreaId;
 }
 
 async function biteshipFetch(path: string, init: RequestInit) {
@@ -101,7 +105,7 @@ async function biteshipFetch(path: string, init: RequestInit) {
 }
 
 export async function getBiteshipRates(request: BiteshipRateRequest): Promise<BiteshipRatesResult> {
-    const { originAreaId: configuredOrigin } = getBiteshipConfig();
+    const configuredOrigin = getBiteshipOriginAreaId();
     const items = request.items.map((item) => ({
         name: item.name || "Produk",
         weight: item.weight,
@@ -124,7 +128,7 @@ export async function getBiteshipRates(request: BiteshipRateRequest): Promise<Bi
 export async function searchBiteshipAreas(input: string, type?: "single" | "double"): Promise<BiteshipArea[]> {
     const trimmed = input.trim();
     if (!trimmed) return [];
-    const params = new URLSearchParams({ countries: "ID", input: trimmed, type: type || "double" });
+    const params = new URLSearchParams({ countries: "ID", input: trimmed, type: type || "single" });
     const data = await biteshipFetch(`/v1/maps/areas?${params.toString()}`, { method: "GET" });
     const raw = data as BiteshipAreasRawResponse;
     const areas: BiteshipArea[] = [];

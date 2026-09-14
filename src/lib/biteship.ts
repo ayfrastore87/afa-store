@@ -63,6 +63,21 @@ export function getBiteshipOriginAreaId() {
     return originAreaId;
 }
 
+/**
+ * Extracts only safe, non-secret fields from an upstream error payload for
+ * diagnostic logging. Never returns the whole body, headers, keys, or env.
+ */
+function pickBiteshipErrorFields(data: unknown): { code?: string | number; error?: string; message?: string } {
+    if (typeof data !== "object" || data === null) return {};
+    const record = data as Record<string, unknown>;
+    const out: { code?: string | number; error?: string; message?: string } = {};
+    const code = record.code;
+    if (typeof code === "string" || typeof code === "number") out.code = code;
+    if (typeof record.error === "string") out.error = record.error;
+    if (typeof record.message === "string") out.message = record.message;
+    return out;
+}
+
 async function biteshipFetch(path: string, init: RequestInit) {
     const { apiKey, baseUrl } = getBiteshipConfig();
     const controller = new AbortController();
@@ -89,7 +104,7 @@ async function biteshipFetch(path: string, init: RequestInit) {
         }
         if (!response.ok) {
             const retryable = response.status >= 500;
-            console.error("biteship_request_failed", { path, status: response.status });
+            console.error("biteship_request_failed", { path, status: response.status, ...pickBiteshipErrorFields(data) });
             if (retryable) throw new BiteshipUnavailableError();
             throw new BiteshipError("Alamat pengiriman tidak dapat diproses. Periksa kembali alamat Anda.");
         }

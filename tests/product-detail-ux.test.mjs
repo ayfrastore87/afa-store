@@ -10,7 +10,7 @@ const cartLibSource = fs.readFileSync(new URL("../src/lib/cart.ts", import.meta.
 
 test("product card image action navigates to /produk/[slug] (no more modal preview)", () => {
     assert.match(pageSource, /href=\{`\/produk\/\$\{item\.slug\}`\}/);
-    assert.match(pageSource, /Lihat detail/);
+
     assert.doesNotMatch(pageSource, /onPreview/);
     assert.doesNotMatch(pageSource, /ImagePreview/);
 });
@@ -69,4 +69,23 @@ test("detail add-to-cart prevents double submit and awaits result", () => {
     assert.match(ctaSource, /const added = await addToCart\(/);
     assert.match(ctaSource, /aria-busy=\{adding\}/);
     assert.match(ctaSource, /"Menambahkan…"/);
+});
+
+test("product card no longer renders \"Lihat gambar\" or \"Lihat detail\" overlay text over the image", () => {
+    assert.ok(!pageSource.includes("Lihat gambar"), "should not render 'Lihat gambar'");
+    assert.ok(!pageSource.includes(">Lihat detail</span>"), "should not render a visible 'Lihat detail' overlay badge");
+    assert.ok(!pageSource.includes("Lihat detail</span>"), "should not render a visible 'Lihat detail' overlay badge");
+});
+
+test("product image is a clickable Link with a meaningful accessible label", () => {
+    assert.ok(pageSource.includes("aria-label={`Lihat detail ${item.name}`}"), "image link keeps an accessible label");
+    assert.ok(pageSource.includes("aspect-square w-full cursor-pointer"), "image link is clickable");
+});
+
+test("product image link navigates to /produk/[slug]", () => {
+    assert.ok(pageSource.includes("href={`/produk/${item.slug}`}"), "image links to the product detail route");
+});
+
+test("product title also links to the detail page", () => {
+    assert.ok(pageSource.includes('<Link href={`/produk/${item.slug}`} aria-label={`Lihat detail ${item.name}`} className="inline cursor-pointer'), "title links to detail");
 });

@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { MAX_PRODUCT_WEIGHT_GRAMS, MIN_PRODUCT_WEIGHT_GRAMS } from "@/lib/shipping-weight";
 
 export const PRODUCT_DESCRIPTION_MAX_LENGTH = 1000;
+
+export const PRODUCT_DEFAULT_WEIGHT_GRAMS = 1000;
 
 const optionalText = (max: number) =>
     z
@@ -23,6 +26,7 @@ export const productSchema = z.object({
     badge: z.string().trim().nullable(),
     description: optionalText(PRODUCT_DESCRIPTION_MAX_LENGTH),
     rating: z.number().min(0).max(5),
+    weight: z.number().int().min(MIN_PRODUCT_WEIGHT_GRAMS).max(MAX_PRODUCT_WEIGHT_GRAMS),
     isActive: z.boolean(),
 });
 
@@ -40,6 +44,7 @@ export function productPayload(input: unknown) {
         badge: value.badge || null,
         description: value.description ?? null,
         rating: value.rating,
+        weight: value.weight ?? PRODUCT_DEFAULT_WEIGHT_GRAMS,
         isActive: value.isActive,
     });
 }

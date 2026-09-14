@@ -69,6 +69,7 @@ model Product {
   description           String?
   flavor                String?
   size                  String?
+  weight                Int                    @default(1000)
   price                 Int
   stock                 Int
   image                 String?
@@ -143,6 +144,11 @@ model Order {
   change              Int?
   courier             String?
   trackingNumber      String?
+  service             String?
+  serviceCode         String?
+  shippingQuoteRef    String?
+  destinationAreaId   String?
+  originAreaId        String?
   paidAt              DateTime?
   processedAt         DateTime?
   packedAt            DateTime?
@@ -189,6 +195,7 @@ model OrderItem {
   quantity  Int
   price     Int
   subtotal  Int
+  weight    Int      @default(0)
 
   @@map("order_items")
 }

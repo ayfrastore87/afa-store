@@ -10,6 +10,7 @@ export type AuthoritativeProductItem = ProductRequestItem & {
     image: string;
     slug: string;
     stock: number;
+    weight: number;
 };
 
 export class ProductAuthorityError extends Error {
@@ -31,7 +32,7 @@ export async function getActiveProductById(productId: string) {
     if (typeof productId !== "string" || !productId.trim()) return null;
     return prisma.product.findFirst({
         where: { id: productId.trim(), isActive: true },
-        select: { id: true, name: true, slug: true, price: true, stock: true, image: true },
+        select: { id: true, name: true, slug: true, price: true, stock: true, image: true, weight: true },
     });
 }
 
@@ -50,7 +51,7 @@ export async function authorizeProductItems(items: ProductRequestItem[], client:
 
     const products = await client.product.findMany({
         where: { id: { in: [...grouped.keys()] }, isActive: true },
-        select: { id: true, name: true, slug: true, price: true, stock: true, image: true },
+        select: { id: true, name: true, slug: true, price: true, stock: true, image: true, weight: true },
     });
     const productMap = new Map(products.map((product) => [product.id, product]));
 
@@ -58,7 +59,7 @@ export async function authorizeProductItems(items: ProductRequestItem[], client:
         const product = productMap.get(id);
         if (!product) throw new ProductAuthorityError(404, "Produk tidak ditemukan");
         if (qty > product.stock) throw new ProductAuthorityError(409, "Stok produk tidak mencukupi");
-        return { id, qty, name: product.name, slug: product.slug, price: product.price, stock: product.stock, image: product.image || "/products/parcel.png" };
+        return { id, qty, name: product.name, slug: product.slug, price: product.price, stock: product.stock, image: product.image || "/products/parcel.png", weight: product.weight };
     });
 }
 
@@ -72,7 +73,7 @@ export async function reconcileProductItems(items: ProductRequestItem[], client:
 
     const products = await client.product.findMany({
         where: { id: { in: [...grouped.keys()] }, isActive: true, stock: { gt: 0 } },
-        select: { id: true, name: true, slug: true, price: true, stock: true, image: true },
+        select: { id: true, name: true, slug: true, price: true, stock: true, image: true, weight: true },
     });
 
     return products.map((product) => ({
@@ -83,6 +84,7 @@ export async function reconcileProductItems(items: ProductRequestItem[], client:
         price: product.price,
         stock: product.stock,
         image: product.image || "/products/parcel.png",
+        weight: product.weight,
     }));
 }
 

@@ -1,6 +1,6 @@
 ﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems, encodeCheckoutItems } from "@/lib/checkout";
+import { CHECKOUT_COOKIE, checkoutSubtotal, decodeCheckoutItems, encodeCheckoutItems } from "@/lib/checkout";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, parseProductRequestItem, productAuthorityResponse } from "@/lib/product-authority";
 
@@ -14,7 +14,8 @@ export async function GET() {
         const snapshot = decodeCheckoutItems(store.get(CHECKOUT_COOKIE)?.value);
         const items = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })));
         const subtotal = checkoutSubtotal(items);
-        return NextResponse.json({ items, subtotal, shipping: SHIPPING_COST, total: subtotal + SHIPPING_COST });
+        // Shipping is now quoted live via POST /api/shipping/rates (never a flat fee).
+        return NextResponse.json({ items, subtotal, shipping: 0, total: subtotal });
     } catch (error) {
         const safe = productAuthorityResponse(error);
         return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });

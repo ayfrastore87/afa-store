@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { createSupabaseServiceClient } from "@/lib/supabase-admin";
-import { CHECKOUT_COOKIE, SHIPPING_COST, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
+import { CHECKOUT_COOKIE, checkoutSubtotal, decodeCheckoutItems } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
 import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
@@ -10,6 +10,9 @@ import { isPaymentMethod } from "@/lib/payments";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, ProductAuthorityError, productAuthorityResponse } from "@/lib/product-authority";
 import { checkoutRequestHash, normalizeIdempotencyKey } from "@/lib/checkout-idempotency";
+import { getBiteshipRates, getBiteshipOriginAreaId, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
+import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/shipping-weight";
+import { normalizeAreaId, denyArbitraryAreaId } from "@/lib/shipping-destination";
 
 export const runtime = "nodejs";
 
@@ -24,6 +27,13 @@ type CheckoutAddress = {
     district?: string;
     postalCode?: string;
     paymentMethod?: string;
+    // Shipping selection — server re-validates this against a live Biteship quote.
+    destinationAreaId?: string;
+    courierCode?: string;
+    courierName?: string;
+    serviceCode?: string;
+    serviceName?: string;
+    quoteRef?: string;
 };
 
 const paymentMethods = ["QRIS", "TRANSFER_BANK", "COD"] as const;
@@ -63,9 +73,19 @@ export async function POST(request: Request) {
         const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
         const normalizedMethod = isPaymentMethod(paymentMethod) ? paymentMethod : "QRIS";
         const requestHash = checkoutRequestHash(user.id, address, snapshot.map(({ id, qty }) => ({ id, qty })));
-        let existing;
+
+        // Idempotency: resolve a previous checkout BEFORE any external call (Biteship) or
+        // shipping validation. A retry with the same key must reuse the existing result and
+        // must never depend on a fresh quote (which may have changed or become unavailable).
         try {
-            existing = await prisma.checkoutIdempotency.findUnique({ where: { key } });
+            const existing = await prisma.checkoutIdempotency.findUnique({ where: { key } });
+            if (existing) {
+                if (existing.userId !== user.id || existing.requestHash !== requestHash) {
+                    return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
+                }
+                if (existing.responsePayload) return NextResponse.json(existing.responsePayload, { status: 201 });
+                return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
+            }
         } catch (error) {
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
                 console.warn("checkout_unavailable", { route: "/api/checkout/order", category: "idempotency_store_unavailable", status: 503 });
@@ -73,18 +93,57 @@ export async function POST(request: Request) {
             }
             throw error;
         }
-        if (existing) {
-            if (existing.userId !== user.id || existing.requestHash !== requestHash) {
-                return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
-            }
-            if (existing.responsePayload) return NextResponse.json(existing.responsePayload, { status: 201 });
-            return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
+
+        // SECURITY: re-derive shipping server-side. Never trust client price/weight.
+        const selection = { courierCode: String(address.courierCode ?? ""), serviceCode: String(address.serviceCode ?? "") };
+        if (!isValidRateSelection(selection)) {
+            return NextResponse.json({ message: "Pilih jasa kurir sebelum melanjutkan." }, { status: 400 });
         }
+        const destinationAreaId = normalizeAreaId(address.destinationAreaId);
+        if (!destinationAreaId || denyArbitraryAreaId(destinationAreaId)) {
+            return NextResponse.json({ message: "Tujuan pengiriman tidak valid. Silakan pilih ulang." }, { status: 400 });
+        }
+
+        // Authorize items (with authoritative weight) before hitting Biteship.
+        const authorized = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })));
+        const totalWeight = calculateTotalWeight(authorized.map((item) => ({ id: item.id, weight: item.weight, qty: item.qty })));
+        if (totalWeight < 1) {
+            return NextResponse.json({ message: "Berat produk tidak valid. Hubungi admin." }, { status: 400 });
+        }
+
+        let shipping;
+        let courierName;
+        let serviceName;
+        let quoteRef;
+        let originAreaId;
+        try {
+            const quoted = await getBiteshipRates({
+                destinationAreaId,
+                items: authorized.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price })),
+            });
+            const selected = selectRate(quoted.rates, selection);
+            if (!selected) {
+                return NextResponse.json({ message: "Ongkir pilihan sudah berubah. Silakan pilih kurir kembali." }, { status: 409 });
+            }
+            shipping = selected.price;
+            courierName = selected.courierName;
+            serviceName = selected.serviceName;
+            quoteRef = selected.quoteRef;
+            originAreaId = quoted.originAreaId || getBiteshipOriginAreaId();
+        } catch (error) {
+            if (error instanceof BiteshipUnavailableError) {
+                return NextResponse.json({ message: error.message }, { status: 503 });
+            }
+            if (error instanceof BiteshipError) {
+                return NextResponse.json({ message: error.message }, { status: 400 });
+            }
+            throw error;
+        }
+
         const paymentStatus = paymentMethod === "COD" ? "PENDING" : "PENDING";
         const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000);
         let order;
         let total = 0;
-        const shipping = SHIPPING_COST;
         try {
         order = await prisma.$transaction(async (tx) => {
             await tx.checkoutIdempotency.create({ data: { key, userId: user.id, requestHash, status: "PROCESSING" } });
@@ -118,7 +177,13 @@ export async function POST(request: Request) {
                     status: "PENDING",
                     paymentMethod,
                     paymentStatus: "PENDING",
-                    items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty })) },
+                    courier: courierName,
+                    service: serviceName,
+                    serviceCode: selection.serviceCode,
+                    shippingQuoteRef: quoteRef,
+                    destinationAreaId,
+                    originAreaId,
+                    items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty, weight: item.weight })) },
                 },
                 include: { items: true, user: true },
             });

@@ -130,6 +130,9 @@ model Order {
   phone               String
   address             String
   note                String?
+  senderName          String?
+  senderPhone         String?
+  hidePrice           Boolean              @default(false)
   subtotal            Int
   shipping            Int                  @default(0)
   voucher             String?
@@ -143,12 +146,18 @@ model Order {
   cashReceived        Int?
   change              Int?
   courier             String?
+  courierCode         String?
   trackingNumber      String?
   service             String?
   serviceCode         String?
   shippingQuoteRef    String?
   destinationAreaId   String?
   originAreaId        String?
+  biteshipOrderId     String?              @unique
+  biteshipStatus      String?
+  biteshipTrackingId  String?
+  biteshipLabelUrl    String?
+  biteshipCreatedAt   DateTime?
   paidAt              DateTime?
   processedAt         DateTime?
   packedAt            DateTime?

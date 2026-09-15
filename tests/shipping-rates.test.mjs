@@ -232,3 +232,47 @@ test("checkout order route still requires origin area ID for shipping", () => {
     assert.match(orderRoute, /BiteshipUnavailableError/);
     assert.match(orderRoute, /getBiteshipRates\(/);
 });
+
+// 18. Biteship courier listing
+// NOTE: these are SOURCE-LEVEL assertions, not behavioral runtime tests.
+// src/lib/biteship.ts is guarded by `import "server-only"` (and pulls in
+// env/Prisma-aware helpers), so it cannot be imported by this plain node:test
+// harness. We assert on the implementation shape instead.
+test("rates request never sends couriers empty string", () => {
+    assert.doesNotMatch(biteshipLib, /couriers:\s*""/);
+});
+
+test("courier codes are collected from the /v1/couriers endpoint", () => {
+    assert.match(biteshipLib, /\/v1\/couriers/);
+});
+
+test("courier_code is trimmed before use", () => {
+    assert.match(biteshipLib, /entry\.courier_code\.trim\(\)/);
+});
+
+test("courier codes are deduped via a Set", () => {
+    assert.match(biteshipLib, /new Set<string>\(\)/);
+});
+
+test("blank courier_code entries are ignored", () => {
+    assert.match(biteshipLib, /if \(code\) codes\.add\(code\)/);
+});
+
+test("listed courier codes are joined with commas for the rates payload", () => {
+    assert.match(biteshipLib, /listBiteshipCouriers\(\)\)\.join\(","\)/);
+});
+
+test("empty courier list fails safe BEFORE the rates POST", () => {
+    assert.match(biteshipLib, /if \(!couriers\) throw new BiteshipUnavailableError\(\)/);
+    const emptyThrowIdx = biteshipLib.indexOf("if (!couriers) throw new BiteshipUnavailableError");
+    const postRatesIdx = biteshipLib.indexOf('biteshipFetch("/v1/rates/couriers"');
+    assert.ok(emptyThrowIdx !== -1 && postRatesIdx !== -1, "both markers must exist");
+    assert.ok(emptyThrowIdx < postRatesIdx, "empty-couriers guard must run before POST /v1/rates/couriers");
+});
+
+test("courier cache is written only after a successful fetch", () => {
+    const fetchCouriersIdx = biteshipLib.indexOf('biteshipFetch("/v1/couriers"');
+    const cacheWriteIdx = biteshipLib.indexOf("couriersCache = { codes: result");
+    assert.ok(fetchCouriersIdx !== -1 && cacheWriteIdx !== -1, "both markers must exist");
+    assert.ok(cacheWriteIdx > fetchCouriersIdx, "cache assignment must come after the courier fetch");
+});

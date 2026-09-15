@@ -69,7 +69,7 @@ export async function POST(request: Request) {
         });
 
         if (!result.rates.length) {
-            return NextResponse.json({ message: "Kurir belum tersedia untuk alamat tujuan ini. Silakan coba alamat lain." }, { status: 404 });
+            return NextResponse.json({ message: "Belum ada layanan pengiriman untuk tujuan ini." }, { status: 404 });
         }
 
         return NextResponse.json({

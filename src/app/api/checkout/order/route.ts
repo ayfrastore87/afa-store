@@ -27,6 +27,11 @@ type CheckoutAddress = {
     district?: string;
     postalCode?: string;
     paymentMethod?: string;
+    // Dropshipper identity — label/sender info only. It must NEVER change the
+    // Biteship physical origin (which stays server-controlled at AFA STORE).
+    senderName?: string;
+    senderPhone?: string;
+    hidePrice?: boolean;
     // Shipping selection — server re-validates this against a live Biteship quote.
     destinationAreaId?: string;
     courierCode?: string;
@@ -36,7 +41,7 @@ type CheckoutAddress = {
     quoteRef?: string;
 };
 
-const paymentMethods = ["QRIS", "TRANSFER_BANK", "COD"] as const;
+const paymentMethods = ["QRIS"] as const;
 
 function requireText(value: string | undefined) {
     return typeof value === "string" && value.trim().length > 0;
@@ -64,12 +69,23 @@ export async function POST(request: Request) {
         } catch {
             return NextResponse.json({ message: "Payload checkout tidak valid." }, { status: 400 });
         }
-        if (![address.recipientName, address.phone, address.address, address.province, address.city, address.district, address.postalCode].every(requireText)) {
+        // Required identity + destination: recipient name, phone and street address.
+        // The Biteship destination is authoritative via destinationAreaId (validated further
+        // below against the live quote). province/city/district/postalCode are enrichment
+        // carried from the selected Biteship area metadata and are optional here.
+        const recipientName = requireText(address.recipientName) ? address.recipientName!.trim().slice(0, 120) : "";
+        const recipientPhone = requireText(address.phone) ? address.phone!.trim().slice(0, 40) : "";
+        const streetAddress = requireText(address.address) ? address.address!.trim().slice(0, 500) : "";
+        if (!recipientName || !recipientPhone || !streetAddress) {
             return NextResponse.json({ message: "Lengkapi alamat pengiriman." }, { status: 400 });
         }
 
-        const note = requireText(address.note) ? ` Catatan: ${address.note!.trim()}` : "";
-        const fullAddress = `${address.address}, ${address.district}, ${address.city}, ${address.province} ${address.postalCode}.${note}`;
+        const sellerNote = typeof address.note === "string" ? address.note.trim().slice(0, 200) || null : null;
+        const senderName = typeof address.senderName === "string" ? address.senderName.trim().slice(0, 120) || null : null;
+        const senderPhone = typeof address.senderPhone === "string" ? address.senderPhone.trim().slice(0, 40) || null : null;
+        const hidePrice = address.hidePrice === true;
+        const recipientLabel = recipientName;
+        const fullAddress = [streetAddress, address.district, address.city, address.province, address.postalCode].map((part) => (typeof part === "string" ? part.trim().slice(0, 200) : "")).filter(Boolean).join(", ").slice(0, 800);
         const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
         const normalizedMethod = isPaymentMethod(paymentMethod) ? paymentMethod : "QRIS";
         const requestHash = checkoutRequestHash(user.id, address, snapshot.map(({ id, qty }) => ({ id, qty })));
@@ -113,6 +129,7 @@ export async function POST(request: Request) {
 
         let shipping;
         let courierName;
+        let courierCode;
         let serviceName;
         let quoteRef;
         let originAreaId;
@@ -127,6 +144,9 @@ export async function POST(request: Request) {
             }
             shipping = selected.price;
             courierName = selected.courierName;
+            // The authoritative Biteship courier CODE comes from the server-side
+            // revalidated quote — never from the browser display name or a guess.
+            courierCode = selected.courierCode;
             serviceName = selected.serviceName;
             quoteRef = selected.quoteRef;
             originAreaId = quoted.originAreaId || getBiteshipOriginAreaId();
@@ -140,7 +160,6 @@ export async function POST(request: Request) {
             throw error;
         }
 
-        const paymentStatus = paymentMethod === "COD" ? "PENDING" : "PENDING";
         const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000);
         let order;
         let total = 0;
@@ -167,9 +186,13 @@ export async function POST(request: Request) {
                 data: {
                     userId: user.id,
                     invoice: formatOrderInvoice(now, todayCount + 1),
-                    customer: address.recipientName!.trim(),
-                    phone: address.phone!.trim(),
+                    customer: recipientLabel,
+                    phone: recipientPhone,
                     address: fullAddress,
+                    note: sellerNote,
+                    senderName,
+                    senderPhone,
+                    hidePrice,
                     subtotal,
                     shipping,
                     discount: 0,
@@ -178,6 +201,7 @@ export async function POST(request: Request) {
                     paymentMethod,
                     paymentStatus: "PENDING",
                     courier: courierName,
+                    courierCode,
                     service: serviceName,
                     serviceCode: selection.serviceCode,
                     shippingQuoteRef: quoteRef,
@@ -187,7 +211,7 @@ export async function POST(request: Request) {
                 },
                 include: { items: true, user: true },
             });
-            await tx.payment.create({ data: { orderId: created.id, method: normalizedMethod, amount: total, status: paymentStatus, expiredAt: defaultExpiredAt } });
+            await tx.payment.create({ data: { orderId: created.id, method: normalizedMethod, amount: total, status: "PENDING", expiredAt: defaultExpiredAt } });
             await tx.checkoutHistory.create({
                 data: { userId: user.id, orderId: created.id, channel: "checkout", items, subtotal, shipping, discount: 0, total, city: address.city?.trim() || null, message: `Order ${created.invoice} dibuat pada ${now.toISOString()}${address.email ? ` untuk ${address.email.trim()}` : ""}` },
             });

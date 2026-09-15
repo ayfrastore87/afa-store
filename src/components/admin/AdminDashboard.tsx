@@ -49,8 +49,14 @@ type Order = {
     total: number;
     createdAt: string;
     courier?: string | null;
+    courierCode?: string | null;
     trackingNumber?: string | null;
     shippedAt?: string | null;
+    biteshipOrderId?: string | null;
+    biteshipStatus?: string | null;
+    biteshipTrackingId?: string | null;
+    biteshipLabelUrl?: string | null;
+    biteshipCreatedAt?: string | null;
     items?: OrderItemWithProduct[];
 };
 
@@ -471,6 +477,26 @@ export default function AdminPage() {
         return true;
     }
 
+    async function createBiteshipShipping(order: Order) {
+        const response = await fetch(`/api/admin/orders/${order.id}/biteship`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+
+        const data = (await response.json().catch(() => ({}))) as { message?: string; order?: Partial<Order> };
+
+        if (!response.ok) {
+            toast(safeApiMessage(data) || "Pengiriman Biteship gagal dibuat.", "error");
+            return false;
+        }
+
+        const updatedOrder = { ...order, ...data.order };
+        setOrders((items) => items.map((item) => (item.id === order.id ? updatedOrder : item)));
+        setDetailOrder(updatedOrder);
+        toast("Pengiriman Biteship berhasil dibuat");
+        return true;
+    }
+
     async function logout() {
         await supabase.auth.signOut();
         router.push("/admin/login");
@@ -513,7 +539,7 @@ export default function AdminPage() {
             </div>
 
             <MobileBottomNav activeTab={activeTab} />
-            {detailOrder && <OrderDetailModal order={detailOrder} couriers={couriers} onClose={() => setDetailOrder(null)} onSave={saveShipping} />}
+            {detailOrder && <OrderDetailModal order={detailOrder} couriers={couriers} onClose={() => setDetailOrder(null)} onSave={saveShipping} onCreateBiteship={createBiteshipShipping} />}
         </main>
     );
 }
@@ -597,16 +623,29 @@ function AccountPanel({ adminEmail, onLogout }: { adminEmail: string; onLogout: 
 }
 
 
-function OrderDetailModal({ order, couriers, onClose, onSave }: { order: Order; couriers: string[]; onClose: () => void; onSave: (order: Order, courier: string, trackingNumber: string) => Promise<boolean> }) {
+function OrderDetailModal({ order, couriers, onClose, onSave, onCreateBiteship }: { order: Order; couriers: string[]; onClose: () => void; onSave: (order: Order, courier: string, trackingNumber: string) => Promise<boolean>; onCreateBiteship: (order: Order) => Promise<boolean> }) {
     const initialCourier = order.courier && !couriers.includes(order.courier) ? order.courier : (order.courier || couriers[0] || "JNE");
     const [courier, setCourier] = useState(initialCourier);
     const [customCourier, setCustomCourier] = useState(order.courier && !couriers.includes(order.courier) ? order.courier : "");
     const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || "");
     const [saving, setSaving] = useState(false);
+    const [creatingBiteship, setCreatingBiteship] = useState(false);
     const [error, setError] = useState("");
 
     const isShipped = String(order.status).toUpperCase() === "SHIPPED";
     const selectedCourier = courier === "Lainnya" ? customCourier : courier;
+
+    const isPaid = String(order.paymentStatus || "").toUpperCase() === "PAID";
+    const hasBiteship = Boolean(order.biteshipOrderId && !order.biteshipOrderId.startsWith("claim:"));
+    const canBiteship = isPaid && Boolean(order.courierCode) && !hasBiteship;
+
+    async function submitBiteship() {
+        setError("");
+        setCreatingBiteship(true);
+        const ok = await onCreateBiteship(order);
+        setCreatingBiteship(false);
+        if (ok) onClose();
+    }
 
     async function submit(event: FormEvent) {
         event.preventDefault();
@@ -671,8 +710,33 @@ function OrderDetailModal({ order, couriers, onClose, onSave }: { order: Order; 
                         )}
                     </section>
 
+                    <section className="rounded-2xl border border-[#184D47]/15 p-4">
+                        <p className="mb-2 text-sm font-black">PENGIRIMAN BITESHIP</p>
+                        {hasBiteship ? (
+                            <div className="space-y-2 text-sm">
+                                <Info label="ID Pesanan Biteship" value={order.biteshipOrderId || "-"} />
+                                <Info label="Status Biteship" value={order.biteshipStatus || "-"} />
+                                <Info label="Nomor Resi (AWB)" value={order.biteshipTrackingId || "-"} />
+                                {order.biteshipLabelUrl && (
+                                    <a href={order.biteshipLabelUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#0F4C45] px-4 font-black text-white">
+                                        <ExternalLink size={16} /> Buka Label
+                                    </a>
+                                )}
+                            </div>
+                        ) : isPaid && !order.courierCode ? (
+                            <p className="rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                                Kode kurir Biteship belum tersedia untuk pesanan lama ini. Gunakan pengiriman manual.
+                            </p>
+                        ) : (
+                            <button onClick={() => void submitBiteship()} disabled={!canBiteship || creatingBiteship} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0F4C45] px-5 font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60">
+                                {creatingBiteship && <Loader2 className="animate-spin" size={18} />}
+                                {creatingBiteship ? "Membuat..." : "Buat Pengiriman Biteship"}
+                            </button>
+                        )}
+                    </section>
+
                     <form onSubmit={submit} className="space-y-4 rounded-2xl border border-[#184D47]/15 p-4">
-                        <p className="text-sm font-black">PENGIRIMAN</p>
+                        <p className="text-sm font-black">PENGIRIMAN MANUAL</p>
                         <label className="block space-y-2">
                             <span className="text-sm font-bold">Kurir</span>
                             <select value={courier} onChange={(event) => setCourier(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#184D47]/15 bg-white px-4 font-bold">

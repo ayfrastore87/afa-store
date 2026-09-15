@@ -7,7 +7,7 @@ import {
     normalizeReverseResult,
     normalizeNominatimPlace,
 } from "../src/lib/geocoding-normalize.ts";
-import { buildAreaSearchQueries, pickBestAreaMatch } from "../src/lib/area-match.ts";
+import { buildAreaSearchQueries, pickBestAreaMatch, normalizeAreaName } from "../src/lib/area-match.ts";
 import { normalizeLatitude, normalizeLongitude } from "../src/lib/coordinates.ts";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
@@ -270,4 +270,93 @@ test("reverse geocode failure keeps the picker open with a retry action", () => 
 
 test("OSM attribution stays visible in the picker", () => {
     assert.match(locationMap, /OpenStreetMap contributors/);
+});
+
+// ===== Biteship destination area matching (smart checkout) =====
+
+test("area match: Bojong / Karang Tengah / Cianjur / Jawa Barat / 43125 is a strong match", () => {
+    const address = { province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" };
+    const candidates = [
+        { id: "bojong", name: "Bojong, Karangtengah, Kabupaten Cianjur, Jawa Barat 43125", type: "level_4", postalCode: "43125", province: "Jawa Barat", city: "Kabupaten Cianjur", district: "Karangtengah", village: "Bojong" },
+    ];
+    const best = pickBestAreaMatch(candidates, address);
+    assert.equal(best?.id, "bojong");
+});
+
+test("area match: administrative prefixes (Kabupaten/Kecamatan/Desa) compare as equal", () => {
+    const address = { province: "Jawa Barat", city: "Kabupaten Cianjur", district: "Kecamatan Karang Tengah", village: "Desa Bojong", postcode: "43125" };
+    const candidates = [
+        { id: "bojong", name: "Bojong, Karang Tengah, Cianjur, Jawa Barat 43125", type: "level_4", postalCode: "43125", province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong" },
+    ];
+    const best = pickBestAreaMatch(candidates, address);
+    assert.equal(best?.id, "bojong");
+    assert.equal(normalizeAreaName("Kabupaten Cianjur"), "cianjur");
+    assert.equal(normalizeAreaName("Kecamatan Karang Tengah"), "karang tengah");
+    assert.equal(normalizeAreaName("Desa Bojong"), "bojong");
+});
+
+test("area match: whitespace variation Karangtengah vs Karang Tengah matches when other components are strong", () => {
+    const address = { province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" };
+    const candidates = [
+        { id: "bojong", name: "Bojong, Karangtengah, Cianjur, Jawa Barat 43125", type: "level_4", postalCode: "43125", province: "Jawa Barat", city: "Cianjur", district: "Karangtengah", village: "Bojong" },
+    ];
+    const best = pickBestAreaMatch(candidates, address);
+    assert.equal(best?.id, "bojong");
+});
+
+test("area match: postal + city + district exact is a strong match even without village", () => {
+    const address = { province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "", postcode: "43125" };
+    const candidates = [
+        { id: "kec", name: "Karangtengah, Kabupaten Cianjur, Jawa Barat 43125", type: "level_3", postalCode: "43125", province: "Jawa Barat", city: "Kabupaten Cianjur", district: "Karangtengah" },
+    ];
+    const best = pickBestAreaMatch(candidates, address);
+    assert.equal(best?.id, "kec");
+});
+
+test("area match: same village name in a different city is rejected", () => {
+    const address = { province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" };
+    const candidates = [
+        { id: "bandung", name: "Bojong, Bojong, Kota Bandung, Jawa Barat 40111", type: "level_4", postalCode: "40111", province: "Jawa Barat", city: "Bandung", district: "Bojong", village: "Bojong" },
+    ];
+    assert.equal(pickBestAreaMatch(candidates, address), null);
+});
+
+test("area match: postal mismatch + ambiguous other data does not strong-match", () => {
+    const address = { province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" };
+    const candidates = [
+        { id: "ambiguous", name: "Bojong, Cianjur, Jawa Barat 43126", type: "level_4", postalCode: "43126", province: "Jawa Barat", city: "Cianjur", village: "Bojong" },
+    ];
+    assert.equal(pickBestAreaMatch(candidates, address), null);
+});
+
+test("area match: no strong match returns null (manual fallback path)", () => {
+    const address = { province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" };
+    const candidates = [
+        { id: "x", name: "Surabaya", type: "level_2", city: "Surabaya" },
+    ];
+    assert.equal(pickBestAreaMatch(candidates, address), null);
+});
+
+test("area match: search queries are most-specific-first and never rely on province", () => {
+    const queries = buildAreaSearchQueries({ province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" });
+    assert.equal(queries[0], "Bojong Karang Tengah Cianjur 43125");
+    assert.ok(queries.includes("Bojong Karang Tengah Cianjur"));
+    assert.ok(queries.includes("Karang Tengah Cianjur 43125"));
+    assert.ok(queries.includes("Karang Tengah Cianjur"));
+    assert.ok(queries.includes("Bojong Cianjur 43125"));
+    assert.ok(queries.includes("Bojong Cianjur"));
+    assert.ok(queries.includes("Cianjur 43125"));
+    assert.ok(queries.includes("Cianjur"));
+    // No query should contain the province (keeps Biteship search broad enough).
+    assert.ok(queries.every((q) => !q.toLowerCase().includes("jawa barat")));
+});
+
+test("area match: never falls back to areas[0] (no unsafe auto-select)", () => {
+    assert.doesNotMatch(checkoutPage, /setDestinationArea\(areas\[0\]\)/);
+    assert.match(checkoutPage, /setDestinationArea\(best\)/);
+});
+
+test("destinationAreaId still comes only from an official Biteship area result", () => {
+    assert.match(checkoutPage, /pickBestAreaMatch\(candidates, address\)/);
+    assert.match(orderRoute, /normalizeAreaId\(address\.destinationAreaId\)/);
 });

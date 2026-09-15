@@ -27,6 +27,7 @@ export type BiteshipArea = {
     province?: string;
     city?: string;
     district?: string;
+    village?: string;
 };
 
 export type BiteshipRatesResult = {
@@ -58,6 +59,7 @@ type BiteshipAreasRawResponse = {
         administrative_division_level_1_name?: string;
         administrative_division_level_2_name?: string;
         administrative_division_level_3_name?: string;
+        administrative_division_level_4_name?: string;
         [key: string]: unknown;
     }>;
     [key: string]: unknown;
@@ -259,6 +261,7 @@ export async function searchBiteshipAreas(input: string, type?: "single" | "doub
             province: str(entry.province) || str(entry.administrative_division_level_1_name) || undefined,
             city: str(entry.city) || str(entry.administrative_division_level_2_name) || undefined,
             district: str(entry.district) || str(entry.administrative_division_level_3_name) || undefined,
+            village: str(entry.administrative_division_level_4_name) || undefined,
         });
     }
     return areas.slice(0, 30);

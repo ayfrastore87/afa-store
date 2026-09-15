@@ -64,7 +64,7 @@ export function normalizeNominatimPlace(raw: unknown): LocationSearchResult | nu
         address: {
             road: str(addr.road),
             houseNumber: str(addr.house_number),
-            village: first(str(addr.village), str(addr.suburb), str(addr.neighbourhood), str(addr.hamlet)),
+            village: first(str(addr.village), str(addr.suburb)),
             suburb: first(str(addr.suburb), str(addr.borough)),
             district: first(str(addr.city_district), str(addr.borough), str(addr.district)),
             city: first(str(addr.city), str(addr.county), str(addr.town), str(addr.municipality)),

@@ -29,7 +29,7 @@ type ProfileAddress = {
     isDefault: boolean;
 };
 
-type Area = { id: string; name: string; type?: string; postalCode?: string; province?: string; city?: string; district?: string };
+type Area = { id: string; name: string; type?: string; postalCode?: string; province?: string; city?: string; district?: string; village?: string };
 
 type Rate = { courierCode: string; courierName: string; serviceCode: string; serviceName: string; price: number; duration: string | null; quoteRef: string | null };
 
@@ -239,6 +239,8 @@ export default function CheckoutPage() {
         if (!Object.values(address).some(Boolean)) { setAreaState("not_found"); return; }
         setAreaState("matching");
         const queries = buildAreaSearchQueries(address);
+        const candidates: Area[] = [];
+        const seenIds = new Set<string>();
         for (const q of queries) {
             try {
                 const r = await fetch(`/api/shipping/areas?input=${encodeURIComponent(q)}`);
@@ -246,18 +248,23 @@ export default function CheckoutPage() {
                 if (!r.ok) continue;
                 const areas: Area[] = d.areas || [];
                 if (!areas.length) continue;
-                const best = pickBestAreaMatch(areas, address);
-                if (best) {
-                    setDestinationArea(best);
-                    setAreaQuery(best.name);
-                    setAreaState("matched");
-                    return;
+                for (const area of areas) {
+                    if (area?.id && !seenIds.has(area.id)) {
+                        seenIds.add(area.id);
+                        candidates.push(area);
+                    }
                 }
-                // No strong match: do NOT fall back to areas[0]. Requiring the
-                // customer to pick the official Biteship area manually is safer
-                // than auto-selecting a possibly-wrong kelurahan/kecamatan.
             } catch {
                 // try next query
+            }
+            // A HTTP 200 response does NOT mean the area matched: keep the best
+            // STRONG candidate across every query before ever selecting one.
+            const best = pickBestAreaMatch(candidates, address);
+            if (best) {
+                setDestinationArea(best);
+                setAreaQuery(best.name);
+                setAreaState("matched");
+                return;
             }
         }
         setDestinationArea(null);

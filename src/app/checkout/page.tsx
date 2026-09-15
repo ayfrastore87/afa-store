@@ -3,12 +3,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Check, Home, Loader2, MapPin, PackageOpen, Search, Truck } from "lucide-react";
+import { Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, Truck } from "lucide-react";
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
-import { CheckoutLocationPicker } from "@/components/checkout/location-picker";
 import type { DeliveryCoordinates } from "@/lib/coordinates";
+import { CheckoutLocationMap } from "@/components/checkout/location-map";
+import { CheckoutLocationSearch } from "@/components/checkout/location-search";
+import type { LocationSearchResult } from "@/lib/geocoding-normalize";
+import { buildAreaSearchQueries, pickBestAreaMatch, type AreaAddressInput } from "@/lib/area-match";
 
 type Session = { items: CheckoutItem[]; subtotal: number };
 
@@ -26,23 +29,42 @@ type ProfileAddress = {
     isDefault: boolean;
 };
 
-type Area = { id: string; name: string; type: string; postalCode?: string; province?: string; city?: string; district?: string };
+type Area = { id: string; name: string; type?: string; postalCode?: string; province?: string; city?: string; district?: string };
 
 type Rate = { courierCode: string; courierName: string; serviceCode: string; serviceName: string; price: number; duration: string | null; quoteRef: string | null };
 
 type AddressMode = "profile" | "dropship" | "other";
 
-// Online checkout only offers QRIS. Transfer Bank and COD are intentionally
-// excluded here because their downstream flows (verification/settlement) are not
-// complete yet. Existing orders already carrying another paymentMethod are
-// unaffected — this only controls what online checkout offers and sends.
 const PAYMENT_METHOD = "QRIS" as const;
 const paymentMethods = [PAYMENT_METHOD] as const;
 const paymentLabels: Record<(typeof paymentMethods)[number], string> = { QRIS: "QRIS" };
 
 type RateState = "idle" | "loading" | "ready" | "empty" | "unavailable" | "configuration" | "error";
 
-const emptyForm = { recipientName: "", phone: "", email: "", address: "", note: "", province: "", city: "", district: "", postalCode: "", paymentMethod: "QRIS" };
+type AreaState = "idle" | "matching" | "matched" | "not_found";
+
+type ReverseState = "idle" | "loading" | "done" | "error";
+
+type GeoState = "idle" | "locating";
+
+const emptyForm = {
+    recipientName: "", phone: "", email: "", address: "", note: "",
+    province: "", city: "", district: "", village: "", postalCode: "",
+    paymentMethod: "QRIS",
+};
+
+function geoErrorMessage(err: GeolocationPositionError): string {
+    switch (err.code) {
+        case err.PERMISSION_DENIED:
+            return "Izin lokasi tidak diberikan. Anda tetap dapat memilih titik langsung di peta.";
+        case err.POSITION_UNAVAILABLE:
+            return "GPS/lokasi perangkat tidak tersedia. Pilih titik langsung di peta.";
+        case err.TIMEOUT:
+            return "Pengambilan lokasi terlalu lama. Pilih titik langsung di peta.";
+        default:
+            return "Gagal mengambil lokasi. Pilih titik langsung di peta.";
+    }
+}
 
 export default function CheckoutPage() {
     const [session, setSession] = useState<Session | null>(null);
@@ -60,35 +82,40 @@ export default function CheckoutPage() {
     const [senderPhone, setSenderPhone] = useState("");
     const [hidePrice, setHidePrice] = useState(true);
 
+    // Map-first location.
+    const [deliveryLocation, setDeliveryLocation] = useState<DeliveryCoordinates | null>(null);
+    const [reverseState, setReverseState] = useState<ReverseState>("idle");
+    const [geoState, setGeoState] = useState<GeoState>("idle");
+    const [locationMessage, setLocationMessage] = useState("");
+    const reverseRef = useRef(0);
+
+    // Biteship area auto-match + fallback search.
+    const [areaState, setAreaState] = useState<AreaState>("idle");
+    const [destinationArea, setDestinationArea] = useState<Area | null>(null);
     const [areaQuery, setAreaQuery] = useState("");
     const [areaOptions, setAreaOptions] = useState<Area[]>([]);
     const [areaSearching, setAreaSearching] = useState(false);
-    const [destinationArea, setDestinationArea] = useState<Area | null>(null);
     const areaRequestRef = useRef(0);
-    const areaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const [rates, setRates] = useState<Rate[]>([]);
     const [rateState, setRateState] = useState<RateState>("idle");
     const [rateError, setRateError] = useState("");
     const [selected, setSelected] = useState<{ courierCode: string; serviceCode: string } | null>(null);
     const rateRequestRef = useRef(0);
-
-    // Delivery-location point (metadata only — never affects ongkir).
-    const [deliveryLocation, setDeliveryLocation] = useState<DeliveryCoordinates | null>(null);
-    // Bump to re-run the rate effect from the "Coba Lagi" button.
     const [rateReload, setRateReload] = useState(0);
 
     const submittingRef = useRef(false);
     const keyRef = useRef<string | null>(null);
     const fingerprintRef = useRef("");
 
-    const resetArea = () => {
-        if (areaDebounceRef.current) clearTimeout(areaDebounceRef.current);
-        areaRequestRef.current++;
+    const setAreaField = (patch: Partial<typeof emptyForm>) => setForm((f) => ({ ...f, ...patch }));
+
+    const resetAll = () => {
+        setDestinationArea(null);
+        setAreaState("idle");
         setAreaQuery("");
         setAreaOptions([]);
         setAreaSearching(false);
-        setDestinationArea(null);
         setSelected(null);
         setRates([]);
         setRateState("idle");
@@ -126,23 +153,132 @@ export default function CheckoutPage() {
             phone: a.phone,
             province: a.province,
             city: a.city,
-            district: [a.district, a.village].filter(Boolean).join(", "),
+            district: a.district,
+            village: a.village,
             postalCode: a.postalCode,
             address: a.detail,
             note: a.note || "",
             paymentMethod: "QRIS",
         });
-        resetArea();
+        resetAll();
     };
 
     const update = (name: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [name]: value }));
 
     const switchMode = (next: AddressMode) => {
         setMode(next);
-        resetArea();
+        resetAll();
     };
 
-    // Area search: debounce + min 3 chars + stale-response protection.
+    // Reverse-geocode a coordinate and auto-fill the address + auto-match Biteship area.
+    const reverseGeocodeAndFill = async (coords: DeliveryCoordinates) => {
+        const requestId = ++reverseRef.current;
+        setReverseState("loading");
+        setLocationMessage("Mengenali alamat...");
+        try {
+            const r = await fetch(`/api/location/reverse?lat=${coords.latitude}&lng=${coords.longitude}`);
+            const d = await r.json().catch(() => ({}));
+            if (requestId !== reverseRef.current) return;
+            if (!r.ok || !d.result) {
+                setReverseState("error");
+                setLocationMessage("Gagal mengenali alamat. Anda tetap dapat mengisi manual.");
+                return;
+            }
+            const result = d.result as LocationSearchResult;
+            const a = result.address;
+            const nextForm = {
+                ...form,
+                address: [a.road, a.houseNumber].filter(Boolean).join(" ") || result.displayName,
+                province: a.province || "",
+                city: a.city || a.regency || "",
+                district: a.district || "",
+                village: a.village || "",
+                postalCode: a.postcode || "",
+            };
+            setForm(nextForm);
+            setReverseState("done");
+            setLocationMessage("");
+            void matchArea({
+                province: nextForm.province,
+                city: nextForm.city,
+                district: nextForm.district,
+                village: nextForm.village,
+                postcode: nextForm.postalCode,
+            });
+        } catch {
+            if (requestId === reverseRef.current) {
+                setReverseState("error");
+                setLocationMessage("Gagal mengenali alamat. Silakan coba lagi.");
+            }
+        }
+    };
+
+    // Auto-match reverse-geocoded address to an OFFICIAL Biteship area result.
+    const matchArea = async (address: AreaAddressInput) => {
+        if (!Object.values(address).some(Boolean)) { setAreaState("not_found"); return; }
+        setAreaState("matching");
+        const queries = buildAreaSearchQueries(address);
+        for (const q of queries) {
+            try {
+                const r = await fetch(`/api/shipping/areas?input=${encodeURIComponent(q)}`);
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) continue;
+                const areas: Area[] = d.areas || [];
+                if (!areas.length) continue;
+                const best = pickBestAreaMatch(areas, address);
+                if (best) {
+                    setDestinationArea(best);
+                    setAreaQuery(best.name);
+                    setAreaState("matched");
+                    return;
+                }
+                // No strong match: do NOT fall back to areas[0]. Requiring the
+                // customer to pick the official Biteship area manually is safer
+                // than auto-selecting a possibly-wrong kelurahan/kecamatan.
+            } catch {
+                // try next query
+            }
+        }
+        setDestinationArea(null);
+        setSelected(null);
+        setAreaState("not_found");
+    };
+
+    const handleMapSelect = (coords: DeliveryCoordinates) => {
+        setDeliveryLocation(coords);
+        void reverseGeocodeAndFill(coords);
+    };
+
+    const handleSearchSelect = (result: LocationSearchResult) => {
+        const coords = { latitude: result.latitude, longitude: result.longitude };
+        setDeliveryLocation(coords);
+        void reverseGeocodeAndFill(coords);
+    };
+
+    const useMyLocation = () => {
+        if (!("geolocation" in navigator)) {
+            setLocationMessage("Perangkat ini tidak mendukung lokasi. Pilih titik di peta.");
+            return;
+        }
+        setGeoState("locating");
+        setLocationMessage("Mencari lokasi Anda...");
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setGeoState("idle");
+                const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+                setDeliveryLocation(coords);
+                setLocationMessage("");
+                void reverseGeocodeAndFill(coords);
+            },
+            (err) => {
+                setGeoState("idle");
+                setLocationMessage(geoErrorMessage(err));
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+        );
+    };
+
+    // Fallback area search (debounced) when auto-match fails.
     useEffect(() => {
         const q = areaQuery.trim();
         setAreaOptions([]);
@@ -166,6 +302,15 @@ export default function CheckoutPage() {
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [areaQuery]);
+
+    const chooseArea = (a: Area) => {
+        setDestinationArea(a);
+        setAreaQuery(a.name);
+        setAreaOptions([]);
+        setAreaState("matched");
+        setSelected(null);
+        setAreaField({ province: a.province || "", city: a.city || "", district: a.district || a.name, postalCode: a.postalCode || "" });
+    };
 
     // Auto-fetch rates once a valid destinationAreaId is selected.
     useEffect(() => {
@@ -196,14 +341,6 @@ export default function CheckoutPage() {
             })
             .catch(() => { if (requestId === rateRequestRef.current) { setRateState("unavailable"); setRateError("Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi."); } });
     }, [destinationArea, session?.items, rateReload]);
-
-    const chooseArea = (a: Area) => {
-        setDestinationArea(a);
-        setAreaQuery(a.name);
-        setAreaOptions([]);
-        setSelected(null);
-        setForm((f) => ({ ...f, province: a.province || "", city: a.city || "", district: a.district || a.name, postalCode: a.postalCode || "" }));
-    };
 
     const selectRate = (rate: Rate) => setSelected({ courierCode: rate.courierCode, serviceCode: rate.serviceCode });
     const selectedRate = selected ? rates.find((r) => r.courierCode === selected.courierCode && r.serviceCode === selected.serviceCode) ?? null : null;
@@ -247,6 +384,11 @@ export default function CheckoutPage() {
             quoteRef: selectedRate.quoteRef,
             destinationLatitude: deliveryLocation?.latitude,
             destinationLongitude: deliveryLocation?.longitude,
+            destinationProvince: form.province,
+            destinationCity: form.city,
+            destinationDistrict: form.district,
+            destinationVillage: form.village,
+            destinationPostalCode: form.postalCode,
         };
 
         const fingerprint = JSON.stringify({ payload, items: session.items.map(({ id, qty }) => ({ id, qty })) });
@@ -271,11 +413,12 @@ export default function CheckoutPage() {
 
     return (
         <main className="min-h-screen bg-[#F8F5EE] px-4 py-8 pb-28 text-[#2E2A26] md:px-8 lg:pb-8">
-            <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-[1240px]">
                 <Link href="/cart" className="font-semibold text-[#8B6B3F]">&larr; Kembali ke Keranjang</Link>
-                <h1 className="mt-6 font-display text-4xl font-bold text-[#123524] md:text-6xl">Selesaikan Pesanan</h1>
+                <h1 className="mt-6 font-display text-3xl font-bold text-[#123524] md:text-5xl">Selesaikan Pesanan</h1>
 
-                <form onSubmit={submit} className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+                <form onSubmit={submit} className="mt-8 grid gap-6 lg:grid-cols-[1fr_380px] lg:items-start">
+                    {/* LEFT COLUMN — map-first address flow */}
                     <div className="space-y-6">
                         <Panel title="Alamat Pengiriman">
                             <div className="grid grid-cols-3 gap-2">
@@ -298,15 +441,66 @@ export default function CheckoutPage() {
                                     ))}
                                 </div>
                             )}
+                        </Panel>
 
-                            {(mode === "other" || mode === "dropship") && (
-                                <div className="mt-4 grid gap-3">
-                                    {mode === "dropship" && <p className="text-xs font-bold uppercase tracking-wide text-[#858a86]">Data Penerima</p>}
-                                    <Field label="Nama Penerima *" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder="Contoh: Siti Nurhaliza" />
-                                    <Field label="Nomor HP Penerima *" value={form.phone} onChange={(v) => update("phone", v)} placeholder="Contoh: 0812 3456 7890" />
-                                    <Field label="Alamat Lengkap *" value={form.address} onChange={(v) => update("address", v)} placeholder="Contoh: Jl. Melati No. 12 RT 03/RW 05" />
+                        <Panel title="1 · Pilih Lokasi di Peta">
+                            <p className="mb-3 text-sm text-[#6D6558]">Cari alamat atau klik langsung di peta untuk memilih lokasi.</p>
+                            <div className="mb-3 space-y-2">
+                                <CheckoutLocationSearch onSelect={handleSearchSelect} />
+                                <button type="button" onClick={useMyLocation} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
+                                    {geoState === "locating" ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
+                                    {geoState === "locating" ? "Mencari lokasi Anda..." : "Gunakan Lokasi Saya"}
+                                </button>
+                            </div>
+                            <CheckoutLocationMap value={deliveryLocation} onChange={handleMapSelect} />
+                            {reverseState === "loading" && <p className="mt-2 text-sm text-[#6D6558]"><Loader2 size={14} className="mr-1 inline animate-spin" />Mengenali alamat...</p>}
+                            {locationMessage && <p className="mt-2 text-sm text-[#8B6B3F]">{locationMessage}</p>}
+                            {reverseState === "done" && deliveryLocation && (
+                                <div className="mt-3 rounded-xl border border-[#184D47]/30 bg-[#EAF1ED] p-3 text-sm">
+                                    <p className="flex items-center gap-2 font-bold text-[#184D47]"><Check size={16} /> Lokasi berhasil dipilih</p>
+                                    <p className="mt-1 text-[#2E2A26]">{form.address}</p>
+                                    <p className="text-xs text-[#6D6558]">{[form.village, form.district, form.city, form.province, form.postalCode].filter(Boolean).join(", ")}</p>
                                 </div>
                             )}
+                        </Panel>
+
+                        <Panel title="Data Penerima">
+                            <div className="grid gap-3">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <Field label="Nama Penerima *" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder="Contoh: Siti Nurhaliza" />
+                                    <Field label="Nomor HP *" value={form.phone} onChange={(v) => update("phone", v)} placeholder="Contoh: 0812 3456 7890" />
+                                </div>
+                                <Field label="Alamat Lengkap *" value={form.address} onChange={(v) => update("address", v)} placeholder="Contoh: Jl. Melati No. 12 RT 03/RW 05" />
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <Field label="Provinsi" value={form.province} onChange={(v) => update("province", v)} placeholder="Provinsi" />
+                                    <Field label="Kota / Kabupaten" value={form.city} onChange={(v) => update("city", v)} placeholder="Kota / Kabupaten" />
+                                    <Field label="Kecamatan" value={form.district} onChange={(v) => update("district", v)} placeholder="Kecamatan" />
+                                    <Field label="Kelurahan / Desa" value={form.village} onChange={(v) => update("village", v)} placeholder="Kelurahan / Desa" />
+                                    <Field label="Kode Pos" value={form.postalCode} onChange={(v) => update("postalCode", v)} placeholder="Kode Pos" />
+                                </div>
+
+                                {areaState === "matched" && destinationArea && (
+                                    <p className="flex items-center gap-2 rounded-xl bg-[#EAF1ED] p-3 text-sm font-bold text-[#184D47]"><Check size={16} /> Area pengiriman ditemukan: {[destinationArea.name, destinationArea.district, destinationArea.city, destinationArea.province, destinationArea.postalCode].filter(Boolean).join(", ")}</p>
+                                )}
+                                {areaState === "matching" && <p className="text-sm text-[#6D6558]"><Loader2 size={14} className="mr-1 inline animate-spin" />Mencocokkan area pengiriman...</p>}
+                                {areaState === "not_found" && (
+                                    <div className="rounded-xl bg-[#FFF2D6] p-3">
+                                        <p className="text-sm font-bold text-[#123524]">Kami belum dapat mencocokkan area pengiriman secara otomatis.</p>
+                                        <p className="mt-1 text-xs text-[#6D6558]">Cari kecamatan / kelurahan tujuan di bawah ini.</p>
+                                        <div className="mt-3">
+                                            <AreaAutocomplete
+                                                query={areaQuery}
+                                                searching={areaSearching}
+                                                options={areaOptions}
+                                                destination={destinationArea}
+                                                onQueryChange={setAreaQuery}
+                                                onChoose={chooseArea}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
 
                             {mode === "dropship" && (
                                 <div className="mt-4 grid gap-3 rounded-2xl bg-[#FFF2D6] p-4">
@@ -327,27 +521,32 @@ export default function CheckoutPage() {
                                 </div>
                             )}
                         </Panel>
+                    </div>
 
-                        <Panel title="Pilih Tujuan (Kecamatan / Kelurahan)">
-                            <AreaAutocomplete
-                                query={areaQuery}
-                                searching={areaSearching}
-                                options={areaOptions}
-                                destination={destinationArea}
-                                onQueryChange={setAreaQuery}
-                                onChoose={chooseArea}
-                            />
-                        </Panel>
+                    {/* RIGHT COLUMN — order summary + shipping + payment */}
+                    <aside className="space-y-6 lg:sticky lg:top-6">
+                        <div className="luxury-card rounded-[28px] p-5 md:p-6">
+                            <h2 className="mb-4 font-display text-2xl font-bold text-[#123524]">Ringkasan Order</h2>
+                            {session.items.map((i) => (
+                                <div key={i.id} className="flex gap-3 border-b py-3">
+                                    <Image src={i.image} alt={i.name} width={56} height={56} className="rounded-xl object-contain" />
+                                    <span className="min-w-0 flex-1 break-words">{i.name}<small className="block">{i.qty} &times; {formatRupiah(i.price)}</small></span>
+                                </div>
+                            ))}
+                            <p className="mt-4 flex justify-between">Subtotal <b>{formatRupiah(session.subtotal)}</b></p>
+                            <p className="flex justify-between">Pengiriman <b>{shippingReady ? formatRupiah(shipping) : "-"}</b></p>
+                            {shippingReady && selectedRate?.duration && <p className="flex justify-between text-xs text-[#6D6558]">Estimasi <b>{selectedRate.duration} hari</b></p>}
+                            <p className="mt-3 flex justify-between border-t pt-3 text-lg font-bold">Total <b>{formatRupiah(total)}</b></p>
+                            <p className="mt-1 text-xs text-[#6D6558]">Total final divalidasi ulang oleh server saat checkout.</p>
+                        </div>
 
-                        <Panel title="Titik Lokasi (Opsional)">
-                            <CheckoutLocationPicker value={deliveryLocation} onChange={setDeliveryLocation} />
-                        </Panel>
-
-                        <Panel title="Pengiriman">
+                        <div className="luxury-card rounded-[28px] p-5 md:p-6">
+                            <h2 className="mb-3 font-display text-2xl font-bold text-[#123524]">Pilih Metode Pengiriman</h2>
                             <ShippingRates state={rateState} error={rateError} grouped={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
-                        </Panel>
+                        </div>
 
-                        <Panel title="Pembayaran">
+                        <div className="luxury-card rounded-[28px] p-5 md:p-6">
+                            <h2 className="mb-3 font-display text-2xl font-bold text-[#123524]">Metode Pembayaran</h2>
                             <fieldset>
                                 <legend className="sr-only">Metode pembayaran</legend>
                                 <div className="space-y-2">
@@ -359,28 +558,14 @@ export default function CheckoutPage() {
                                     ))}
                                 </div>
                             </fieldset>
-                        </Panel>
-                    </div>
 
-                    <aside className="luxury-card h-fit rounded-[28px] p-6 lg:sticky lg:top-6">
-                        <h2 className="font-display text-2xl font-bold text-[#123524]">Ringkasan Order</h2>
-                        {session.items.map((i) => (
-                            <div key={i.id} className="flex gap-3 border-b py-3">
-                                <Image src={i.image} alt={i.name} width={56} height={56} className="rounded-xl object-contain" />
-                                <span className="min-w-0 flex-1 break-words">{i.name}<small className="block">{i.qty} &times; {formatRupiah(i.price)}</small></span>
-                            </div>
-                        ))}
-                        <p className="mt-4 flex justify-between">Subtotal <b>{formatRupiah(session.subtotal)}</b></p>
-                        <p className="flex justify-between">Pengiriman <b>{shippingReady ? formatRupiah(shipping) : "-"}</b></p>
-                        {shippingReady && selectedRate?.duration && <p className="flex justify-between text-xs text-[#6D6558]">Estimasi <b>{selectedRate.duration} hari</b></p>}
-                        <p className="mt-3 flex justify-between border-t pt-3 text-lg font-bold">Total <b>{formatRupiah(total)}</b></p>
-                        <p className="mt-1 text-xs text-[#6D6558]">Total final divalidasi ulang oleh server saat checkout.</p>
-                        {processing && <p role="status" className="mt-3 rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Checkout sedang diproses. Silakan tunggu sebentar sebelum mencoba lagi.</p>}
-                        {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-                        <button type="submit" disabled={!canSubmit} aria-busy={paying} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#123524] font-bold text-white disabled:opacity-60">
-                            {paying && <Loader2 size={18} className="animate-spin" />}
-                            Buat Pesanan
-                        </button>
+                            {processing && <p role="status" className="mt-3 rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Checkout sedang diproses. Silakan tunggu sebentar sebelum mencoba lagi.</p>}
+                            {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+                            <button type="submit" disabled={!canSubmit} aria-busy={paying} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#123524] font-bold text-white disabled:opacity-60">
+                                {paying && <Loader2 size={18} className="animate-spin" />}
+                                Buat Pesanan &rarr;
+                            </button>
+                        </div>
                     </aside>
                 </form>
             </div>
@@ -389,7 +574,7 @@ export default function CheckoutPage() {
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-    return <section className="luxury-card rounded-[28px] p-5 md:p-7"><h2 className="mb-4 font-display text-2xl font-bold text-[#123524]">{title}</h2>{children}</section>;
+    return <section className="luxury-card rounded-[28px] p-5 md:p-6"><h2 className="mb-4 font-display text-xl font-bold text-[#123524] md:text-2xl">{title}</h2>{children}</section>;
 }
 
 function ModeButton({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
@@ -402,20 +587,19 @@ function ModeButton({ icon, label, active, onClick }: { icon: React.ReactNode; l
 }
 
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) {
-    return <label className="grid gap-1 text-sm font-semibold text-[#123524]"><span>{label}</span><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="min-h-12 rounded-xl border border-[#C9A45B]/30 bg-white px-3 font-normal" /></label>;
+    return <label className="grid gap-1 text-sm font-semibold text-[#123524]"><span>{label}</span><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="min-h-11 rounded-xl border border-[#C9A45B]/30 bg-white px-3 font-normal" /></label>;
 }
 
 function AreaAutocomplete({ query, searching, options, destination, onQueryChange, onChoose }: { query: string; searching: boolean; options: Area[]; destination: Area | null; onQueryChange: (value: string) => void; onChoose: (area: Area) => void }) {
     return (
         <div className="space-y-2">
-            <span className="text-sm font-bold text-[#123524]">Kecamatan / kelurahan tujuan</span>
             <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6D6558]" />
                 <input
                     value={query}
                     onChange={(e) => onQueryChange(e.target.value)}
                     placeholder="Cari kecamatan / kelurahan tujuan"
-                    className="min-h-12 w-full rounded-xl border border-[#C9A45B]/30 bg-white pl-9 pr-3"
+                    className="min-h-11 w-full rounded-xl border border-[#C9A45B]/30 bg-white pl-9 pr-3"
                     aria-label="Cari kecamatan atau kelurahan tujuan"
                     role="combobox"
                     aria-expanded={options.length > 0}

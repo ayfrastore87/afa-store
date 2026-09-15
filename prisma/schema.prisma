@@ -155,6 +155,11 @@ model Order {
   originAreaId        String?
   destinationLatitude  Float?
   destinationLongitude Float?
+  destinationProvince    String?
+  destinationCity        String?
+  destinationDistrict    String?
+  destinationVillage     String?
+  destinationPostalCode  String?
   biteshipOrderId     String?              @unique
   biteshipStatus      String?
   biteshipTrackingId  String?

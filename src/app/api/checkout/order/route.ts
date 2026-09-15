@@ -44,6 +44,11 @@ type CheckoutAddress = {
     // NEVER used to substitute the Biteship destinationAreaId.
     destinationLatitude?: number;
     destinationLongitude?: number;
+    destinationProvince?: string;
+    destinationCity?: string;
+    destinationDistrict?: string;
+    destinationVillage?: string;
+    destinationPostalCode?: string;
 };
 
 const paymentMethods = ["QRIS"] as const;
@@ -135,6 +140,16 @@ export async function POST(request: Request) {
         const destinationLatitude = coordinates.coordinates?.latitude ?? null;
         const destinationLongitude = coordinates.coordinates?.longitude ?? null;
 
+        // Administrative address snapshot (metadata only). Trimmed, length-capped,
+        // nullable when the provider failed to resolve a component. These values are
+        // NEVER accepted as raw provider objects and NEVER affect shipping price.
+        const cleanMeta = (value: unknown, max: number): string | null => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null);
+        const destinationProvince = cleanMeta(address.destinationProvince, 120);
+        const destinationCity = cleanMeta(address.destinationCity, 120);
+        const destinationDistrict = cleanMeta(address.destinationDistrict, 120);
+        const destinationVillage = cleanMeta(address.destinationVillage, 120);
+        const destinationPostalCode = cleanMeta(address.destinationPostalCode, 12);
+
         // Authorize items (with authoritative weight) before hitting Biteship.
         const authorized = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })));
         const totalWeight = calculateTotalWeight(authorized.map((item) => ({ id: item.id, weight: item.weight, qty: item.qty })));
@@ -224,6 +239,11 @@ export async function POST(request: Request) {
                     originAreaId,
                     destinationLatitude,
                     destinationLongitude,
+                    destinationProvince,
+                    destinationCity,
+                    destinationDistrict,
+                    destinationVillage,
+                    destinationPostalCode,
                     items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty, weight: item.weight })) },
                 },
                 include: { items: true, user: true },

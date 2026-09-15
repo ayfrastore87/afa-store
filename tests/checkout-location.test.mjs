@@ -141,7 +141,8 @@ test("BiteshipUnavailableError carries a safe code (no env/key leakage)", () => 
 });
 
 // 11. location picker uses Geolocation + no API key (progressive enhancement)
-test("checkout has location picker with geolocation + safe external map link", () => {
-    assert.match(checkoutPage, /CheckoutLocationPicker/);
-    assert.match(checkoutPage, /Titik Lokasi \(Opsional\)/);
+test("checkout has map-first location picker with geolocation + safe external map", () => {
+    assert.match(checkoutPage, /CheckoutLocationMap/);
+    assert.match(checkoutPage, /Gunakan Lokasi Saya/);
+    assert.match(checkoutPage, /Pilih Lokasi di Peta/);
 });

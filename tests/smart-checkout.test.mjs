@@ -195,8 +195,8 @@ test("search + geolocation only recenter the draft map (never final)", () => {
     assert.match(checkoutPage, /setMapZoom\(17\)/);
 });
 
-test("\"Pilih Lokasi Ini\" is the single trigger for location confirmation", () => {
-    assert.match(checkoutPage, /Pilih Lokasi Ini/);
+test("\"GUNAKAN LOKASI INI\" is the single trigger for location confirmation", () => {
+    assert.match(checkoutPage, /GUNAKAN LOKASI INI/);
     assert.match(checkoutPage, /onClick=\{confirmLocation\}/);
     assert.match(checkoutPage, /const confirmLocation = \(\) => \{[\s\S]*?resetAll\(\);[\s\S]*?setConfirmedLocation\(draftLocation\);[\s\S]*?reverseGeocodeAndFill\(draftLocation\);[\s\S]*?\};/);
 });
@@ -212,9 +212,20 @@ test("confirmed location replaces the stored coordinates", () => {
     assert.match(checkoutPage, /destinationLongitude: confirmedLocation\?\.longitude/);
 });
 
-test("changing the location resets the selected shipping", () => {
-    assert.match(checkoutPage, /const editLocation = \(\) => \{[\s\S]*?resetAll\(\);[\s\S]*?setConfirmedLocation\(null\);[\s\S]*?\};/);
-    assert.match(checkoutPage, /Ubah Titik Lokasi/);
+test("opening the picker (first time or edit) never resets shipping or clears the old location", () => {
+    assert.match(checkoutPage, /const openLocationPicker = \(\) => \{[\s\S]*?setMapOpen\(true\);/);
+    assert.doesNotMatch(checkoutPage, /const openLocationPicker = \(\) => \{[\s\S]*?resetAll\(\);/);
+    assert.doesNotMatch(checkoutPage, /const openLocationPicker = \(\) => \{[\s\S]*?setConfirmedLocation\(null\);/);
+});
+
+test("closing/canceling the picker keeps the previously confirmed location intact", () => {
+    assert.match(checkoutPage, /const closeLocationPicker = \(\) => \{[\s\S]*?setMapOpen\(false\);/);
+    assert.doesNotMatch(checkoutPage, /const closeLocationPicker = \(\) => \{[\s\S]*?setConfirmedLocation/);
+});
+
+test("a newly confirmed location resets the previous shipping", () => {
+    assert.match(checkoutPage, /const confirmLocation = \(\) => \{[\s\S]*?resetAll\(\);[\s\S]*?setConfirmedLocation\(draftLocation\);/);
+    assert.match(checkoutPage, /Ubah Lokasi/);
 });
 
 test("destinationAreaId still comes from official Biteship match (no areas[0] fallback)", () => {
@@ -226,4 +237,37 @@ test("QRIS-only + server-side quote authority remain intact", () => {
     assert.match(checkoutPage, /const PAYMENT_METHOD = "QRIS" as const/);
     assert.match(orderRoute, /selectRate\(quoted\.rates, selection\)/);
     assert.match(orderRoute, /const quoted = await getBiteshipRates/);
+});
+
+// Fullscreen location picker UX.
+test("checkout opens a fullscreen location picker instead of an inline map card", () => {
+    assert.match(checkoutPage, /\{mapOpen && \(/);
+    assert.match(checkoutPage, /CheckoutLocationMap/);
+    assert.match(checkoutPage, /fullscreen/);
+    assert.match(checkoutPage, /Buka Peta/);
+    assert.match(checkoutPage, /Tentukan Lokasi Pengiriman/);
+});
+
+test("checkout no longer permanently renders the map inside the address flow", () => {
+    // The location card is a lightweight CTA; the map only lives inside the gated picker.
+    assert.match(checkoutPage, /Pilih Lokasi Pengiriman/);
+    assert.match(checkoutPage, /Lokasi pengiriman dipilih/);
+    assert.doesNotMatch(checkoutPage, /<CheckoutLocationMap\s*\n\s*center=\{draftLocation\}/);
+});
+
+test("fullscreen picker closes only after reverse geocode succeeds", () => {
+    // Success: reverse state flips to "done" before the picker is dismissed.
+    assert.match(checkoutPage, /setReverseState\("done"\);[\s\S]*?setMapOpen\(false\)/);
+    // Failure: the error path re-enters manual area fallback and does NOT dismiss the picker.
+    assert.match(checkoutPage, /setReverseState\("error"\);[\s\S]*?setAreaState\("not_found"\);/);
+    assert.doesNotMatch(checkoutPage, /setReverseState\("error"\);\s*setMapOpen\(false\)/);
+});
+
+test("reverse geocode failure keeps the picker open with a retry action", () => {
+    assert.match(checkoutPage, /Alamat lokasi belum dapat dikenali\. Geser titik sedikit lalu coba kembali\./);
+    assert.match(checkoutPage, /Coba Lagi/);
+});
+
+test("OSM attribution stays visible in the picker", () => {
+    assert.match(locationMap, /OpenStreetMap contributors/);
 });

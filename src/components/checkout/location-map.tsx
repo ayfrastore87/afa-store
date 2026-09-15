@@ -40,6 +40,7 @@ type Props = {
     onZoomChange: (zoom: number) => void;
     onInteractionStart: () => void;
     onInteractionEnd: () => void;
+    fullscreen?: boolean;
 };
 
 /**
@@ -50,7 +51,7 @@ type Props = {
  * the tiles with a shadow so it stays visible on every map color. OSM attribution
  * is always shown.
  */
-export function CheckoutLocationMap({ center, zoom, onCenterChange, onZoomChange, onInteractionStart, onInteractionEnd }: Props) {
+export function CheckoutLocationMap({ center, zoom, onCenterChange, onZoomChange, onInteractionStart, onInteractionEnd, fullscreen = false }: Props) {
     const [pan, setPan] = useState<PanState>({ dx: 0, dy: 0 });
     const [dragging, setDragging] = useState(false);
     const dragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
@@ -127,7 +128,7 @@ export function CheckoutLocationMap({ center, zoom, onCenterChange, onZoomChange
         <div
             role="application"
             aria-label="Peta pilihan lokasi"
-            className="relative h-[300px] w-full touch-none select-none overflow-hidden rounded-2xl border border-[#C9A45B]/30 bg-[#e7e4da] sm:h-[360px]"
+            className={fullscreen ? "relative h-full w-full touch-none select-none overflow-hidden bg-[#e7e4da]" : "relative h-[300px] w-full touch-none select-none overflow-hidden rounded-2xl border border-[#C9A45B]/30 bg-[#e7e4da] sm:h-[360px]"}
             style={{ cursor: dragging ? "grabbing" : "grab" }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}

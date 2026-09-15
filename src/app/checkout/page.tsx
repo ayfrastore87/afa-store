@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, Truck } from "lucide-react";
+import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, Truck, X } from "lucide-react";
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
@@ -87,7 +87,7 @@ export default function CheckoutPage() {
 
     // Map-first location. `draftLocation` tracks the live map center (the pin) and is
     // updated freely while panning/searching/geolocating. `confirmedLocation` is only
-    // set when the customer presses "Pilih Lokasi Ini", which is the single trigger for
+    // set when the customer presses "GUNAKAN LOKASI INI", which is the single trigger for
     // reverse geocoding + Biteship area matching + shipping rates.
     const [draftLocation, setDraftLocation] = useState<DeliveryCoordinates>(DEFAULT_MAP_CENTER);
     const [confirmedLocation, setConfirmedLocation] = useState<DeliveryCoordinates | null>(null);
@@ -99,6 +99,7 @@ export default function CheckoutPage() {
     const [geoState, setGeoState] = useState<GeoState>("idle");
     const [locationMessage, setLocationMessage] = useState("");
     const reverseRef = useRef(0);
+    const [mapOpen, setMapOpen] = useState(false);
 
     // Biteship area auto-match + fallback search.
     const [areaState, setAreaState] = useState<AreaState>("idle");
@@ -188,7 +189,7 @@ export default function CheckoutPage() {
     };
 
     // Reverse-geocode a CONFIRMED coordinate and auto-fill the address + auto-match the
-    // Biteship area. Only called from `confirmLocation` (after "Pilih Lokasi Ini"), never
+    // Biteship area. Only called from `confirmLocation` (after "GUNAKAN LOKASI INI"), never
     // while the map is being panned.
     const reverseGeocodeAndFill = async (coords: DeliveryCoordinates) => {
         const requestId = ++reverseRef.current;
@@ -223,6 +224,8 @@ export default function CheckoutPage() {
                 village: nextForm.village,
                 postcode: nextForm.postalCode,
             });
+            // Close the fullscreen picker only now that the address was recognized.
+            setMapOpen(false);
         } catch {
             if (requestId === reverseRef.current) {
                 setReverseState("error");
@@ -319,10 +322,19 @@ export default function CheckoutPage() {
         void reverseGeocodeAndFill(draftLocation);
     };
 
-    const editLocation = () => {
-        resetAll();
-        setConfirmedLocation(null);
-        setReverseState("idle");
+    // Opening the picker (first time or "Ubah Lokasi") never resets shipping and never
+    // clears the previously confirmed location. The old address/ongkir are only replaced
+    // once a NEW location is successfully confirmed via `confirmLocation`.
+    const openLocationPicker = () => {
+        if (confirmedLocation) setDraftLocation(confirmedLocation);
+        setInteracting(false);
+        setSettled(true);
+        setMapOpen(true);
+    };
+
+    const closeLocationPicker = () => {
+        setMapOpen(false);
+        setInteracting(false);
         setSettled(true);
     };
 
@@ -492,54 +504,29 @@ export default function CheckoutPage() {
                         </Panel>
 
                         <Panel title="1 · Pilih Lokasi di Peta">
-                            <p className="mb-3 text-sm text-[#6D6558]">Cari alamat atau gunakan lokasi Anda, lalu geser peta sampai pin tepat di titik tujuan.</p>
-                            <div className="mb-3 space-y-2">
-                                <CheckoutLocationSearch onSelect={handleSearchSelect} />
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <button type="button" onClick={useMyLocation} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
-                                        {geoState === "locating" ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
-                                        {geoState === "locating" ? "Mencari lokasi Anda..." : "Gunakan Lokasi Saya"}
+                            {confirmedLocation === null ? (
+                                <div className="rounded-2xl border border-[#C9A45B]/30 bg-white p-5 text-center">
+                                    <MapPin size={28} className="mx-auto text-[#184D47]" />
+                                    <h3 className="mt-2 font-display text-lg font-bold text-[#123524]">Pilih Lokasi Pengiriman</h3>
+                                    <p className="mt-1 text-sm text-[#6D6558]">Tentukan titik rumah atau lokasi tujuan melalui peta.</p>
+                                    <button type="button" onClick={openLocationPicker} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#184D47] px-5 text-sm font-bold text-white hover:bg-[#123524] sm:w-auto sm:px-8">
+                                        <MapPin size={16} /> Buka Peta
                                     </button>
-                                    {locationMessage && <span className="text-xs text-[#8B6B3F]">{locationMessage}</span>}
                                 </div>
-                            </div>
-                            <CheckoutLocationMap
-                                center={draftLocation}
-                                zoom={mapZoom}
-                                onCenterChange={handleCenterChange}
-                                onZoomChange={setMapZoom}
-                                onInteractionStart={handleInteractionStart}
-                                onInteractionEnd={handleInteractionEnd}
-                            />
-
-                            {/* Confirmation card below the map */}
-                            <div className="mt-3 rounded-2xl border border-[#C9A45B]/30 bg-white p-4">
-                                {confirmedLocation === null ? (
-                                    <>
-                                        <p className="flex items-center gap-2 text-sm font-bold text-[#123524]"><MapPin size={16} className="text-[#184D47]" /> Tentukan titik pengiriman</p>
-                                        <p className="mt-1 text-sm text-[#6D6558]">Geser peta sampai pin tepat di rumah/lokasi tujuan.</p>
-                                        <p className={`mt-2 text-sm font-semibold ${settled ? "text-[#184D47]" : "text-[#8B6B3F]"}`}>
-                                            {interacting ? "Menggeser peta..." : settled ? "Lokasi siap dipilih" : "Menentukan titik..."}
-                                        </p>
-                                        <button type="button" onClick={confirmLocation} className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#184D47] px-5 text-sm font-bold text-white hover:bg-[#123524]">
-                                            <Check size={16} /> Pilih Lokasi Ini
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p className="flex items-center gap-2 text-sm font-bold text-[#184D47]"><Check size={16} /> Lokasi pengiriman dipilih</p>
-                                        {reverseState === "loading" && <p className="mt-2 flex items-center gap-2 text-sm text-[#6D6558]"><Loader2 size={14} className="animate-spin" />Mengenali alamat...</p>}
-                                        {areaState === "matching" && <p className="mt-2 flex items-center gap-2 text-sm text-[#6D6558]"><Loader2 size={14} className="animate-spin" />Mencocokkan area pengiriman...</p>}
-                                        {reverseState === "done" && <p className="mt-2 text-sm font-semibold text-[#184D47]">✓ Lokasi pengiriman berhasil dipilih</p>}
-                                        {reverseState === "error" && <p className="mt-2 text-sm font-semibold text-red-700">Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.</p>}
-                                        <p className="mt-1 break-words text-[#2E2A26]">{form.address || "Alamat belum terisi"}</p>
-                                        <p className="text-xs text-[#6D6558]">{[form.village, form.district, form.city, form.province, form.postalCode].filter(Boolean).join(", ")}</p>
-                                        <button type="button" onClick={editLocation} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
-                                            <MapPin size={14} /> Ubah Titik Lokasi
-                                        </button>
-                                    </>
-                                )}
-                            </div>
+                            ) : (
+                                <div className="rounded-2xl border border-[#184D47]/30 bg-[#EAF1ED] p-5">
+                                    <p className="flex items-center gap-2 text-sm font-bold text-[#184D47]"><Check size={16} /> Lokasi pengiriman dipilih</p>
+                                    <p className="mt-2 break-words text-[#2E2A26]">{form.address || "Alamat belum terisi"}</p>
+                                    {[form.village, form.district].filter(Boolean).length > 0 && (
+                                        <p className="text-sm text-[#2E2A26]">{[form.village, form.district].filter(Boolean).join(", ")}</p>
+                                    )}
+                                    <p className="text-sm text-[#6D6558]">{[form.city, form.province, form.postalCode].filter(Boolean).join(", ")}</p>
+                                    {reverseState === "error" && <p className="mt-2 text-sm font-semibold text-red-700">Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.</p>}
+                                    <button type="button" onClick={openLocationPicker} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-white">
+                                        <MapPin size={14} /> Ubah Lokasi
+                                    </button>
+                                </div>
+                            )}
                         </Panel>
 
                         <Panel title="Data Penerima">
@@ -647,6 +634,71 @@ export default function CheckoutPage() {
                     </aside>
                 </form>
             </div>
+
+            {mapOpen && (
+                <div className="fixed inset-0 z-[100] flex h-[100dvh] w-full flex-col overflow-hidden bg-[#F8F5EE]" role="dialog" aria-modal="true" aria-label="Tentukan Lokasi Pengiriman">
+                    {/* Header */}
+                    <header className="flex items-center gap-2 border-b border-[#C9A45B]/30 bg-white px-3 py-3">
+                        <button type="button" onClick={closeLocationPicker} aria-label="Tutup peta" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#123524] hover:bg-[#F0E7D8]">
+                            <ArrowLeft size={20} />
+                        </button>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="truncate font-display text-base font-bold text-[#123524] sm:text-lg">Tentukan Lokasi Pengiriman</h2>
+                            <p className="truncate text-xs text-[#6D6558]">Geser peta sampai pin tepat di rumah/lokasi tujuan.</p>
+                        </div>
+                        <button type="button" onClick={useMyLocation} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#184D47] px-3 text-xs font-bold text-[#184D47] hover:bg-[#EAF1ED]">
+                            {geoState === "locating" ? <Loader2 size={14} className="animate-spin" /> : <LocateFixed size={14} />}
+                            <span className="hidden sm:inline">Gunakan Lokasi Saya</span>
+                            <span className="sm:hidden">GPS</span>
+                        </button>
+                        <button type="button" onClick={closeLocationPicker} aria-label="Tutup" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#123524] hover:bg-[#F0E7D8]">
+                            <X size={20} />
+                        </button>
+                    </header>
+
+                    {/* Search */}
+                    <div className="relative z-30 border-b border-[#C9A45B]/30 bg-white px-4 py-3">
+                        <CheckoutLocationSearch onSelect={handleSearchSelect} />
+                        {locationMessage && <p className="mt-2 text-xs text-[#8B6B3F]">{locationMessage}</p>}
+                    </div>
+
+                    {/* Map — fills the majority of the viewport */}
+                    <div className="relative min-h-0 flex-1">
+                        <CheckoutLocationMap
+                            fullscreen
+                            center={draftLocation}
+                            zoom={mapZoom}
+                            onCenterChange={handleCenterChange}
+                            onZoomChange={setMapZoom}
+                            onInteractionStart={handleInteractionStart}
+                            onInteractionEnd={handleInteractionEnd}
+                        />
+                    </div>
+
+                    {/* Bottom confirmation panel */}
+                    <div className="border-t border-[#C9A45B]/30 bg-white px-4 pb-3 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
+                        {reverseState === "loading" ? (
+                            <p className="flex items-center justify-center gap-2 text-sm font-semibold text-[#6D6558]"><Loader2 size={16} className="animate-spin" /> Mengenali alamat...</p>
+                        ) : (
+                            <p className={`text-center text-sm font-semibold ${settled ? "text-[#184D47]" : "text-[#8B6B3F]"}`}>
+                                {interacting ? "Menggeser peta..." : settled ? "Lokasi siap dipilih" : "Menentukan titik..."}
+                            </p>
+                        )}
+
+                        {reverseState === "error" && (
+                            <div role="alert" className="mt-2 rounded-xl bg-red-50 p-3 text-center text-sm text-red-700">
+                                <p>Alamat lokasi belum dapat dikenali. Geser titik sedikit lalu coba kembali.</p>
+                                <button type="button" onClick={confirmLocation} className="mt-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-100">Coba Lagi</button>
+                            </div>
+                        )}
+
+                        <button type="button" onClick={confirmLocation} disabled={reverseState === "loading" || areaState === "matching"} className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#184D47] px-5 text-sm font-bold text-white hover:bg-[#123524] disabled:opacity-60">
+                            {reverseState === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                            GUNAKAN LOKASI INI
+                        </button>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }

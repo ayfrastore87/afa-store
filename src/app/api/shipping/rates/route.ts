@@ -88,7 +88,9 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         if (error instanceof BiteshipUnavailableError) {
-            return NextResponse.json({ message: error.message }, { status: 503 });
+            const code = error.code === "CONFIGURATION" ? "CONFIGURATION" : "UPSTREAM";
+            // Never expose env/API key details — return a generic message plus a safe code.
+            return NextResponse.json({ message: code === "CONFIGURATION" ? "Layanan pengiriman belum dapat digunakan." : "Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi.", code }, { status: 503 });
         }
         if (error instanceof BiteshipError) {
             return NextResponse.json({ message: error.message }, { status: 400 });

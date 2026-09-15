@@ -7,6 +7,8 @@ import { Check, Home, Loader2, MapPin, PackageOpen, Search, Truck } from "lucide
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
+import { CheckoutLocationPicker } from "@/components/checkout/location-picker";
+import type { DeliveryCoordinates } from "@/lib/coordinates";
 
 type Session = { items: CheckoutItem[]; subtotal: number };
 
@@ -38,7 +40,7 @@ const PAYMENT_METHOD = "QRIS" as const;
 const paymentMethods = [PAYMENT_METHOD] as const;
 const paymentLabels: Record<(typeof paymentMethods)[number], string> = { QRIS: "QRIS" };
 
-type RateState = "idle" | "loading" | "ready" | "empty" | "unavailable" | "error";
+type RateState = "idle" | "loading" | "ready" | "empty" | "unavailable" | "configuration" | "error";
 
 const emptyForm = { recipientName: "", phone: "", email: "", address: "", note: "", province: "", city: "", district: "", postalCode: "", paymentMethod: "QRIS" };
 
@@ -70,6 +72,11 @@ export default function CheckoutPage() {
     const [rateError, setRateError] = useState("");
     const [selected, setSelected] = useState<{ courierCode: string; serviceCode: string } | null>(null);
     const rateRequestRef = useRef(0);
+
+    // Delivery-location point (metadata only — never affects ongkir).
+    const [deliveryLocation, setDeliveryLocation] = useState<DeliveryCoordinates | null>(null);
+    // Bump to re-run the rate effect from the "Coba Lagi" button.
+    const [rateReload, setRateReload] = useState(0);
 
     const submittingRef = useRef(false);
     const keyRef = useRef<string | null>(null);
@@ -175,15 +182,20 @@ export default function CheckoutPage() {
             .then(async (r) => {
                 const d = await r.json().catch(() => ({}));
                 if (requestId !== rateRequestRef.current) return;
-                if (r.status === 503) { setRateState("unavailable"); setRateError(d.message || "Layanan pengiriman sedang tidak tersedia."); return; }
-                if (!r.ok) { setRateState("error"); setRateError(d.message || "Gagal memuat ongkir."); return; }
+                if (r.status === 503) {
+                    if (d.code === "CONFIGURATION") { setRateState("configuration"); setRateError("Layanan pengiriman belum dapat digunakan."); }
+                    else { setRateState("unavailable"); setRateError("Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi."); }
+                    return;
+                }
+                if (r.status === 404) { setRateState("empty"); setRateError(""); return; }
+                if (!r.ok) { setRateState("error"); setRateError("Gagal memuat ongkir. Silakan coba lagi."); return; }
                 const list = d.rates || [];
                 if (!list.length) { setRateState("empty"); return; }
                 setRates(list);
                 setRateState("ready");
             })
-            .catch(() => { if (requestId === rateRequestRef.current) { setRateState("error"); setRateError("Gagal memuat ongkir. Silakan coba lagi."); } });
-    }, [destinationArea, session?.items]);
+            .catch(() => { if (requestId === rateRequestRef.current) { setRateState("unavailable"); setRateError("Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi."); } });
+    }, [destinationArea, session?.items, rateReload]);
 
     const chooseArea = (a: Area) => {
         setDestinationArea(a);
@@ -233,6 +245,8 @@ export default function CheckoutPage() {
             serviceCode: selectedRate.serviceCode,
             serviceName: selectedRate.serviceName,
             quoteRef: selectedRate.quoteRef,
+            destinationLatitude: deliveryLocation?.latitude,
+            destinationLongitude: deliveryLocation?.longitude,
         };
 
         const fingerprint = JSON.stringify({ payload, items: session.items.map(({ id, qty }) => ({ id, qty })) });
@@ -287,22 +301,23 @@ export default function CheckoutPage() {
 
                             {(mode === "other" || mode === "dropship") && (
                                 <div className="mt-4 grid gap-3">
-                                    <Field label="Nama penerima" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder="Nama penerima paket" />
-                                    <Field label="Nomor HP penerima" value={form.phone} onChange={(v) => update("phone", v)} placeholder="08xxxxxxxxxx" />
-                                    <Field label="Alamat lengkap" value={form.address} onChange={(v) => update("address", v)} placeholder="Jalan, nomor rumah, RT/RW, patokan" />
+                                    {mode === "dropship" && <p className="text-xs font-bold uppercase tracking-wide text-[#858a86]">Data Penerima</p>}
+                                    <Field label="Nama Penerima *" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder="Contoh: Siti Nurhaliza" />
+                                    <Field label="Nomor HP Penerima *" value={form.phone} onChange={(v) => update("phone", v)} placeholder="Contoh: 0812 3456 7890" />
+                                    <Field label="Alamat Lengkap *" value={form.address} onChange={(v) => update("address", v)} placeholder="Contoh: Jl. Melati No. 12 RT 03/RW 05" />
                                 </div>
                             )}
 
                             {mode === "dropship" && (
                                 <div className="mt-4 grid gap-3 rounded-2xl bg-[#FFF2D6] p-4">
-                                    <p className="text-sm font-bold text-[#123524]">Info Pengirim (Dropshipper)</p>
-                                    <Field label="Nama pengirim / toko Anda" value={senderName} onChange={setSenderName} placeholder="Nama pengirim di paket" />
-                                    <Field label="Nomor HP pengirim (opsional)" value={senderPhone} onChange={setSenderPhone} placeholder="08xxxxxxxxxx" />
+                                    <p className="text-sm font-bold text-[#123524]">Data Pengirim / Dropshipper</p>
+                                    <Field label="Nama Pengirim *" value={senderName} onChange={setSenderName} placeholder="Contoh: AFA Gift" />
+                                    <Field label="Nomor HP Pengirim" value={senderPhone} onChange={setSenderPhone} placeholder="Contoh: 0812 0000 0000" />
                                     <label className="flex items-start gap-3 text-sm text-[#2E2A26]">
                                         <input type="checkbox" checked={hidePrice} onChange={(e) => setHidePrice(e.target.checked)} className="mt-1 h-4 w-4 accent-[#184D47]" />
-                                        <span>Jangan sertakan harga/invoice di paket</span>
+                                        <span>Sembunyikan harga dari penerima</span>
                                     </label>
-                                    <p className="text-xs text-[#6D6558]">Barang tetap dikirim dari gudang AFA Store.</p>
+                                    <p className="text-xs text-[#6D6558]">Pesanan dikirim dari gudang AFA STORE. Nama pengirim digunakan sebagai identitas dropshipper.</p>
                                 </div>
                             )}
 
@@ -324,8 +339,12 @@ export default function CheckoutPage() {
                             />
                         </Panel>
 
+                        <Panel title="Titik Lokasi (Opsional)">
+                            <CheckoutLocationPicker value={deliveryLocation} onChange={setDeliveryLocation} />
+                        </Panel>
+
                         <Panel title="Pengiriman">
-                            <ShippingRates state={rateState} error={rateError} grouped={groupedRates} selected={selected} onSelect={selectRate} />
+                            <ShippingRates state={rateState} error={rateError} grouped={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
                         </Panel>
 
                         <Panel title="Pembayaran">
@@ -353,6 +372,7 @@ export default function CheckoutPage() {
                         ))}
                         <p className="mt-4 flex justify-between">Subtotal <b>{formatRupiah(session.subtotal)}</b></p>
                         <p className="flex justify-between">Pengiriman <b>{shippingReady ? formatRupiah(shipping) : "-"}</b></p>
+                        {shippingReady && selectedRate?.duration && <p className="flex justify-between text-xs text-[#6D6558]">Estimasi <b>{selectedRate.duration} hari</b></p>}
                         <p className="mt-3 flex justify-between border-t pt-3 text-lg font-bold">Total <b>{formatRupiah(total)}</b></p>
                         <p className="mt-1 text-xs text-[#6D6558]">Total final divalidasi ulang oleh server saat checkout.</p>
                         {processing && <p role="status" className="mt-3 rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Checkout sedang diproses. Silakan tunggu sebentar sebelum mencoba lagi.</p>}
@@ -394,7 +414,7 @@ function AreaAutocomplete({ query, searching, options, destination, onQueryChang
                 <input
                     value={query}
                     onChange={(e) => onQueryChange(e.target.value)}
-                    placeholder="Ketik minimal 3 karakter..."
+                    placeholder="Cari kecamatan / kelurahan tujuan"
                     className="min-h-12 w-full rounded-xl border border-[#C9A45B]/30 bg-white pl-9 pr-3"
                     aria-label="Cari kecamatan atau kelurahan tujuan"
                     role="combobox"
@@ -428,12 +448,27 @@ function groupByCourier(rates: Rate[]) {
     return Array.from(map.entries()).map(([code, list]) => ({ code, name: list[0].courierName, rates: list }));
 }
 
-function ShippingRates({ state, error, grouped, selected, onSelect }: { state: RateState; error: string; grouped: { code: string; name: string; rates: Rate[] }[]; selected: { courierCode: string; serviceCode: string } | null; onSelect: (rate: Rate) => void }) {
-    if (state === "idle") return <p className="text-sm text-[#6D6558]">Pilih tujuan pengiriman untuk melihat ongkir.</p>;
-    if (state === "loading") return <div className="flex items-center gap-2 text-sm font-bold text-[#123524]"><Loader2 size={16} className="animate-spin" />Memuat ongkir...</div>;
-    if (state === "unavailable") return <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error || "Layanan pengiriman sedang tidak tersedia. Silakan coba lagi nanti."}</p>;
-    if (state === "error") return <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error || "Gagal memuat ongkir. Silakan coba lagi."}</p>;
-    if (state === "empty") return <p className="rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Belum ada layanan pengiriman untuk tujuan ini. Silakan coba alamat lain.</p>;
+function ShippingRates({ state, error, grouped, selected, onSelect, onRetry }: { state: RateState; error: string; grouped: { code: string; name: string; rates: Rate[] }[]; selected: { courierCode: string; serviceCode: string } | null; onSelect: (rate: Rate) => void; onRetry: () => void }) {
+    if (state === "idle") return <p className="text-sm text-[#6D6558]">Silakan pilih kecamatan/kelurahan tujuan terlebih dahulu.</p>;
+    if (state === "loading") return <div className="flex items-center gap-2 text-sm font-bold text-[#123524]"><Loader2 size={16} className="animate-spin" />Mencari layanan pengiriman...</div>;
+    if (state === "configuration") return <p role="alert" className="rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Layanan pengiriman belum dapat digunakan.</p>;
+    if (state === "unavailable") {
+        return (
+            <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+                <p>{error || "Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi."}</p>
+                <button type="button" onClick={onRetry} className="mt-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-100">Coba Lagi</button>
+            </div>
+        );
+    }
+    if (state === "error") {
+        return (
+            <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+                <p>{error || "Gagal memuat ongkir."}</p>
+                <button type="button" onClick={onRetry} className="mt-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-100">Coba Lagi</button>
+            </div>
+        );
+    }
+    if (state === "empty") return <p className="rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Belum ada layanan pengiriman untuk tujuan ini.</p>;
     return (
         <fieldset>
             <legend className="sr-only">Pilih kurir dan layanan</legend>
@@ -443,13 +478,15 @@ function ShippingRates({ state, error, grouped, selected, onSelect }: { state: R
                         <p className="mb-2 flex items-center gap-2 text-sm font-bold text-[#123524]"><Truck size={16} />{group.name}</p>
                         <div className="grid gap-2">
                             {group.rates.map((rate) => (
-                                <label key={rate.serviceCode} className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
-                                    <span className="flex items-center gap-3">
+                                <label key={`${group.code}-${rate.serviceCode}`} className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
+                                    <span className="flex min-w-0 items-center gap-3">
                                         <input type="radio" name="shipping-rate" checked={selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode} onChange={() => onSelect(rate)} />
-                                        <span className="text-sm font-bold">{rate.serviceName}</span>
-                                        {rate.duration && <span className="text-xs text-[#6D6558]">&plusmn; {rate.duration} hari</span>}
+                                        <span className="min-w-0">
+                                            <span className="block text-sm font-bold">{rate.serviceName}</span>
+                                            {rate.duration && <span className="block text-xs text-[#6D6558]">Estimasi {rate.duration} hari</span>}
+                                        </span>
                                     </span>
-                                    <b className="whitespace-nowrap">{formatRupiah(rate.price)}</b>
+                                    <b className="shrink-0 whitespace-nowrap">{formatRupiah(rate.price)}</b>
                                 </label>
                             ))}
                         </div>

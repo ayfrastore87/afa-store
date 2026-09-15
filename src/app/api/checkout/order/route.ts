@@ -13,6 +13,7 @@ import { checkoutRequestHash, normalizeIdempotencyKey } from "@/lib/checkout-ide
 import { getBiteshipRates, getBiteshipOriginAreaId, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
 import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/shipping-weight";
 import { normalizeAreaId, denyArbitraryAreaId } from "@/lib/shipping-destination";
+import { parseDeliveryCoordinates } from "@/lib/coordinates";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,10 @@ type CheckoutAddress = {
     serviceCode?: string;
     serviceName?: string;
     quoteRef?: string;
+    // Delivery-location metadata (optional). NEVER used for price/ongkir and
+    // NEVER used to substitute the Biteship destinationAreaId.
+    destinationLatitude?: number;
+    destinationLongitude?: number;
 };
 
 const paymentMethods = ["QRIS"] as const;
@@ -119,6 +124,16 @@ export async function POST(request: Request) {
         if (!destinationAreaId || denyArbitraryAreaId(destinationAreaId)) {
             return NextResponse.json({ message: "Tujuan pengiriman tidak valid. Silakan pilih ulang." }, { status: 400 });
         }
+
+        // Optional delivery-location coordinates. Validated for finiteness/range and
+        // stored purely as metadata — they never influence shipping price and never
+        // replace destinationAreaId (which stays authoritative for ongkir).
+        const coordinates = parseDeliveryCoordinates(address.destinationLatitude, address.destinationLongitude);
+        if (coordinates.provided && !coordinates.valid) {
+            return NextResponse.json({ message: "Koordinat lokasi tidak valid. Silakan pilih ulang titik lokasi." }, { status: 400 });
+        }
+        const destinationLatitude = coordinates.coordinates?.latitude ?? null;
+        const destinationLongitude = coordinates.coordinates?.longitude ?? null;
 
         // Authorize items (with authoritative weight) before hitting Biteship.
         const authorized = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })));
@@ -207,6 +222,8 @@ export async function POST(request: Request) {
                     shippingQuoteRef: quoteRef,
                     destinationAreaId,
                     originAreaId,
+                    destinationLatitude,
+                    destinationLongitude,
                     items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty, weight: item.weight })) },
                 },
                 include: { items: true, user: true },

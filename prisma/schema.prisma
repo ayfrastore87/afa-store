@@ -153,6 +153,8 @@ model Order {
   shippingQuoteRef    String?
   destinationAreaId   String?
   originAreaId        String?
+  destinationLatitude  Float?
+  destinationLongitude Float?
   biteshipOrderId     String?              @unique
   biteshipStatus      String?
   biteshipTrackingId  String?

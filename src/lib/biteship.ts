@@ -73,7 +73,7 @@ export class BiteshipError extends Error {
 }
 
 export class BiteshipUnavailableError extends BiteshipError {
-    constructor(message = "Layanan pengiriman sedang tidak tersedia. Silakan coba lagi nanti.") {
+    constructor(message = "Layanan pengiriman sedang tidak tersedia. Silakan coba lagi nanti.", public readonly code: "CONFIGURATION" | "UPSTREAM" = "UPSTREAM") {
         super(message, true);
         this.name = "BiteshipUnavailableError";
     }
@@ -83,7 +83,7 @@ export function getBiteshipConfig() {
     const apiKey = process.env.BITESHIP_API_KEY?.trim();
     const originAreaId = process.env.BITESHIP_ORIGIN_AREA_ID?.trim();
     const baseUrl = (process.env.BITESHIP_BASE_URL?.trim() || "https://api.biteship.com").replace(/\/+$/, "");
-    if (!apiKey) throw new BiteshipUnavailableError("Konfigurasi pengiriman belum lengkap. Silakan hubungi admin.");
+    if (!apiKey) throw new BiteshipUnavailableError("Konfigurasi pengiriman belum lengkap. Silakan hubungi admin.", "CONFIGURATION");
     // NOTE: origin area ID is intentionally NOT required here — area search
     // (`/api/shipping/areas`) only needs the API key. Rates/checkout enforce it
     // separately via getBiteshipOriginAreaId().
@@ -92,7 +92,7 @@ export function getBiteshipConfig() {
 
 export function getBiteshipOriginAreaId() {
     const originAreaId = getBiteshipConfig().originAreaId;
-    if (!originAreaId) throw new BiteshipUnavailableError("Lokasi pengiriman toko belum diatur. Silakan hubungi admin.");
+    if (!originAreaId) throw new BiteshipUnavailableError("Lokasi pengiriman toko belum diatur. Silakan hubungi admin.", "CONFIGURATION");
     return originAreaId;
 }
 

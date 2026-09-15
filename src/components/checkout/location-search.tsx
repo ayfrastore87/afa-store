@@ -55,7 +55,7 @@ export function CheckoutLocationSearch({ onSelect }: Props) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onFocus={() => { if (results.length) setOpen(true); }}
-                placeholder="Cari alamat, nama tempat, atau area..."
+                placeholder="Cari alamat, perumahan, jalan, atau tempat..."
                 aria-label="Cari alamat atau nama tempat"
                 role="combobox"
                 aria-expanded={open && results.length > 0}

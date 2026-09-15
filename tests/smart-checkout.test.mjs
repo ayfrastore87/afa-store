@@ -20,6 +20,7 @@ const checkoutPage = read("../src/app/checkout/page.tsx");
 const locationSearchRoute = read("../src/app/api/location/search/route.ts");
 const locationReverseRoute = read("../src/app/api/location/reverse/route.ts");
 const geocodingLib = read("../src/lib/geocoding.ts");
+const locationMap = read("../src/components/checkout/location-map.tsx");
 
 // 1. Search normalization
 test("normalizes Nominatim search results to a stable shape", () => {
@@ -168,6 +169,61 @@ test("map uses OSM tiles without API key; search debounced", () => {
     assert.match(checkoutPage, /CheckoutLocationMap/);
     assert.match(checkoutPage, /CheckoutLocationSearch/);
     assert.match(read("../src/components/checkout/location-search.tsx"), /450/);
-    assert.match(read("../src/components/checkout/location-map.tsx"), /tile\.openstreetmap\.org/);
-    assert.match(read("../src/components/checkout/location-map.tsx"), /OpenStreetMap contributors/);
+    assert.match(locationMap, /tile\.openstreetmap\.org/);
+    assert.match(locationMap, /OpenStreetMap contributors/);
+});
+
+// Smart map UX: draft vs confirmed location, Grab/Gojek-style center pin.
+test("map exposes a controlled center/draft concept with a fixed center pin", () => {
+    assert.match(locationMap, /center: DeliveryCoordinates/);
+    assert.match(locationMap, /onCenterChange/);
+    assert.match(locationMap, /onInteractionStart/);
+    assert.match(locationMap, /onInteractionEnd/);
+    assert.match(locationMap, /pointer-events-none absolute left-1\/2 top-1\/2/);
+    assert.match(locationMap, /TITIK PENGIRIMAN/);
+    assert.match(checkoutPage, /draftLocation/);
+    assert.match(checkoutPage, /confirmedLocation/);
+});
+
+test("panning the map only updates the draft center (no geocode, no area, no rates)", () => {
+    assert.match(checkoutPage, /const handleCenterChange = \(coords: DeliveryCoordinates\) => \{\s*setDraftLocation\(coords\);\s*\};/);
+    assert.doesNotMatch(locationMap, /api\/location\/reverse|api\/shipping\/rates|destinationAreaId/);
+});
+
+test("search + geolocation only recenter the draft map (never final)", () => {
+    assert.match(checkoutPage, /const handleSearchSelect = \(result: LocationSearchResult\) => \{[\s\S]*?setDraftLocation\(coords\);[\s\S]*?setMapZoom\(16\);[\s\S]*?\};/);
+    assert.match(checkoutPage, /setMapZoom\(17\)/);
+});
+
+test("\"Pilih Lokasi Ini\" is the single trigger for location confirmation", () => {
+    assert.match(checkoutPage, /Pilih Lokasi Ini/);
+    assert.match(checkoutPage, /onClick=\{confirmLocation\}/);
+    assert.match(checkoutPage, /const confirmLocation = \(\) => \{[\s\S]*?resetAll\(\);[\s\S]*?setConfirmedLocation\(draftLocation\);[\s\S]*?reverseGeocodeAndFill\(draftLocation\);[\s\S]*?\};/);
+});
+
+test("reverse geocoding runs only after confirmation (with manual fallback on failure)", () => {
+    assert.match(checkoutPage, /reverseGeocodeAndFill\(draftLocation\)/);
+    assert.match(checkoutPage, /setAreaState\("not_found"\)/);
+    assert.match(checkoutPage, /Alamat lokasi belum dapat dikenali/);
+});
+
+test("confirmed location replaces the stored coordinates", () => {
+    assert.match(checkoutPage, /destinationLatitude: confirmedLocation\?\.latitude/);
+    assert.match(checkoutPage, /destinationLongitude: confirmedLocation\?\.longitude/);
+});
+
+test("changing the location resets the selected shipping", () => {
+    assert.match(checkoutPage, /const editLocation = \(\) => \{[\s\S]*?resetAll\(\);[\s\S]*?setConfirmedLocation\(null\);[\s\S]*?\};/);
+    assert.match(checkoutPage, /Ubah Titik Lokasi/);
+});
+
+test("destinationAreaId still comes from official Biteship match (no areas[0] fallback)", () => {
+    assert.match(checkoutPage, /setDestinationArea\(best\)/);
+    assert.doesNotMatch(checkoutPage, /setDestinationArea\(areas\[0\]\)/);
+});
+
+test("QRIS-only + server-side quote authority remain intact", () => {
+    assert.match(checkoutPage, /const PAYMENT_METHOD = "QRIS" as const/);
+    assert.match(orderRoute, /selectRate\(quoted\.rates, selection\)/);
+    assert.match(orderRoute, /const quoted = await getBiteshipRates/);
 });

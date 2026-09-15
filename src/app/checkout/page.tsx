@@ -39,6 +39,9 @@ const PAYMENT_METHOD = "QRIS" as const;
 const paymentMethods = [PAYMENT_METHOD] as const;
 const paymentLabels: Record<(typeof paymentMethods)[number], string> = { QRIS: "QRIS" };
 
+const DEFAULT_MAP_CENTER: DeliveryCoordinates = { latitude: -6.2, longitude: 106.816666 };
+const DEFAULT_MAP_ZOOM = 16;
+
 type RateState = "idle" | "loading" | "ready" | "empty" | "unavailable" | "configuration" | "error";
 
 type AreaState = "idle" | "matching" | "matched" | "not_found";
@@ -56,7 +59,7 @@ const emptyForm = {
 function geoErrorMessage(err: GeolocationPositionError): string {
     switch (err.code) {
         case err.PERMISSION_DENIED:
-            return "Izin lokasi tidak diberikan. Anda tetap dapat memilih titik langsung di peta.";
+            return "Izin lokasi tidak diberikan. Cari alamat atau tentukan titik langsung di peta.";
         case err.POSITION_UNAVAILABLE:
             return "GPS/lokasi perangkat tidak tersedia. Pilih titik langsung di peta.";
         case err.TIMEOUT:
@@ -82,8 +85,16 @@ export default function CheckoutPage() {
     const [senderPhone, setSenderPhone] = useState("");
     const [hidePrice, setHidePrice] = useState(true);
 
-    // Map-first location.
-    const [deliveryLocation, setDeliveryLocation] = useState<DeliveryCoordinates | null>(null);
+    // Map-first location. `draftLocation` tracks the live map center (the pin) and is
+    // updated freely while panning/searching/geolocating. `confirmedLocation` is only
+    // set when the customer presses "Pilih Lokasi Ini", which is the single trigger for
+    // reverse geocoding + Biteship area matching + shipping rates.
+    const [draftLocation, setDraftLocation] = useState<DeliveryCoordinates>(DEFAULT_MAP_CENTER);
+    const [confirmedLocation, setConfirmedLocation] = useState<DeliveryCoordinates | null>(null);
+    const [mapZoom, setMapZoom] = useState(DEFAULT_MAP_ZOOM);
+    const [interacting, setInteracting] = useState(false);
+    const [settled, setSettled] = useState(true);
+    const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [reverseState, setReverseState] = useState<ReverseState>("idle");
     const [geoState, setGeoState] = useState<GeoState>("idle");
     const [locationMessage, setLocationMessage] = useState("");
@@ -121,6 +132,12 @@ export default function CheckoutPage() {
         setRateState("idle");
         setRateError("");
     };
+
+    useEffect(() => {
+        return () => {
+            if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         fetch("/api/checkout/session")
@@ -170,18 +187,20 @@ export default function CheckoutPage() {
         resetAll();
     };
 
-    // Reverse-geocode a coordinate and auto-fill the address + auto-match Biteship area.
+    // Reverse-geocode a CONFIRMED coordinate and auto-fill the address + auto-match the
+    // Biteship area. Only called from `confirmLocation` (after "Pilih Lokasi Ini"), never
+    // while the map is being panned.
     const reverseGeocodeAndFill = async (coords: DeliveryCoordinates) => {
         const requestId = ++reverseRef.current;
         setReverseState("loading");
-        setLocationMessage("Mengenali alamat...");
         try {
             const r = await fetch(`/api/location/reverse?lat=${coords.latitude}&lng=${coords.longitude}`);
             const d = await r.json().catch(() => ({}));
             if (requestId !== reverseRef.current) return;
             if (!r.ok || !d.result) {
                 setReverseState("error");
-                setLocationMessage("Gagal mengenali alamat. Anda tetap dapat mengisi manual.");
+                // Reveal the manual Kecamatan/Kelurahan fallback when the geocoder fails.
+                setAreaState("not_found");
                 return;
             }
             const result = d.result as LocationSearchResult;
@@ -197,7 +216,6 @@ export default function CheckoutPage() {
             };
             setForm(nextForm);
             setReverseState("done");
-            setLocationMessage("");
             void matchArea({
                 province: nextForm.province,
                 city: nextForm.city,
@@ -208,7 +226,7 @@ export default function CheckoutPage() {
         } catch {
             if (requestId === reverseRef.current) {
                 setReverseState("error");
-                setLocationMessage("Gagal mengenali alamat. Silakan coba lagi.");
+                setAreaState("not_found");
             }
         }
     };
@@ -244,15 +262,29 @@ export default function CheckoutPage() {
         setAreaState("not_found");
     };
 
-    const handleMapSelect = (coords: DeliveryCoordinates) => {
-        setDeliveryLocation(coords);
-        void reverseGeocodeAndFill(coords);
+    // Panning the map only updates the DRAFT center. It never reverse-geocodes, never
+    // touches destinationAreaId, and never fetches shipping rates.
+    const handleCenterChange = (coords: DeliveryCoordinates) => {
+        setDraftLocation(coords);
     };
 
+    const handleInteractionStart = () => {
+        setInteracting(true);
+        setSettled(false);
+        if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
+
+    const handleInteractionEnd = () => {
+        setInteracting(false);
+        if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = setTimeout(() => setSettled(true), 600);
+    };
+
+    // Search only navigates the map to a suggestion; it is NOT final.
     const handleSearchSelect = (result: LocationSearchResult) => {
         const coords = { latitude: result.latitude, longitude: result.longitude };
-        setDeliveryLocation(coords);
-        void reverseGeocodeAndFill(coords);
+        setDraftLocation(coords);
+        setMapZoom(16);
     };
 
     const useMyLocation = () => {
@@ -266,9 +298,9 @@ export default function CheckoutPage() {
             (position) => {
                 setGeoState("idle");
                 const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-                setDeliveryLocation(coords);
+                setDraftLocation(coords);
+                setMapZoom(17);
                 setLocationMessage("");
-                void reverseGeocodeAndFill(coords);
             },
             (err) => {
                 setGeoState("idle");
@@ -276,6 +308,22 @@ export default function CheckoutPage() {
             },
             { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
         );
+    };
+
+    // The single confirmation point: freeze the draft as the confirmed location, reset any
+    // previous shipping, then reverse-geocode → Biteship area match → rates.
+    const confirmLocation = () => {
+        if (!draftLocation || reverseState === "loading" || areaState === "matching") return;
+        resetAll();
+        setConfirmedLocation(draftLocation);
+        void reverseGeocodeAndFill(draftLocation);
+    };
+
+    const editLocation = () => {
+        resetAll();
+        setConfirmedLocation(null);
+        setReverseState("idle");
+        setSettled(true);
     };
 
     // Fallback area search (debounced) when auto-match fails.
@@ -382,8 +430,8 @@ export default function CheckoutPage() {
             serviceCode: selectedRate.serviceCode,
             serviceName: selectedRate.serviceName,
             quoteRef: selectedRate.quoteRef,
-            destinationLatitude: deliveryLocation?.latitude,
-            destinationLongitude: deliveryLocation?.longitude,
+            destinationLatitude: confirmedLocation?.latitude,
+            destinationLongitude: confirmedLocation?.longitude,
             destinationProvince: form.province,
             destinationCity: form.city,
             destinationDistrict: form.district,
@@ -417,7 +465,7 @@ export default function CheckoutPage() {
                 <Link href="/cart" className="font-semibold text-[#8B6B3F]">&larr; Kembali ke Keranjang</Link>
                 <h1 className="mt-6 font-display text-3xl font-bold text-[#123524] md:text-5xl">Selesaikan Pesanan</h1>
 
-                <form onSubmit={submit} className="mt-8 grid gap-6 lg:grid-cols-[1fr_380px] lg:items-start">
+                <form onSubmit={submit} className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)] lg:items-start">
                     {/* LEFT COLUMN — map-first address flow */}
                     <div className="space-y-6">
                         <Panel title="Alamat Pengiriman">
@@ -444,24 +492,54 @@ export default function CheckoutPage() {
                         </Panel>
 
                         <Panel title="1 · Pilih Lokasi di Peta">
-                            <p className="mb-3 text-sm text-[#6D6558]">Cari alamat atau klik langsung di peta untuk memilih lokasi.</p>
+                            <p className="mb-3 text-sm text-[#6D6558]">Cari alamat atau gunakan lokasi Anda, lalu geser peta sampai pin tepat di titik tujuan.</p>
                             <div className="mb-3 space-y-2">
                                 <CheckoutLocationSearch onSelect={handleSearchSelect} />
-                                <button type="button" onClick={useMyLocation} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
-                                    {geoState === "locating" ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
-                                    {geoState === "locating" ? "Mencari lokasi Anda..." : "Gunakan Lokasi Saya"}
-                                </button>
-                            </div>
-                            <CheckoutLocationMap value={deliveryLocation} onChange={handleMapSelect} />
-                            {reverseState === "loading" && <p className="mt-2 text-sm text-[#6D6558]"><Loader2 size={14} className="mr-1 inline animate-spin" />Mengenali alamat...</p>}
-                            {locationMessage && <p className="mt-2 text-sm text-[#8B6B3F]">{locationMessage}</p>}
-                            {reverseState === "done" && deliveryLocation && (
-                                <div className="mt-3 rounded-xl border border-[#184D47]/30 bg-[#EAF1ED] p-3 text-sm">
-                                    <p className="flex items-center gap-2 font-bold text-[#184D47]"><Check size={16} /> Lokasi berhasil dipilih</p>
-                                    <p className="mt-1 text-[#2E2A26]">{form.address}</p>
-                                    <p className="text-xs text-[#6D6558]">{[form.village, form.district, form.city, form.province, form.postalCode].filter(Boolean).join(", ")}</p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button type="button" onClick={useMyLocation} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
+                                        {geoState === "locating" ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
+                                        {geoState === "locating" ? "Mencari lokasi Anda..." : "Gunakan Lokasi Saya"}
+                                    </button>
+                                    {locationMessage && <span className="text-xs text-[#8B6B3F]">{locationMessage}</span>}
                                 </div>
-                            )}
+                            </div>
+                            <CheckoutLocationMap
+                                center={draftLocation}
+                                zoom={mapZoom}
+                                onCenterChange={handleCenterChange}
+                                onZoomChange={setMapZoom}
+                                onInteractionStart={handleInteractionStart}
+                                onInteractionEnd={handleInteractionEnd}
+                            />
+
+                            {/* Confirmation card below the map */}
+                            <div className="mt-3 rounded-2xl border border-[#C9A45B]/30 bg-white p-4">
+                                {confirmedLocation === null ? (
+                                    <>
+                                        <p className="flex items-center gap-2 text-sm font-bold text-[#123524]"><MapPin size={16} className="text-[#184D47]" /> Tentukan titik pengiriman</p>
+                                        <p className="mt-1 text-sm text-[#6D6558]">Geser peta sampai pin tepat di rumah/lokasi tujuan.</p>
+                                        <p className={`mt-2 text-sm font-semibold ${settled ? "text-[#184D47]" : "text-[#8B6B3F]"}`}>
+                                            {interacting ? "Menggeser peta..." : settled ? "Lokasi siap dipilih" : "Menentukan titik..."}
+                                        </p>
+                                        <button type="button" onClick={confirmLocation} className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#184D47] px-5 text-sm font-bold text-white hover:bg-[#123524]">
+                                            <Check size={16} /> Pilih Lokasi Ini
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="flex items-center gap-2 text-sm font-bold text-[#184D47]"><Check size={16} /> Lokasi pengiriman dipilih</p>
+                                        {reverseState === "loading" && <p className="mt-2 flex items-center gap-2 text-sm text-[#6D6558]"><Loader2 size={14} className="animate-spin" />Mengenali alamat...</p>}
+                                        {areaState === "matching" && <p className="mt-2 flex items-center gap-2 text-sm text-[#6D6558]"><Loader2 size={14} className="animate-spin" />Mencocokkan area pengiriman...</p>}
+                                        {reverseState === "done" && <p className="mt-2 text-sm font-semibold text-[#184D47]">✓ Lokasi pengiriman berhasil dipilih</p>}
+                                        {reverseState === "error" && <p className="mt-2 text-sm font-semibold text-red-700">Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.</p>}
+                                        <p className="mt-1 break-words text-[#2E2A26]">{form.address || "Alamat belum terisi"}</p>
+                                        <p className="text-xs text-[#6D6558]">{[form.village, form.district, form.city, form.province, form.postalCode].filter(Boolean).join(", ")}</p>
+                                        <button type="button" onClick={editLocation} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
+                                            <MapPin size={14} /> Ubah Titik Lokasi
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </Panel>
 
                         <Panel title="Data Penerima">

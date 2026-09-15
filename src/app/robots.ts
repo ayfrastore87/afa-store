@@ -3,6 +3,6 @@ import type { MetadataRoute } from "next";
 export default function robots(): MetadataRoute.Robots {
     return {
         rules: { userAgent: "*", allow: "/" },
-        sitemap: "https://afa-store.vercel.app/sitemap.xml",
+        sitemap: "https://afastore.online/sitemap.xml",
     };
 }

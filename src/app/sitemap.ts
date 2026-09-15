@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    const base = "https://afa-store.vercel.app";
+    const base = "https://afastore.online";
     return ["", "/custom-parcel", "/admin"].map((path) => ({
         url: `${base}${path}`,
         lastModified: new Date(),

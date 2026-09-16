@@ -1,0 +1,127 @@
+// ---------------------------------------------------------------------------
+// Minimal Google Maps JavaScript API type declarations for the AFA STORE
+// checkout location picker.
+//
+// The checkout loads the official Maps JavaScript API bootstrap script directly
+// (see src/lib/google-maps-loader.ts) and deliberately avoids adding a large
+// typing-only dependency. This global augmentation covers only the surface we
+// actually use:
+//   - `google.maps.Map` + the pan/zoom events we listen to,
+//   - `google.maps.Geocoder` (reverse geocoding of a confirmed pin),
+//   - `google.maps.places.PlaceAutocompleteElement` (Places API "New" widget).
+//
+// The API key is NEVER hardcoded and never logged: it is read from the
+// NEXT_PUBLIC_GOOGLE_MAPS_API_KEY environment variable by the loader.
+// ---------------------------------------------------------------------------
+
+type GoogleLatLngLiteral = { lat: number; lng: number };
+
+interface GoogleMapsLatLng {
+    lat(): number;
+    lng(): number;
+}
+
+interface GoogleMapsEventListener {
+    remove(): void;
+}
+
+interface GoogleMapsMapOptions {
+    center?: GoogleLatLngLiteral;
+    zoom?: number;
+    minZoom?: number;
+    maxZoom?: number;
+    disableDefaultUI?: boolean;
+    clickableIcons?: boolean;
+    keyboardShortcuts?: boolean;
+    gestureHandling?: "cooperative" | "greedy" | "auto" | "none";
+    backgroundColor?: string;
+    fullscreenControl?: boolean;
+    mapTypeControl?: boolean;
+    rotateControl?: boolean;
+    scaleControl?: boolean;
+    streetViewControl?: boolean;
+    zoomControl?: boolean;
+}
+
+interface GoogleMapsMap {
+    setCenter(center: GoogleLatLngLiteral): void;
+    getCenter(): GoogleMapsLatLng | null;
+    setZoom(zoom: number): void;
+    getZoom(): number | null;
+    addListener(event: string, handler: (...args: unknown[]) => void): GoogleMapsEventListener;
+}
+
+interface GoogleGeocodeRequest {
+    location: GoogleLatLngLiteral;
+    language?: string | null;
+    region?: string | null;
+}
+
+interface GoogleGeocoderAddressComponent {
+    long_name?: string | null;
+    short_name?: string | null;
+    types?: string[] | null;
+}
+
+interface GoogleGeocoderGeometry {
+    location?: GoogleMapsLatLng | null;
+}
+
+interface GoogleGeocoderResult {
+    formatted_address?: string | null;
+    address_components?: GoogleGeocoderAddressComponent[] | null;
+    geometry?: GoogleGeocoderGeometry | null;
+    place_id?: string | null;
+    types?: string[] | null;
+}
+
+interface GoogleGeocoderResponse {
+    results?: GoogleGeocoderResult[] | null;
+}
+
+interface GoogleGeocoder {
+    geocode(request: GoogleGeocodeRequest): Promise<GoogleGeocoderResponse>;
+}
+
+interface GoogleMapsPlaceAutocompleteElementOptions {
+    includedRegionCodes?: string[];
+    requestedLanguage?: string;
+    requestedRegion?: string;
+}
+
+interface GoogleMapsPlaceSelectEvent extends Event {
+    placePrediction?: { toPlace?: () => GoogleMapsPlace | null } | null;
+}
+
+/**
+ * `gmp-place-autocomplete` is a custom element. Only the members the checkout uses
+ * are declared; the widget renders its own suggestion list (Popover API).
+ */
+interface GoogleMapsPlaceAutocompleteElement extends HTMLElement {
+    placeholder?: string;
+    value?: string;
+}
+
+interface GoogleMapsPlace {
+    formattedAddress?: string | null;
+    displayName?: string | { text?: string | null } | null;
+    addressComponents?: unknown;
+    location?: GoogleMapsLatLng | null;
+    fetchFields?(request: { fields: string[] }): Promise<unknown>;
+}
+
+interface GoogleMapsApi {
+    maps: {
+        Map: new (element: HTMLElement, options?: GoogleMapsMapOptions) => GoogleMapsMap;
+        Geocoder: new () => GoogleGeocoder;
+        /** Removes every listener the API registered on an instance (map teardown). */
+        event?: { clearInstanceListeners?: (instance: unknown) => void };
+        places: {
+            PlaceAutocompleteElement: new (options?: GoogleMapsPlaceAutocompleteElementOptions) => GoogleMapsPlaceAutocompleteElement;
+        };
+    };
+}
+
+interface Window {
+    google?: GoogleMapsApi;
+}

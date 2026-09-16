@@ -9,6 +9,7 @@ import {
 } from "../src/lib/geocoding-normalize.ts";
 import { buildAreaSearchQueries, MAX_AREA_SEARCH_QUERIES, pickBestAreaMatch, normalizeAreaName } from "../src/lib/area-match.ts";
 import { normalizeLatitude, normalizeLongitude } from "../src/lib/coordinates.ts";
+import { reverseGeocodeWithGoogle } from "../src/lib/google-geocoding.ts";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -17,10 +18,10 @@ const migration = read("../prisma/migrations/20260915020000_add_destination_admi
 const orderRoute = read("../src/app/api/checkout/order/route.ts");
 const ratesRoute = read("../src/app/api/shipping/rates/route.ts");
 const checkoutPage = read("../src/app/checkout/page.tsx");
-const locationSearchRoute = read("../src/app/api/location/search/route.ts");
-const locationReverseRoute = read("../src/app/api/location/reverse/route.ts");
-const geocodingLib = read("../src/lib/geocoding.ts");
+const googleMapsLoader = read("../src/lib/google-maps-loader.ts");
+const googleGeocoding = read("../src/lib/google-geocoding.ts");
 const locationMap = read("../src/components/checkout/location-map.tsx");
+const locationSearch = read("../src/components/checkout/location-search.tsx");
 
 // 1. Search normalization
 test("normalizes Nominatim search results to a stable shape", () => {
@@ -59,13 +60,21 @@ test("normalizeNominatimPlace rejects missing/invalid coordinates", () => {
     assert.equal(normalizeNominatimPlace({ lat: "abc", lon: "1" }), null);
 });
 
-// 3. invalid lat/lng rejected
-test("reverse route validates lat/lng (finite + range)", () => {
+// 3. invalid lat/lng rejected before any Google request is issued
+test("reverse geocoding rejects out-of-range pins before any Google call", async () => {
     assert.equal(normalizeLatitude(91), null);
     assert.equal(normalizeLatitude(-91), null);
     assert.equal(normalizeLongitude(181), null);
-    assert.match(locationReverseRoute, /normalizeLatitude/);
-    assert.match(locationReverseRoute, /normalizeLongitude/);
+    let calls = 0;
+    const fakeApi = { maps: { Geocoder: class { async geocode() { calls += 1; return { results: [] }; } } } };
+    assert.equal(await reverseGeocodeWithGoogle({ latitude: 91, longitude: 106.8 }, fakeApi), null);
+    assert.equal(await reverseGeocodeWithGoogle({ latitude: -6.2, longitude: 181 }, fakeApi), null);
+    assert.equal(await reverseGeocodeWithGoogle(null, fakeApi), null);
+    // Out-of-range pins never reach the provider (no wasted quota, no invented address).
+    assert.equal(calls, 0);
+    // And a missing API handle is a soft failure too, never a thrown error.
+    assert.equal(await reverseGeocodeWithGoogle({ latitude: -6.2, longitude: 106.8 }, null), null);
+    assert.match(googleGeocoding, /export async function reverseGeocodeWithGoogle/);
 });
 
 // 4. geolocation metadata does not affect ongkir
@@ -141,14 +150,21 @@ test("dropship does not change physical Biteship origin", () => {
 });
 
 // 12. raw geocoder/Biteship errors not leaked (client-facing messages are safe)
-test("geocoder + Biteship errors are sanitized (no raw upstream text)", () => {
-    assert.match(geocodingLib, /GeocodingUnavailableError/);
-    assert.match(geocodingLib, /User-Agent/);
-    assert.match(geocodingLib, /NOMINATIM_TIMEOUT_MS/);
-    // Client-facing responses use fixed, safe messages (server-side console logging is not the response).
-    assert.match(locationSearchRoute, /"Pencarian lokasi gagal\. Silakan coba lagi\."/);
-    assert.match(locationSearchRoute, /status: 503/);
-    assert.match(locationReverseRoute, /"Gagal mengenali alamat\. Silakan coba lagi\."/);
+test("geocoder + Google Maps errors are sanitized (no raw upstream text, no key)", () => {
+    // A failed bootstrap is a typed error with a fixed, safe Indonesian message.
+    assert.match(googleMapsLoader, /GoogleMapsLoadError/);
+    assert.match(googleMapsLoader, /"MISSING_KEY" \| "UNSUPPORTED" \| "LOAD_FAILED"/);
+    assert.match(googleMapsLoader, /Peta Google belum dapat dimuat\. Periksa koneksi lalu coba lagi\./);
+    assert.match(googleMapsLoader, /Peta belum dikonfigurasi\. Hubungi admin AFA STORE\./);
+    // The key is read from env only and is never logged, echoed or embedded in markup.
+    assert.match(googleMapsLoader, /NEXT_PUBLIC_GOOGLE_MAPS_API_KEY/);
+    assert.doesNotMatch(googleMapsLoader, /console\.(log|info|warn|error)/);
+    assert.doesNotMatch(locationMap + locationSearch + googleGeocoding + googleMapsLoader, /console\.(log|info|warn|error)/);
+    // A failed Places pick shows a fixed, safe message instead of the upstream error.
+    assert.match(locationSearch, /SELECTION_ERROR/);
+    assert.match(locationSearch, /Alamat itu belum dapat dibaca/);
+    // The confirmed-pin path keeps its safe, customer-facing failure copy.
+    assert.match(checkoutPage, /Alamat lokasi belum dapat dikenali/);
 });
 
 // 13. admin shipment Phase 2 unchanged
@@ -172,13 +188,21 @@ test("admin address migration is additive only", () => {
     assert.doesNotMatch(migration, /ALTER COLUMN/);
 });
 
-// map / search architecture no API key
-test("map uses OSM tiles without API key; search debounced", () => {
+// map / search architecture: official Google Maps JS API (key from env, never hardcoded)
+test("map + search run on the Google Maps JS API and no longer on OSM/Nominatim", () => {
     assert.match(checkoutPage, /CheckoutLocationMap/);
     assert.match(checkoutPage, /CheckoutLocationSearch/);
-    assert.match(read("../src/components/checkout/location-search.tsx"), /450/);
-    assert.match(locationMap, /tile\.openstreetmap\.org/);
-    assert.match(locationMap, /OpenStreetMap contributors/);
+    assert.match(locationMap, /loadGoogleMaps/);
+    assert.match(locationSearch, /PlaceAutocompleteElement/);
+    assert.match(googleMapsLoader, /NEXT_PUBLIC_GOOGLE_MAPS_API_KEY/);
+    assert.match(googleMapsLoader, /maps\.googleapis\.com/);
+    // Search results and reverse geocoding both go through Google, not the OSM proxy.
+    assert.match(locationSearch, /toLocationSearchResult/);
+    assert.match(checkoutPage, /reverseGeocodeWithGoogle/);
+    assert.doesNotMatch(checkoutPage, /api\/location\//);
+    assert.doesNotMatch(locationMap + locationSearch, /tile\.openstreetmap\.org|nominatim/i);
+    // No API key literal is ever committed to the repository.
+    assert.doesNotMatch(locationMap + locationSearch + googleMapsLoader + googleGeocoding + checkoutPage, /AIza[0-9A-Za-z_-]{10,}/);
 });
 
 // Smart map UX: draft vs confirmed location, Grab/Gojek-style center pin.
@@ -276,8 +300,9 @@ test("reverse geocode failure keeps the picker open with a retry action", () => 
     assert.match(checkoutPage, /Coba Lagi/);
 });
 
-test("OSM attribution stays visible in the picker", () => {
-    assert.match(locationMap, /OpenStreetMap contributors/);
+test("map provider attribution stays visible in the picker", () => {
+    // Google's own logo/terms are drawn by the API; the picker adds its own chip too.
+    assert.match(locationMap, /Peta &copy; Google/);
 });
 
 // ===== Biteship destination area matching (smart checkout) =====

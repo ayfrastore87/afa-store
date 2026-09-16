@@ -11,6 +11,8 @@ import type { DeliveryCoordinates } from "@/lib/coordinates";
 import { CheckoutLocationMap } from "@/components/checkout/location-map";
 import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
+import { reverseGeocodeWithGoogle, toLocationSearchResult } from "@/lib/google-geocoding";
+import { getGoogleMapsApi, loadGoogleMaps } from "@/lib/google-maps-loader";
 import { addAreaCandidates, buildAreaSearchQueries, isHighConfidenceAreaMatch, pickBestAreaMatch, scoreAreaCandidate, type AreaAddressInput } from "@/lib/area-match";
 import {
     addressFieldsForMode,
@@ -355,9 +357,9 @@ export default function CheckoutPage() {
         applyAddressFields(addressFieldsForMode(next, null));
     };
 
-    // Reverse-geocode a CONFIRMED coordinate and auto-fill the address + auto-match the
-    // Biteship area. Only called from `confirmLocation` (after "GUNAKAN LOKASI INI"), never
-    // while the map is being panned.
+    // Reverse-geocode a CONFIRMED coordinate with the Google Maps JS API and auto-fill the
+    // address + auto-match the Biteship area. Only called from `confirmLocation` (after
+    // "GUNAKAN LOKASI INI"), never while the map is being panned.
     const reverseGeocodeAndFill = async (coords: DeliveryCoordinates) => {
         const requestId = ++reverseRef.current;
         // Full-precision pin this request belongs to: a response that comes back
@@ -365,18 +367,23 @@ export default function CheckoutPage() {
         const requestedPin = { latitude: coords.latitude, longitude: coords.longitude };
         setReverseState("loading");
         try {
-            const r = await fetch(`/api/location/reverse?lat=${coords.latitude}&lng=${coords.longitude}`);
-            const d = await r.json().catch(() => ({}));
+            // The Maps JS API is loaded lazily; the picker normally already triggered it,
+            // so this resolves immediately. A missing or blocked key REJECTS here and is
+            // handled by the catch below (manual area fallback) — an address is never
+            // invented. Google stays the geocoder; Biteship stays authoritative for the
+            // area match and the shipping rates.
+            await loadGoogleMaps();
+            const address = await reverseGeocodeWithGoogle(requestedPin, getGoogleMapsApi());
             // Stale-response guard: a superseded request, or a response for a pin that
             // is no longer the confirmed one, must NEVER overwrite the latest pin.
             if (isStaleResponse(reverseRef.current, requestId) || isStalePin(requestedPin, confirmedPinRef.current)) return;
-            if (!r.ok || !d.result) {
+            const result: LocationSearchResult | null = toLocationSearchResult(address);
+            if (!result) {
                 setReverseState("error");
                 // Reveal the manual Kecamatan/Kelurahan fallback when the geocoder fails.
                 setAreaState("not_found");
                 return;
             }
-            const result = d.result as LocationSearchResult;
             const a = result.address;
             const nextAddress: DestinationAddress = {
                 streetLine: [a.road, a.houseNumber].filter(Boolean).join(" ") || result.displayName,

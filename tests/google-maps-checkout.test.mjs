@@ -559,10 +559,12 @@ test("confirming a pin reverse-geocodes with Google in order and guards against 
     const matchIndex = checkoutPage.indexOf("void matchArea({", reverseIndex);
     const closeIndex = checkoutPage.indexOf("setMapOpen(false)", reverseIndex);
     assert.ok(reverseIndex > -1 && matchIndex > reverseIndex && closeIndex > matchIndex);
-    // An answer with nothing recognizable at all reveals the manual kecamatan/kelurahan fallback.
+    // An answer with nothing recognizable at all reveals the manual kecamatan/kelurahan fallback —
+    // but only once the free fallback had its one bounded attempt first. The failure is therefore
+    // reported AFTER that attempt, never while it is still running (the state stays "loading").
     assert.match(
         checkoutPage,
-        /if \(!result \|\| !isRecognizedGoogleAddress\(address\)\) \{\s*\n\s*setReverseState\("error"\);\s*\n[\s\S]{0,200}?setAreaState\("not_found"\);\s*\n\s*return;/,
+        /if \(!result \|\| !isRecognizedGoogleAddress\(address\)\) \{[\s\S]{0,700}?await reverseFallbackAndFill\(requestedPin, requestId\)\) return;[\s\S]{0,220}?setReverseState\("error"\);\s*\n\s*setReverseFailure\("no_address"\);\s*\n\s*setAreaState\("not_found"\);\s*\n\s*return;/,
     );
 });
 
@@ -777,7 +779,13 @@ test("the address service failing is never reported as an unrecognizable locatio
     assert.equal(classifyGoogleGeocodeFailure(undefined), "unavailable");
 
     // The picker keeps the two apart, and only the real "no address here" case is red.
-    assert.match(checkoutPage, /setReverseFailure\(classifyGoogleGeocodeFailure\(error\)\)/);
+    // The classification is kept, but it is only REPORTED once the free fallback has also returned
+    // nothing: a Google outage must never end the flow while a named location is still obtainable.
+    assert.match(checkoutPage, /const failure = classifyGoogleGeocodeFailure\(error\);/);
+    assert.match(
+        checkoutPage,
+        /if \(await reverseFallbackAndFill\(requestedPin, requestId\)\) return;\s*\n\s*setReverseState\("error"\);\s*\n\s*setReverseFailure\(failure\);/,
+    );
     assert.match(checkoutPage, /reverseFailure === "no_address" \? REVERSE_NO_ADDRESS_MESSAGE : REVERSE_UNAVAILABLE_MESSAGE/);
     assert.match(checkoutPage, /"mt-2 rounded-xl bg-\[#FFF2D6\] p-3 text-center text-sm text-\[#8B6B3F\]"/);
     // The temporary-failure copy asks for the Biteship area instead of blaming the point.

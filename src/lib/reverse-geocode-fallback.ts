@@ -36,6 +36,17 @@ export const REVERSE_FALLBACK_USER_AGENT = "AFA-STORE-checkout/1.0 (+https://afa
 export const REVERSE_FALLBACK_ACCEPT_LANGUAGE = "id";
 /** One bounded attempt: a slow provider must never hold the checkout open. */
 export const REVERSE_FALLBACK_TIMEOUT_MS = 4000;
+/**
+ * The browser's bound for the WHOLE same-origin call, and a strict SUPERSET of the deadline above:
+ * the route's provider deadline only starts once the request has been authenticated and the
+ * customer row read, and it stops before the answer travels back. A browser that gave up on the
+ * same 4 s therefore abandoned answers the server was still delivering — the server logged
+ * `{ status: "ok" }` (and cached it) while the checkout showed "cadangan alamat otomatis juga belum
+ * tersedia". This bound must always stay comfortably larger than `REVERSE_FALLBACK_TIMEOUT_MS`, so a
+ * successful fallback answer can always arrive; it stays bounded so a hanging connection still
+ * cannot hold the checkout open.
+ */
+export const REVERSE_FALLBACK_ROUTE_TIMEOUT_MS = 12000;
 /** Guard against parsing something that is not a small JSON document (e.g. an HTML error page). */
 export const REVERSE_FALLBACK_MAX_RESPONSE_CHARS = 65536;
 /** Short-term cache TTL: a repeated confirmation for the same pin never asks again. */
@@ -470,8 +481,11 @@ export type FallbackRouteRequestOptions = {
  * Ask OUR OWN route for the fallback address. Called from the browser after a confirmed
  * "GUNAKAN LOKASI INI" and for nothing else — never during pan, zoom, drag or touch.
  *
- * The route already bounds its own provider call; this second, identical bound exists purely so a
- * hanging connection cannot leave the checkout spinner turning forever. Aborting (newer
+ * The route already bounds its own provider call, but that bound starts only AFTER the route has
+ * authenticated the session and read the customer row, and it ends before the answer travels back.
+ * The browser therefore gets a strictly LARGER bound of its own (see
+ * `REVERSE_FALLBACK_ROUTE_TIMEOUT_MS`), so a hanging connection cannot leave the checkout spinner
+ * turning forever without ever discarding an answer the server could still deliver. Aborting (newer
  * confirmation, unmount, timeout) yields `unavailable`, which the caller discards when stale.
  */
 export async function requestFallbackReverseAddress(
@@ -491,7 +505,7 @@ export async function requestFallbackReverseAddress(
         if (options.signal.aborted) controller.abort();
         else options.signal.addEventListener("abort", forwardAbort, { once: true });
     }
-    const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? REVERSE_FALLBACK_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? REVERSE_FALLBACK_ROUTE_TIMEOUT_MS);
 
     try {
         const params = new URLSearchParams({

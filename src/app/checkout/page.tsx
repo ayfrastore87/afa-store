@@ -426,21 +426,29 @@ export default function CheckoutPage() {
             // attempt first, and only if that finds nothing here either is the manual
             // Kecamatan/Kelurahan picker revealed.
             if (!result || !isRecognizedGoogleAddress(address)) {
+                // Google answered, but nothing here is recognizable as an address. The free,
+                // server-side fallback gets its ONE bounded attempt BEFORE anything is reported as
+                // failed: `reverseState` stays "loading" (the UI keeps saying "Mengenali alamat...")
+                // so the customer is never told the fallback is unavailable WHILE it is still being
+                // asked. Declaring the failure up front is what once showed "Cadangan alamat otomatis
+                // juga belum tersedia" for a fallback answer that was arriving successfully.
+                if (await reverseFallbackAndFill(requestedPin, requestId)) return;
                 setReverseState("error");
                 setReverseFailure("no_address");
-                if (await reverseFallbackAndFill(requestedPin, requestId)) return;
                 setAreaState("not_found");
                 return;
             }
             applyResolvedAddress(result);
         } catch (error) {
             if (isStaleResponse(reverseRef.current, requestId)) return;
-            // The address SERVICE failed. That is not "this location cannot be recognized", so
-            // it is classified and reported honestly — and only AFTER the free fallback had its
-            // one bounded attempt, so a Google outage still leaves a named location.
-            setReverseState("error");
-            setReverseFailure(classifyGoogleGeocodeFailure(error));
+            // The address SERVICE failed. That is not "this location cannot be recognized", so it is
+            // classified and reported honestly — but only AFTER the free fallback had its one
+            // bounded attempt, so a Google outage still leaves a named location and a successful
+            // fallback is never undone by Google's failure.
+            const failure = classifyGoogleGeocodeFailure(error);
             if (await reverseFallbackAndFill(requestedPin, requestId)) return;
+            setReverseState("error");
+            setReverseFailure(failure);
             setAreaState("not_found");
         }
     };

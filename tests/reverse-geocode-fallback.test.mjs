@@ -19,6 +19,8 @@ import {
     REVERSE_FALLBACK_ENDPOINT,
     REVERSE_FALLBACK_MAX_RESPONSE_CHARS,
     REVERSE_FALLBACK_ROUTE,
+    REVERSE_FALLBACK_ROUTE_TIMEOUT_MS,
+    REVERSE_FALLBACK_TIMEOUT_MS,
     REVERSE_FALLBACK_USER_AGENT,
     buildFallbackReverseUrl,
     clearFallbackReverseCache,
@@ -30,6 +32,7 @@ import {
     requestFallbackReverseAddress,
     resolveFallbackReverseAddress,
 } from "../src/lib/reverse-geocode-fallback.ts";
+import { isStalePin, isStaleResponse } from "../src/lib/checkout-address.ts";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -78,6 +81,35 @@ const bodyResponse = (body, { ok = true, status = 200 } = {}) => ({
         return typeof body === "string" ? body : JSON.stringify(body);
     },
 });
+
+/*
+ * The EXACT production payload captured from
+ * `GET /api/location/reverse-fallback?lat=-6.8108478410000926&lng=107.12745051408709`
+ * (HTTP 200, `cached: true` on a warm server cache). Every structured component is null except
+ * city/province/postalCode, and the provider's own coordinates differ slightly from the pin the
+ * customer confirmed. This response MUST count as a successful DISPLAY ADDRESS: a non-empty
+ * formattedAddress is sufficient, and the provider's nearby coordinates must never become the
+ * delivery pin.
+ */
+const PRODUCTION_PIN = { latitude: -6.8108478410000926, longitude: 107.12745051408709 };
+const PRODUCTION_FORMATTED_ADDRESS = "Cianjur, Jawa Barat, 43211, Indonesia";
+const PRODUCTION_ROUTE_PAYLOAD = {
+    status: "ok",
+    cached: true,
+    address: {
+        formattedAddress: PRODUCTION_FORMATTED_ADDRESS,
+        latitude: -6.8109697,
+        longitude: 107.1273855,
+        street: null,
+        houseNumber: null,
+        village: null,
+        district: null,
+        city: "Cianjur",
+        province: "Jawa Barat",
+        postalCode: "43211",
+        country: "Indonesia",
+    },
+};
 
 /** A fetch that records every call, so the request count itself can be asserted. */
 function recordingFetch(handler) {
@@ -635,3 +667,285 @@ function expectAddress(address) {
         country: address.country ?? null,
     };
 }
+
+/*
+ * ==========================================================================
+ * Production regression: the captured payload above MUST be committed
+ * ==========================================================================
+ */
+
+test("the exact production payload is a successful DISPLAY ADDRESS, nulls included", () => {
+    // status "ok" plus a non-empty formattedAddress is SUFFICIENT. Nothing here may require a
+    // street, a house number, a village, a district or any other administrative component: those
+    // are legitimately unavailable for plenty of Indonesian points.
+    const parsed = fallbackResultFromRoutePayload(PRODUCTION_ROUTE_PAYLOAD);
+    assert.equal(parsed.status, "ok", "a valid formattedAddress is enough to be recognized");
+    assert.equal(parsed.cached, true);
+    assert.deepEqual(parsed.address, {
+        formattedAddress: PRODUCTION_FORMATTED_ADDRESS,
+        latitude: -6.8109697,
+        longitude: 107.1273855,
+        street: null,
+        houseNumber: null,
+        village: null,
+        district: null,
+        city: "Cianjur",
+        province: "Jawa Barat",
+        postalCode: "43211",
+        country: "Indonesia",
+    });
+
+    // The address the checkout DISPLAYS, and the hints the Biteship matcher receives.
+    const searchResult = fallbackAddressToSearchResult(parsed.address);
+    assert.equal(searchResult.displayName, PRODUCTION_FORMATTED_ADDRESS);
+    assert.deepEqual(searchResult.address, {
+        road: null,
+        houseNumber: null,
+        village: null,
+        district: null,
+        city: "Cianjur",
+        province: "Jawa Barat",
+        postcode: "43211",
+    });
+
+    // That is committed through the SAME shared path Google uses, which is also the only writer of
+    // the success state — so a fallback answer really does end as reverseState "done".
+    assert.match(checkoutPage, /applyResolvedAddress\(fallbackAddressToSearchResult\(fallback\.address\)\);/);
+    assert.equal(
+        (code(checkoutPage).match(/setReverseState\("done"\)/g) || []).length,
+        1,
+        "the shared commit is the only success writer",
+    );
+    assert.match(
+        checkoutPage,
+        /const applyResolvedAddress = \(result: LocationSearchResult \| FallbackSearchResult\) => \{/,
+    );
+});
+
+test("the browser leg commits the exact production payload, and cached:true is the same success", async () => {
+    const viaRoute = async (payload) =>
+        requestFallbackReverseAddress(PRODUCTION_PIN.latitude, PRODUCTION_PIN.longitude, {
+            fetchImpl: async (url) => {
+                assert.equal(
+                    String(url),
+                    "/api/location/reverse-fallback?lat=-6.8108478410000926&lng=107.12745051408709",
+                    "the confirmed pin is asked about with full precision",
+                );
+                return jsonResponse(payload);
+            },
+        });
+
+    const warm = await viaRoute(PRODUCTION_ROUTE_PAYLOAD);
+    assert.equal(warm.status, "ok");
+    assert.equal(warm.cached, true);
+    assert.equal(fallbackAddressToSearchResult(warm.address).displayName, PRODUCTION_FORMATTED_ADDRESS);
+
+    // A cold (uncached) answer is byte-for-byte the same success: `cached` is an optimization flag
+    // the checkout reports, never a condition for committing the address.
+    const cold = await viaRoute({ ...PRODUCTION_ROUTE_PAYLOAD, cached: false });
+    assert.equal(cold.status, "ok");
+    assert.equal(cold.cached, false);
+    assert.equal(fallbackAddressToSearchResult(cold.address).displayName, PRODUCTION_FORMATTED_ADDRESS);
+});
+
+test("the browser's route budget outlasts the server's provider deadline", async () => {
+    // The route's provider deadline starts only AFTER it authenticated the session and read the
+    // customer row, and it ends before the answer travels back. A browser that gave up on the same
+    // 4 s therefore abandoned `{ status: "ok" }` answers the server did deliver (and cache) — the
+    // production symptom. The browser bound must stay strictly larger, and still bounded.
+    assert.ok(
+        REVERSE_FALLBACK_ROUTE_TIMEOUT_MS > REVERSE_FALLBACK_TIMEOUT_MS,
+        `browser bound ${REVERSE_FALLBACK_ROUTE_TIMEOUT_MS}ms must exceed the provider deadline ${REVERSE_FALLBACK_TIMEOUT_MS}ms`,
+    );
+    assert.ok(REVERSE_FALLBACK_ROUTE_TIMEOUT_MS <= 15000, "the extra wait stays bounded");
+
+    // A slow-but-successful answer is committed when the budget covers it…
+    const slowAnswer = (_url, init) =>
+        new Promise((resolve, reject) => {
+            const timer = setTimeout(() => resolve(jsonResponse(PRODUCTION_ROUTE_PAYLOAD)), 60);
+            init.signal.addEventListener("abort", () => {
+                clearTimeout(timer);
+                reject(new Error("aborted"));
+            }, { once: true });
+        });
+    const committed = await requestFallbackReverseAddress(PRODUCTION_PIN.latitude, PRODUCTION_PIN.longitude, {
+        timeoutMs: 250,
+        fetchImpl: slowAnswer,
+    });
+    assert.equal(committed.status, "ok");
+    assert.equal(fallbackAddressToSearchResult(committed.address).displayName, PRODUCTION_FORMATTED_ADDRESS);
+
+    // …and is thrown away when the budget is shorter than the answer: this is the bug the bound above
+    // removes, reproduced on purpose.
+    const abandoned = await requestFallbackReverseAddress(PRODUCTION_PIN.latitude, PRODUCTION_PIN.longitude, {
+        timeoutMs: 20,
+        fetchImpl: slowAnswer,
+    });
+    assert.deepEqual(abandoned, { status: "unavailable" });
+
+    // The page uses that default (no smaller override) for its single call site.
+    assert.match(
+        checkoutPage,
+        /requestFallbackReverseAddress\(pin\.latitude, pin\.longitude, \{\s*\n\s*signal: fallbackController\.signal,\s*\n\s*\}\);/,
+    );
+});
+
+
+test("the page never reports the fallback as unusable while it is still being asked", () => {
+    const flowStart = checkoutPage.indexOf("const reverseGeocodeAndFill = async (");
+    const flow = code(checkoutPage.slice(flowStart, checkoutPage.indexOf("const applyResolvedAddress", flowStart)));
+    assert.ok(flowStart > -1 && flow.length > 0);
+
+    // Both Google-failure branches ask the free fallback FIRST, and only write the failure state
+    // once that attempt returned nothing. The loading state covers the whole attempt, so the
+    // customer-visible sentence "Cadangan alamat otomatis juga belum tersedia" can never describe a
+    // fallback request that is still in flight (that is what mis-reported a 200 `status:"ok"`).
+    assert.match(
+        flow,
+        /if \(!result \|\| !isRecognizedGoogleAddress\(address\)\) \{[\s\S]{0,700}?if \(await reverseFallbackAndFill\(requestedPin, requestId\)\) return;[\s\S]{0,220}?setReverseState\("error"\);\s*\n\s*setReverseFailure\("no_address"\);\s*\n\s*setAreaState\("not_found"\);\s*\n\s*return;/,
+    );
+    assert.match(
+        flow,
+        /const failure = classifyGoogleGeocodeFailure\(error\);[\s\S]{0,220}?if \(await reverseFallbackAndFill\(requestedPin, requestId\)\) return;[\s\S]{0,220}?setReverseState\("error"\);\s*\n\s*setReverseFailure\(failure\);\s*\n\s*setAreaState\("not_found"\);/,
+    );
+
+    // Order proof: each of the two failure reports follows its OWN fallback attempt, and no failure
+    // report exists anywhere else in the confirmation flow.
+    const errorWrites = [...flow.matchAll(/setReverseState\("error"\)/g)];
+    assert.equal(errorWrites.length, 2, "one report per Google-failure branch");
+    let previousAttempt = -1;
+    for (const write of errorWrites) {
+        const attempt = flow.lastIndexOf("await reverseFallbackAndFill(", write.index);
+        assert.ok(attempt > previousAttempt, "every failure report must come AFTER a fallback attempt");
+        previousAttempt = attempt;
+    }
+
+    // The loading state is what the customer sees while the fallback is asked.
+    assert.match(flow, /setReverseState\("loading"\);\s*\n\s*setReverseFailure\("none"\);/);
+});
+
+test("the provider's nearby coordinates never become the confirmed delivery pin", () => {
+    // Production: the pin that was asked about and the provider's own answer differ slightly.
+    assert.notDeepEqual(
+        { latitude: PRODUCTION_ROUTE_PAYLOAD.address.latitude, longitude: PRODUCTION_ROUTE_PAYLOAD.address.longitude },
+        PRODUCTION_PIN,
+    );
+
+    // Feeding the staleness guard the PROVIDER's nearby answer would judge the current pin stale and
+    // throw the good answer away, so only the REQUESTED/CONFIRMED pin may be compared.
+    assert.equal(isStalePin(PRODUCTION_PIN, PRODUCTION_PIN), false);
+    assert.equal(
+        isStalePin(
+            { latitude: PRODUCTION_ROUTE_PAYLOAD.address.latitude, longitude: PRODUCTION_ROUTE_PAYLOAD.address.longitude },
+            PRODUCTION_PIN,
+        ),
+        true,
+        "provider-returned coordinates are never the confirmation reference",
+    );
+    assert.match(
+        checkoutPage,
+        /if \(isStaleResponse\(reverseRef\.current, requestId\) \|\| isStalePin\(pin, confirmedPinRef\.current\)\) return false;\s*\n\s*if \(fallback\.status !== "ok"\) return false;\s*\n\s*applyResolvedAddress\(fallbackAddressToSearchResult\(fallback\.address\)\);/,
+    );
+
+    // The answer is consumed as address METADATA only: no provider coordinate is ever read out of
+    // the fallback result, and the confirmed pin has exactly one writer.
+    assert.doesNotMatch(code(checkoutPage), /fallback\.address\.(latitude|longitude)/);
+    assert.equal((code(checkoutPage).match(/confirmedPinRef\.current = /g) || []).length, 1);
+    assert.match(checkoutPage, /confirmedPinRef\.current = draftLocation;/);
+
+    const applyBody = code(
+        checkoutPage.slice(
+            checkoutPage.indexOf("const applyResolvedAddress = ("),
+            checkoutPage.indexOf("const reverseFallbackAndFill ="),
+        ),
+    );
+    assert.ok(applyBody.length > 0);
+    assert.doesNotMatch(applyBody, /latitude|longitude|setConfirmedPin|setDraftLocation|setMapZoom/);
+});
+
+
+test("a Biteship area that cannot be matched never undoes the display-address success", () => {
+    const matchStart = checkoutPage.indexOf("const matchArea = async (address: AreaAddressInput) => {");
+    const matchBody = code(
+        checkoutPage.slice(matchStart, checkoutPage.indexOf("const handleCenterChange", matchStart)),
+    );
+    assert.ok(matchStart > -1 && matchBody.length > 0);
+    // DISPLAY ADDRESS success and BITESHIP AREA success are two separate states: the area match may
+    // only ever write the AREA state, so a no-match can never revert the address to unavailable.
+    assert.doesNotMatch(matchBody, /setReverseState|setReverseFailure/);
+    assert.match(matchBody, /setAreaState\("not_found"\)/);
+
+    // The address is committed and marked done BEFORE the area match starts...
+    const applyBody = code(
+        checkoutPage.slice(
+            checkoutPage.indexOf("const applyResolvedAddress = ("),
+            checkoutPage.indexOf("const reverseFallbackAndFill ="),
+        ),
+    );
+    assert.ok(
+        applyBody.indexOf('setReverseState("done")') < applyBody.indexOf("void matchArea({"),
+        "the address is marked done before the area match begins",
+    );
+
+    // ...so after a display-address success with no official area, the customer still gets the
+    // "Alamat ditemukan…" copy and the existing manual kecamatan/kelurahan picker.
+    assert.match(checkoutPage, /reverseState === "done" \? AREA_FALLBACK_TITLE_AFTER_ADDRESS : AREA_FALLBACK_TITLE/);
+    assert.match(checkoutPage, /Alamat ditemukan\. Pilih kecamatan\/kelurahan pengiriman untuk melanjutkan pengecekan ongkir\./);
+    assert.match(checkoutPage, /areaState === "not_found" && \(/);
+    assert.match(checkoutPage, /<AreaAutocomplete/);
+    assert.match(checkoutPage, /const chooseArea = \(a: Area\) => \{/);
+    // The manual pick is the ONLY other writer of a destinationAreaId, and it is always an official
+    // Biteship area: the fallback module can never produce one.
+    assert.doesNotMatch(code(fallbackLib), /destinationAreaId/);
+});
+
+test("one confirmation spends at most one provider-free fallback request", async () => {
+    // The browser leg is a single bounded attempt: no retry loop, no request per pan/zoom/drag.
+    const browserStart = fallbackLib.indexOf("export async function requestFallbackReverseAddress(");
+    const browserLeg = code(fallbackLib.slice(browserStart));
+    assert.ok(browserStart > -1 && browserLeg.length > 0);
+    assert.doesNotMatch(browserLeg, /\b(for|while)\s*\(/, "no retry loop around the route request");
+    assert.equal((browserLeg.match(/await doFetch\(/g) || []).length, 1);
+
+    // Panning only moves the DRAFT pin, so the fallback is unreachable while the customer moves the
+    // map: no lookup, no request, no Biteship call.
+    const movement = checkoutPage.slice(
+        checkoutPage.indexOf("const handleCenterChange"),
+        checkoutPage.indexOf("const confirmLocation"),
+    );
+    assert.ok(movement.length > 0);
+    assert.doesNotMatch(movement, /Fallback|reverseGeocode|fetch\(/);
+
+    // And the route is asked at most ONCE per confirmation for the same rounded pin, even when two
+    // confirmations overlap: the second shares the first attempt instead of spending another call.
+    clearFallbackReverseCache();
+    const { calls, fetchImpl } = recordingFetch(() => bodyResponse(PROVIDER_PAYLOAD));
+    const pin = { latitude: -6.1313, longitude: 106.1616 };
+    const [first, second] = await Promise.all([
+        resolveFallbackReverseAddress(pin.latitude, pin.longitude, { fetchImpl }),
+        resolveFallbackReverseAddress(pin.latitude, pin.longitude, { fetchImpl }),
+    ]);
+    assert.equal(first.status, "ok");
+    assert.deepEqual(second, first);
+    assert.equal(calls.length, 1);
+    clearFallbackReverseCache();
+});
+
+test("a genuinely superseded fallback answer can never be committed", async () => {
+    // The requested pin is the reference, and the request sequence is checked too, so an answer for
+    // an older confirmation is dropped even though it arrived successfully.
+    assert.equal(isStaleResponse(7, 6), true);
+    assert.equal(isStaleResponse(7, 7), false);
+    assert.equal(isStalePin({ latitude: -6.0021, longitude: 106.0123456 }, PRODUCTION_PIN), true);
+    assert.match(
+        checkoutPage,
+        /if \(isStaleResponse\(reverseRef\.current, requestId\) \|\| isStalePin\(pin, confirmedPinRef\.current\)\) return false;/,
+    );
+
+    // Both commits in the confirmation flow sit behind that guard: Google's answer (in the flow) and
+    // the fallback's answer (inside the helper).
+    const flowStart = checkoutPage.indexOf("const reverseGeocodeAndFill = async (");
+    const flow = code(checkoutPage.slice(flowStart, checkoutPage.indexOf("const applyResolvedAddress", flowStart)));
+    const commit = flow.indexOf("applyResolvedAddress(result);");
+    assert.ok(commit > flow.lastIndexOf("isStalePin(requestedPin, confirmedPinRef.current)"));
+});

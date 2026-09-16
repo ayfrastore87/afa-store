@@ -5,12 +5,26 @@ import { Loader2, MapPin, Minus, Plus, TriangleAlert } from "lucide-react";
 
 import type { DeliveryCoordinates } from "@/lib/coordinates";
 import { getGoogleMapsApi, loadGoogleMaps, GoogleMapsLoadError, GOOGLE_MAPS_LOAD_FAILED_MESSAGE } from "@/lib/google-maps-loader";
+import { COARSE_POINTER_QUERY, preferredGestureHandling, type MapGestureHandling } from "@/lib/map-gesture";
 
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 20;
 // ~1 cm in degrees. The page echoes the published center straight back as a prop, so
 // without a tolerance the map and React state would keep pushing each other around.
 const CENTER_EPSILON = 1e-7;
+
+/**
+ * The gesture policy for THIS device (see src/lib/map-gesture.ts).
+ *
+ * Touch-first (coarse pointer) → `cooperative`: one finger still scrolls the modal/page and two
+ * fingers pinch-zoom the map, so the checkout is never locked. Mouse/trackpad (fine pointer) →
+ * `greedy`: the wheel zooms the map under the cursor, which is what desktop users expect.
+ * Nothing here ever sets `touch-action` or cancels `touchmove`/`wheel`, so page scrolling is
+ * never broken globally.
+ */
+function mapGestureHandling(): MapGestureHandling {
+    return preferredGestureHandling(typeof window === "undefined" ? null : window);
+}
 
 /** Coarse picker state so the page can explain a broken or unconfigured map. */
 export type CheckoutMapStatus = "loading" | "ready" | "unavailable" | "unconfigured";
@@ -81,6 +95,26 @@ export function CheckoutLocationMap({
         zoomRef.current = zoom;
     }, [zoom]);
 
+    // Re-apply the gesture policy when the device class really changes: a media change (touch
+    // screen turned into a mouse-first setup) or an orientation change must never leave the
+    // wrong policy active on a live map. `setOptions` touches only this one option.
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+        const query = window.matchMedia(COARSE_POINTER_QUERY);
+        const apply = () => {
+            const map = mapRef.current;
+            if (!map || typeof map.setOptions !== "function") return;
+            map.setOptions({ gestureHandling: mapGestureHandling() });
+        };
+        apply();
+        query.addEventListener?.("change", apply);
+        window.addEventListener("orientationchange", apply);
+        return () => {
+            query.removeEventListener?.("change", apply);
+            window.removeEventListener("orientationchange", apply);
+        };
+    }, [status]);
+
     // Create the Google map once the official JS API is available.
     useEffect(() => {
         let disposed = false;
@@ -106,7 +140,7 @@ export function CheckoutLocationMap({
                     disableDefaultUI: true,
                     clickableIcons: false,
                     keyboardShortcuts: false,
-                    gestureHandling: "greedy",
+                    gestureHandling: mapGestureHandling(),
                     backgroundColor: "#e7e4da",
                 });
                 mapRef.current = map;

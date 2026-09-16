@@ -13,24 +13,33 @@ import fs from "node:fs";
 
 import {
     GOOGLE_PLACE_FIELDS,
+    classifyGoogleGeocodeFailure,
+    isRecognizedGoogleAddress,
     normalizeGoogleComponents,
     normalizeGoogleGeocodeResult,
     normalizeGoogleGeocodeResults,
     normalizeGooglePlace,
+    pickBestGoogleGeocodeResult,
     reverseGeocodeWithGoogle,
+    scoreGoogleAddress,
     toLocationSearchResult,
 } from "../src/lib/google-geocoding.ts";
 import {
     GOOGLE_MAPS_API_KEY_ENV,
     GOOGLE_MAPS_CALLBACK,
+    GOOGLE_MAPS_GEOCODING_LIBRARY,
     GOOGLE_MAPS_LIBRARIES,
+    GOOGLE_MAPS_LOAD_FAILED_MESSAGE,
     GOOGLE_MAPS_MISSING_KEY_MESSAGE,
     GOOGLE_MAPS_SCRIPT_ID,
     GoogleMapsLoadError,
     buildGoogleMapsScriptUrl,
     loadGoogleMaps,
+    loadGoogleMapsGeocoder,
     readGoogleMapsApiKey,
 } from "../src/lib/google-maps-loader.ts";
+import { isStalePin, isStaleResponse } from "../src/lib/checkout-address.ts";
+import { COARSE_POINTER_QUERY, preferredGestureHandling, prefersCoarsePointer, resolveGestureHandling } from "../src/lib/map-gesture.ts";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -67,6 +76,34 @@ const locationMap = read("../src/components/checkout/location-map.tsx");
 const locationSearch = read("../src/components/checkout/location-search.tsx");
 const loaderLib = read("../src/lib/google-maps-loader.ts");
 const geocodingLib = read("../src/lib/google-geocoding.ts");
+const mapGestureLib = read("../src/lib/map-gesture.ts");
+
+/**
+ * The fake browser the loader's *timing* can be driven with: the global namespace it reads and
+ * the script element it would append. Application code never builds one (it derives the real
+ * `window`/`document`), which is exactly why this can pin down behaviour that cannot be
+ * observed against the live Google API.
+ */
+function fakeLoaderEnvironment(google) {
+    return {
+        global: { google },
+        createScript: () => ({
+            id: GOOGLE_MAPS_SCRIPT_ID,
+            src: "",
+            async: true,
+            defer: false,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            remove: () => {},
+        }),
+        appendScript: () => {},
+        removeScriptById: () => {},
+        schedule: (callback, ms) => setTimeout(callback, ms),
+        cancel: (handle) => clearTimeout(handle),
+        timeoutMs: 200,
+        pollMs: 5,
+    };
+}
 
 /** Places API (New) Place, in the exact shape `fetchFields` returns it. */
 const NEW_PLACE = {
@@ -501,12 +538,13 @@ test("a search suggestion only moves the draft pin", () => {
 });
 
 test("confirming a pin reverse-geocodes with Google in order and guards against stale answers", () => {
-    assert.match(checkoutPage, /import \{ reverseGeocodeWithGoogle, toLocationSearchResult \} from "@\/lib\/google-geocoding"/);
-    assert.match(checkoutPage, /import \{ getGoogleMapsApi, loadGoogleMaps \} from "@\/lib\/google-maps-loader"/);
-    // The API is awaited before the handle is read, so a cold picker still works.
+    assert.match(checkoutPage, /import \{ reverseGeocodeWithGoogle, toLocationSearchResult, isRecognizedGoogleAddress, classifyGoogleGeocodeFailure, type GoogleGeocodeFailureKind \} from "@\/lib\/google-geocoding"/);
+    assert.match(checkoutPage, /import \{ loadGoogleMaps, loadGoogleMapsGeocoder \} from "@\/lib\/google-maps-loader"/);
+    // The API *and* the Geocoder class are awaited before the call, so a cold picker still works
+    // even though `google.maps.Geocoder` arrives with its own library (the places-class race).
     assert.match(
         checkoutPage,
-        /await loadGoogleMaps\(\);\s*\n\s*const address = await reverseGeocodeWithGoogle\(requestedPin, getGoogleMapsApi\(\)\);/,
+        /await loadGoogleMaps\(\);\s*\n\s*const geocoder = await loadGoogleMapsGeocoder\(\);\s*\n\s*const address = await reverseGeocodeWithGoogle\(requestedPin, geocoder\);/,
     );
     // Latest pin wins: superseded responses and responses for an older pin are dropped.
     assert.match(checkoutPage, /const requestedPin = \{ latitude: coords\.latitude, longitude: coords\.longitude \};/);
@@ -519,10 +557,10 @@ test("confirming a pin reverse-geocodes with Google in order and guards against 
     const matchIndex = checkoutPage.indexOf("void matchArea({", reverseIndex);
     const closeIndex = checkoutPage.indexOf("setMapOpen(false)", reverseIndex);
     assert.ok(reverseIndex > -1 && matchIndex > reverseIndex && closeIndex > matchIndex);
-    // Failure of either step reveals the manual kecamatan/kelurahan fallback.
+    // An answer with nothing recognizable at all reveals the manual kecamatan/kelurahan fallback.
     assert.match(
         checkoutPage,
-        /if \(!result\) \{\s*\n\s*setReverseState\("error"\);\s*\n[\s\S]{0,200}?setAreaState\("not_found"\);\s*\n\s*return;/,
+        /if \(!result \|\| !isRecognizedGoogleAddress\(address\)\) \{\s*\n\s*setReverseState\("error"\);\s*\n[\s\S]{0,200}?setAreaState\("not_found"\);\s*\n\s*return;/,
     );
 });
 
@@ -557,4 +595,369 @@ test("Biteship stays authoritative: only the destinationAreaId is ever sent", ()
     // The pickup point never becomes a destination: the API call only needs the area.
     assert.match(checkoutPage, /body: JSON\.stringify\(\{ destinationAreaId: destinationArea\.id,/);
     assert.doesNotMatch(code(checkoutPage), /api\/location|nominatim/i);
+});
+
+// ===== address recognition robustness ("alamat belum dapat dikenali" in Production) =====
+
+test("a reverse geocode weighs every result instead of trusting results[0]", async () => {
+    const { api } = fakeGeocoderApi(() => ({
+        status: "OK",
+        results: [
+            // Google's prominence order can lead with an entry that carries no address at all
+            // (a plus code). Taking results[0] would throw the real address away.
+            { types: ["plus_code"], geometry: { location: { lat: -6.0021, lng: 106.012345678 } } },
+            {
+                formatted_address: "Jl. Melati No. 10, Kalitimbang, Cibeber, Kota Cilegon, Banten 42426, Indonesia",
+                geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+                address_components: [
+                    { long_name: "10", short_name: "10", types: ["street_number"] },
+                    { long_name: "Jl. Melati", short_name: "Jl. Melati", types: ["route"] },
+                    { long_name: "Kalitimbang", short_name: "Kalitimbang", types: ["administrative_area_level_4"] },
+                    { long_name: "Cibeber", short_name: "Cibeber", types: ["administrative_area_level_3"] },
+                    { long_name: "Kota Cilegon", short_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+                    { long_name: "Banten", short_name: "Banten", types: ["administrative_area_level_1"] },
+                    { long_name: "42426", short_name: "42426", types: ["postal_code"] },
+                ],
+            },
+        ],
+    }));
+
+    const address = await reverseGeocodeWithGoogle({ latitude: -6.0021, longitude: 106.012345678 }, api);
+
+    assert.equal(address.road, "Jl. Melati");
+    assert.equal(address.houseNumber, "10");
+    assert.equal(address.village, "Kalitimbang");
+    assert.equal(address.district, "Cibeber");
+    assert.equal(address.city, "Kota Cilegon");
+    assert.equal(address.postcode, "42426");
+    // The richer answer always outranks the component-less one, whatever the order.
+    const bare = normalizeGoogleGeocodeResult({ types: ["plus_code"], geometry: { location: { lat: -6.0021, lng: 106.012345678 } } });
+    assert.equal(scoreGoogleAddress(bare), 0);
+    assert.ok(scoreGoogleAddress(address) > scoreGoogleAddress(bare));
+    assert.equal(pickBestGoogleGeocodeResult([bare, address]), address);
+    assert.equal(pickBestGoogleGeocodeResult([address, bare]), address);
+    // And the implementation never falls back to the provider's first entry.
+    assert.doesNotMatch(code(geocodingLib), /results\[0\]/);
+});
+
+test("a valid formatted_address is recognized even when every structured component is empty", () => {
+    const bare = normalizeGoogleGeocodeResult({
+        formatted_address: "Jl. Raya Cibeber, Kota Cilegon, Banten",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [],
+    });
+    assert.equal(bare.formattedAddress, "Jl. Raya Cibeber, Kota Cilegon, Banten");
+    assert.equal(bare.district, null);
+    assert.equal(bare.village, null);
+    // Recognized by its formatted address alone: this must never print "tidak dikenali".
+    assert.equal(isRecognizedGoogleAddress(bare), true);
+    assert.equal(toLocationSearchResult(bare).displayName, "Jl. Raya Cibeber, Kota Cilegon, Banten");
+    // An answer with NO address text and NO component is the only unrecognized case.
+    const nothing = normalizeGoogleGeocodeResult({ geometry: { location: { lat: -6.0021, lng: 106.012345678 } } });
+    assert.equal(isRecognizedGoogleAddress(nothing), false);
+    assert.equal(pickBestGoogleGeocodeResult([nothing]), null);
+    assert.equal(isRecognizedGoogleAddress(null), false);
+    // The page decides exactly on that signal before it blames Google.
+    assert.match(checkoutPage, /!isRecognizedGoogleAddress\(address\)/);
+});
+
+
+
+test("Indonesian structured levels are extracted from varied Google component sets", () => {
+    // (a) level_4 = kelurahan, level_3 = kecamatan (the common full answer).
+    const full = normalizeGoogleGeocodeResult({
+        formatted_address: "Jl. Melati, Kalitimbang, Cibeber, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "Jl. Melati", types: ["route"] },
+            { long_name: "Kalitimbang", types: ["administrative_area_level_4"] },
+            { long_name: "Cibeber", types: ["administrative_area_level_3"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+            { long_name: "Banten", types: ["administrative_area_level_1"] },
+        ],
+    });
+    assert.equal(full.village, "Kalitimbang");
+    assert.equal(full.district, "Cibeber");
+
+    // (b) No level_4 (Google often stops at level_3): sublocality_level_1 is the kelurahan.
+    const withoutLevel4 = normalizeGoogleGeocodeResult({
+        formatted_address: "Jl. Melati, Kalitimbang, Cibeber, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "Jl. Melati", types: ["route"] },
+            { long_name: "Kalitimbang", types: ["sublocality_level_1"] },
+            { long_name: "Cibeber", types: ["administrative_area_level_3"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+            { long_name: "Banten", types: ["administrative_area_level_1"] },
+        ],
+    });
+    assert.equal(withoutLevel4.village, "Kalitimbang");
+    assert.equal(withoutLevel4.district, "Cibeber");
+
+    // (c) Only a `neighborhood` level: the finest village-level hint Google gives.
+    const neighbourhoodOnly = normalizeGoogleGeocodeResult({
+        formatted_address: "Kalitimbang, Cibeber, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "Kalitimbang", types: ["neighborhood"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+            { long_name: "Banten", types: ["administrative_area_level_1"] },
+        ],
+    });
+    assert.equal(neighbourhoodOnly.village, "Kalitimbang");
+    assert.equal(neighbourhoodOnly.city, "Kota Cilegon");
+
+    // (d) Only level_3: a kecamatan stays a kecamatan, it is never promoted to a kelurahan.
+    const districtOnly = normalizeGoogleGeocodeResult({
+        formatted_address: "Cibeber, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "Cibeber", types: ["administrative_area_level_3"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+        ],
+    });
+    assert.equal(districtOnly.district, "Cibeber");
+    assert.equal(districtOnly.village, null);
+
+    // (e) A `premise` is a house-number class answer, never a street name.
+    const premise = normalizeGoogleGeocodeResult({
+        formatted_address: "AFA Store, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "AFA Store", types: ["premise"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+        ],
+    });
+    assert.equal(premise.houseNumber, "AFA Store");
+    assert.equal(premise.road, null);
+
+    // (f) Numbered sublocalities (Google reports different depths per region): the finer
+    // sublocality is the kelurahan while sublocality_level_1 stays the kecamatan.
+    const numberedSublocalities = normalizeGoogleGeocodeResult({
+        formatted_address: "Kalitimbang, Cibeber, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "Kalitimbang", types: ["sublocality_level_2"] },
+            { long_name: "Cibeber", types: ["sublocality_level_1"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+            { long_name: "Banten", types: ["administrative_area_level_1"] },
+        ],
+    });
+    assert.equal(numberedSublocalities.village, "Kalitimbang");
+    assert.equal(numberedSublocalities.district, "Cibeber");
+
+    // (g) A numbered sublocality on its own is still captured (nothing is dropped).
+    const deepestOnly = normalizeGoogleGeocodeResult({
+        formatted_address: "Kalitimbang, Kota Cilegon",
+        geometry: { location: { lat: -6.0021, lng: 106.012345678 } },
+        address_components: [
+            { long_name: "Kalitimbang", types: ["sublocality_level_4"] },
+            { long_name: "Kota Cilegon", types: ["administrative_area_level_2"] },
+        ],
+    });
+    assert.equal(deepestOnly.village, "Kalitimbang");
+});
+
+test("the address service failing is never reported as an unrecognizable location", () => {
+    // The Maps JS Geocoder rejects with the raw status string.
+    assert.equal(classifyGoogleGeocodeFailure("ZERO_RESULTS"), "no_address");
+    assert.equal(classifyGoogleGeocodeFailure("NOT_FOUND"), "no_address");
+    assert.equal(classifyGoogleGeocodeFailure("OVER_QUERY_LIMIT"), "unavailable");
+    assert.equal(classifyGoogleGeocodeFailure("OVER_DAILY_LIMIT"), "unavailable");
+    assert.equal(classifyGoogleGeocodeFailure("REQUEST_DENIED"), "unavailable");
+    assert.equal(classifyGoogleGeocodeFailure("UNKNOWN_ERROR"), "unavailable");
+    assert.equal(classifyGoogleGeocodeFailure(new Error("Geocoder failed due to: ZERO_RESULTS")), "no_address");
+    assert.equal(classifyGoogleGeocodeFailure(new Error("Failed to fetch")), "unavailable");
+    assert.equal(
+        classifyGoogleGeocodeFailure(new GoogleMapsLoadError("LOAD_FAILED", GOOGLE_MAPS_LOAD_FAILED_MESSAGE)),
+        "unavailable",
+    );
+    assert.equal(classifyGoogleGeocodeFailure(undefined), "unavailable");
+
+    // The picker keeps the two apart, and only the real "no address here" case is red.
+    assert.match(checkoutPage, /setReverseFailure\(classifyGoogleGeocodeFailure\(error\)\)/);
+    assert.match(checkoutPage, /reverseFailure === "no_address" \? REVERSE_NO_ADDRESS_MESSAGE : REVERSE_UNAVAILABLE_MESSAGE/);
+    assert.match(checkoutPage, /"mt-2 rounded-xl bg-\[#FFF2D6\] p-3 text-center text-sm text-\[#8B6B3F\]"/);
+    // The temporary-failure copy asks for the Biteship area instead of blaming the point.
+    assert.match(checkoutPage, /Layanan alamat Google sedang tidak dapat dihubungi\./);
+    // No upstream status text is EVER shown to the customer.
+    assert.doesNotMatch(checkoutPage, /ZERO_RESULTS|OVER_QUERY_LIMIT|REQUEST_DENIED/);
+});
+
+test("Google address success and the Biteship area match are two separate successes", () => {
+    // The address is committed and marked done BEFORE the area match even starts.
+    const doneIndex = checkoutPage.indexOf('setReverseState("done")');
+    const callIndex = checkoutPage.indexOf("void matchArea({", doneIndex);
+    assert.ok(doneIndex > -1 && callIndex > doneIndex);
+    // ...and the area match itself may only ever change the AREA state, never the address state.
+    const matchFnIndex = checkoutPage.indexOf("const matchArea = async (address: AreaAddressInput) => {");
+    const matchBody = checkoutPage.slice(matchFnIndex, checkoutPage.indexOf("const handleCenterChange", matchFnIndex));
+    assert.ok(matchFnIndex > -1 && matchBody.length > 0);
+    assert.doesNotMatch(matchBody, /setReverseState/);
+    // Google found the address, Biteship has no area yet → ask for the area, never error.
+    assert.match(checkoutPage, /AREA_FALLBACK_TITLE_AFTER_ADDRESS/);
+    assert.match(checkoutPage, /Alamat ditemukan\. Pilih kecamatan\/kelurahan pengiriman untuk melanjutkan pengecekan ongkir\./);
+    assert.match(checkoutPage, /reverseState === "done" \? AREA_FALLBACK_TITLE_AFTER_ADDRESS : AREA_FALLBACK_TITLE/);
+    // The recognized address is shown as a success, and the area as its own success.
+    assert.match(checkoutPage, /ADDRESS_FOUND_LABEL/);
+    assert.match(checkoutPage, /reverseState === "done" && destinationAddress\?\.displayName/);
+    assert.match(checkoutPage, /Area pengiriman tersedia/);
+    // A Google failure is only reported while no official area has resolved yet.
+    assert.match(checkoutPage, /reverseState === "error" && areaState !== "matched"/);
+    // The manual kecamatan/kelurahan picker stays the fallback in both cases.
+    assert.match(checkoutPage, /areaState === "not_found" && \(/);
+    assert.match(checkoutPage, /AreaAutocomplete/);
+});
+
+test("a stale reverse-geocode response can never overwrite the newest confirmed pin", () => {
+    const older = { latitude: -6.0021, longitude: 106.012345678 };
+    const newer = { latitude: -6.917464, longitude: 107.619123 };
+    // A response that belongs to an OLD pin arriving after a new confirmation is dropped...
+    assert.equal(isStalePin(older, newer), true);
+    assert.equal(isStalePin(newer, newer), false);
+    // ...and so is any response whose request was already superseded (same pin, newer attempt).
+    assert.equal(isStaleResponse(4, 3), true);
+    assert.equal(isStaleResponse(4, 4), false);
+    // The page applies BOTH guards (request sequence + confirmed pin) before writing anything.
+    assert.match(
+        checkoutPage,
+        /if \(isStaleResponse\(reverseRef\.current, requestId\) \|\| isStalePin\(requestedPin, confirmedPinRef\.current\)\) return;/,
+    );
+    // The full-precision confirmed pin is the source of truth for the request.
+    assert.match(checkoutPage, /const requestedPin = \{ latitude: coords\.latitude, longitude: coords\.longitude \};/);
+    assert.match(checkoutPage, /confirmedPinRef\.current = draftLocation;/);
+    assert.match(checkoutPage, /void reverseGeocodeAndFill\(draftLocation\);/);
+    // Dragging/searching/GPS only move the DRAFT, so no Google request is spent on a moving pin:
+    // exactly ONE reverse-geocode call site exists, and the map never geocodes at all.
+    assert.equal(code(checkoutPage).split("await reverseGeocodeWithGoogle(").length - 1, 1);
+    assert.doesNotMatch(code(locationMap), /reverseGeocode|Geocoder/);
+    assert.match(checkoutPage, /const handleCenterChange = \(coords: DeliveryCoordinates\) => \{\s*\n\s*setDraftLocation\(coords\);\s*\n\s*\};/);
+});
+
+
+// ===== gestures: one-finger scroll + pinch on mobile, wheel zoom on desktop =====
+
+test("the gesture policy is cooperative on touch and greedy with a mouse", () => {
+    assert.equal(COARSE_POINTER_QUERY, "(pointer: coarse)");
+    // Coarse pointer (phone/tablet): one finger scrolls the page/modal, two fingers zoom.
+    assert.equal(resolveGestureHandling(true), "cooperative");
+    assert.equal(prefersCoarsePointer({ matchMedia: () => ({ matches: true }) }), true);
+    assert.equal(preferredGestureHandling({ matchMedia: () => ({ matches: true }) }), "cooperative");
+    // Fine pointer (mouse/trackpad): the wheel zooms the map under the cursor.
+    assert.equal(resolveGestureHandling(false), "greedy");
+    assert.equal(prefersCoarsePointer({ matchMedia: () => ({ matches: false }) }), false);
+    assert.equal(preferredGestureHandling({ matchMedia: () => ({ matches: false }) }), "greedy");
+    // Unknown device: the SAFE policy. A locked page is worse than a two-finger hint.
+    assert.equal(resolveGestureHandling(null), "cooperative");
+    assert.equal(resolveGestureHandling(undefined), "cooperative");
+    assert.equal(preferredGestureHandling(null), "cooperative");
+    assert.equal(prefersCoarsePointer(null), null);
+    assert.equal(prefersCoarsePointer({}), null);
+    assert.equal(prefersCoarsePointer({ matchMedia: () => null }), null);
+    assert.equal(preferredGestureHandling({ matchMedia: () => null }), "cooperative");
+    // The pointer media query decides — NOT the window width — so a narrow desktop window still
+    // gets wheel zoom and a large tablet still scrolls with one finger.
+    assert.equal(code(mapGestureLib).includes("innerWidth"), false);
+});
+
+test("the map applies the policy and keeps it in sync with the device", () => {
+    assert.match(locationMap, /gestureHandling: mapGestureHandling\(\)/);
+    assert.match(locationMap, /window\.matchMedia\(COARSE_POINTER_QUERY\)/);
+    // A live map is reconfigured on a media change / rotation instead of being rebuilt.
+    assert.match(locationMap, /map\.setOptions\(\{ gestureHandling: mapGestureHandling\(\) \}\)/);
+    assert.match(locationMap, /query\.addEventListener\?\.\("change", apply\)/);
+    assert.match(locationMap, /query\.removeEventListener\?\.\("change", apply\)/);
+    assert.match(locationMap, /window\.addEventListener\("orientationchange", apply\)/);
+    // The policy is never a hardcoded constant in the component.
+    assert.doesNotMatch(code(locationMap), /gestureHandling: "(?:greedy|cooperative)"/);
+    // Both device classes keep the checkout's own +/- buttons.
+    assert.match(locationMap, /aria-label="Perbesar peta"/);
+    assert.match(locationMap, /aria-label="Perkecil peta"/);
+});
+
+test("mobile keeps the picker scrollable and never hijacks page gestures", () => {
+    // The picker body scrolls with one finger; the CTA stays outside the scroll area.
+    assert.match(checkoutPage, /overflow-y-auto overscroll-contain/);
+    assert.match(checkoutPage, /sm:h-auto sm:min-h-0 sm:flex-1/);
+    // The map keeps its own comfortable height on a phone.
+    assert.match(checkoutPage, /h-\[44dvh\] min-h-\[240px\]/);
+    const guarded = [code(checkoutPage), code(locationMap), code(locationSearch), code(mapGestureLib)].join("\n");
+    assert.doesNotMatch(guarded, /touch-action|touchAction/);
+    // No touch/wheel listener is ever hijacked anywhere in the picker path.
+    assert.doesNotMatch(guarded, /addEventListener\(\s*["'](?:touchmove|touchstart|wheel|mousewheel)/);
+    assert.doesNotMatch(guarded, /onTouchMove|onWheel/);
+    // The ONLY preventDefault in checkout is the form's own submit handler — never a gesture.
+    const withoutSubmit = code(checkoutPage).replace(
+        /const submit = async \(event: React\.FormEvent\) => \{\s*\n\s*event\.preventDefault\(\);/,
+        "",
+    );
+    assert.doesNotMatch(withoutSubmit, /preventDefault/);
+    assert.doesNotMatch([code(locationMap), code(locationSearch), code(mapGestureLib)].join("\n"), /preventDefault/);
+
+test("no Google API key is hardcoded, logged, or embedded in the picker", () => {
+    for (const source of [checkoutPage, locationMap, locationSearch, geocodingLib, loaderLib, mapGestureLib]) {
+        assert.doesNotMatch(source, /AIza[0-9A-Za-z_-]{10,}/);
+        assert.doesNotMatch(source, /(?:api[_ -]?key|apikey)\s*[:=]\s*["'`][^"'`]{6,}["'`]/i);
+    }
+    // The geocoder is constructed by the loader: the page never sees or passes a key.
+    assert.match(checkoutPage, /const geocoder = await loadGoogleMapsGeocoder\(\);/);
+    assert.doesNotMatch(code(checkoutPage), /apiKey|api_key|maps\.googleapis\.com/);
+    // Nothing in the picker path logs at all...
+    assert.doesNotMatch(
+        [code(locationMap), code(locationSearch), code(geocodingLib), code(loaderLib), code(mapGestureLib)].join("\n"),
+        /console\./,
+    );
+    // ...and the page's single log call is the dev-only area diagnostic, which carries no key.
+    const pageLogs = code(checkoutPage).split(/\r?\n/).filter((line) => line.includes("console."));
+    assert.equal(pageLogs.length, 1);
+    assert.match(pageLogs[0], /console\.info\("\[checkout\] area-match", snapshot\);/);
+    assert.match(checkoutPage, /if \(process\.env\.NODE_ENV === "production"\) return;/);
+});
+
+test("the Geocoder class is awaited with its own library instead of read off the loaded API", async () => {
+    assert.equal(GOOGLE_MAPS_GEOCODING_LIBRARY, "geocoding");
+    assert.match(loaderLib, /export async function loadGoogleMapsGeocoder\(/);
+    assert.match(loaderLib, /importLibrary\(GOOGLE_MAPS_GEOCODING_LIBRARY\)/);
+
+    // The class may attach AFTER the API is usable (exactly like the places widget): the loader
+    // waits through `importLibrary("geocoding")` instead of returning a broken handle.
+    const late = fakeLoaderEnvironment({
+        maps: {
+            Map: function Map() {},
+            importLibrary: async (library) =>
+                library === "geocoding" ? { Geocoder: class LateGeocoder { async geocode() { return { results: [] }; } } } : {},
+        },
+    });
+    const geocoder = await loadGoogleMapsGeocoder(late);
+    assert.equal(typeof geocoder.maps.Geocoder, "function");
+    // The handle really works with the checkout's reverse geocode — and an empty answer still
+    // resolves to null instead of inventing an address.
+    assert.equal(await reverseGeocodeWithGoogle({ latitude: -6.0021, longitude: 106.012345678 }, geocoder), null);
+
+    // An already attached class is used straight away, with no importLibrary round trip.
+    let imported = 0;
+    const attached = fakeLoaderEnvironment({
+        maps: {
+            Map: function Map() {},
+            Geocoder: class Geocoder {},
+            importLibrary: async () => {
+                imported += 1;
+                return {};
+            },
+        },
+    });
+    assert.equal(typeof (await loadGoogleMapsGeocoder(attached)).maps.Geocoder, "function");
+    assert.equal(imported, 0);
+
+    // A class that never arrives becomes a typed, retryable LOAD_FAILED — never a silent null
+    // that the UI could only report as "alamat tidak dikenali".
+    const missing = fakeLoaderEnvironment({ maps: { Map: function Map() {} } });
+    await assert.rejects(
+        () => loadGoogleMapsGeocoder(missing),
+        (error) => error.code === "LOAD_FAILED" && error.message === GOOGLE_MAPS_LOAD_FAILED_MESSAGE,
+    );
+    // The customer-facing failure copy carries no key and no upstream detail.
+    assert.doesNotMatch(GOOGLE_MAPS_LOAD_FAILED_MESSAGE, /key|AIza|http/i);
+});
+
 });

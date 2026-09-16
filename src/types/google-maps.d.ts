@@ -7,7 +7,8 @@
 // typing-only dependency. This global augmentation covers only the surface we
 // actually use:
 //   - `google.maps.Map` + the pan/zoom events we listen to,
-//   - `google.maps.Geocoder` (reverse geocoding of a confirmed pin),
+//   - `google.maps.Geocoder` (reverse geocoding of a confirmed pin), which arrives with the
+//     `geocoding` library and is therefore optional here,
 //   - `google.maps.importLibrary` (the API's own "wait for a library" call),
 //   - `google.maps.places.PlaceAutocompleteElement` (Places API "New" widget), which is
 //     attached only once the `places` library has been loaded.
@@ -50,6 +51,8 @@ interface GoogleMapsMap {
     getCenter(): GoogleMapsLatLng | null;
     setZoom(zoom: number): void;
     getZoom(): number | null;
+    /** Reconfigures a live map (used to re-apply the gesture policy on a media change). */
+    setOptions?(options: GoogleMapsMapOptions): void;
     addListener(event: string, handler: (...args: unknown[]) => void): GoogleMapsEventListener;
 }
 
@@ -127,7 +130,12 @@ interface GoogleMapsPlacesLibrary {
 interface GoogleMapsApi {
     maps: {
         Map: new (element: HTMLElement, options?: GoogleMapsMapOptions) => GoogleMapsMap;
-        Geocoder: new () => GoogleGeocoder;
+        /**
+         * Optional on purpose: the class arrives with the `geocoding` library, so `google.maps`
+         * can exist without it. Consumers await the loader's `loadGoogleMapsGeocoder()` instead
+         * of reading this straight after the API loads.
+         */
+        Geocoder?: new () => GoogleGeocoder;
         /** Removes every listener the API registered on an instance (map teardown). */
         event?: { clearInstanceListeners?: (instance: unknown) => void };
         /**

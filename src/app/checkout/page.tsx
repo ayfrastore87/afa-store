@@ -11,8 +11,8 @@ import type { DeliveryCoordinates } from "@/lib/coordinates";
 import { CheckoutLocationMap } from "@/components/checkout/location-map";
 import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
-import { reverseGeocodeWithGoogle, toLocationSearchResult } from "@/lib/google-geocoding";
-import { getGoogleMapsApi, loadGoogleMaps } from "@/lib/google-maps-loader";
+import { reverseGeocodeWithGoogle, toLocationSearchResult, isRecognizedGoogleAddress, classifyGoogleGeocodeFailure, type GoogleGeocodeFailureKind } from "@/lib/google-geocoding";
+import { loadGoogleMaps, loadGoogleMapsGeocoder } from "@/lib/google-maps-loader";
 import { addAreaCandidates, buildAreaSearchQueries, isHighConfidenceAreaMatch, pickBestAreaMatch, scoreAreaCandidate, type AreaAddressInput } from "@/lib/area-match";
 import {
     addressFieldsForMode,
@@ -158,8 +158,33 @@ type AreaDiagnostics = {
 /** Shown to the customer while the fallback area search is the only path. */
 const AREA_FALLBACK_TITLE = "Area pengiriman belum ditemukan otomatis.";
 const AREA_FALLBACK_HINT = "Cari kelurahan atau kecamatan.";
+/**
+ * Google DID recognize the address and only the Biteship area match is still open. The customer
+ * must see the address as a success and be asked for the area — never an address error.
+ */
+const AREA_FALLBACK_TITLE_AFTER_ADDRESS = "Alamat ditemukan. Pilih kecamatan/kelurahan pengiriman untuk melanjutkan pengecekan ongkir.";
+const AREA_FALLBACK_HINT_AFTER_ADDRESS = "Cari kelurahan atau kecamatan tujuan pengiriman.";
+
+/** Success markers for the confirmed destination (Google address vs Biteship area). */
+const ADDRESS_FOUND_LABEL = "Alamat ditemukan";
 
 type ReverseState = "idle" | "loading" | "done" | "error";
+
+/**
+ * WHY a reverse geocode failed, kept apart from the state itself:
+ *   - `no_address`  Google answered honestly: this exact point has no address (plus-code-only,
+ *     water, a brand-new road). Accurate copy: move the pin / pick the area manually.
+ *   - `unavailable` the address SERVICE failed (quota, authorization, network, API not
+ *     loadable). The location is not at fault, so the customer must never be told their address
+ *     could not be recognized — the Biteship picker is the honest fallback.
+ */
+type ReverseFailure = "none" | GoogleGeocodeFailureKind;
+
+const REVERSE_NO_ADDRESS_MESSAGE = "Alamat lokasi belum dapat dikenali. Geser titik sedikit lalu coba kembali.";
+const REVERSE_UNAVAILABLE_MESSAGE = "Layanan alamat Google sedang tidak dapat dihubungi. Coba lagi, atau pilih kecamatan/kelurahan pengiriman secara manual.";
+/** Same split, worded for the confirmed-location card (no retry button there). */
+const REVERSE_NO_ADDRESS_CARD = "Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.";
+const REVERSE_UNAVAILABLE_CARD = "Alamat dari peta sedang tidak dapat diambil. Pilih kecamatan/kelurahan pengiriman untuk melanjutkan pengecekan ongkir.";
 
 type GeoState = "idle" | "locating";
 
@@ -213,6 +238,8 @@ export default function CheckoutPage() {
     const [settled, setSettled] = useState(true);
     const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [reverseState, setReverseState] = useState<ReverseState>("idle");
+    // Why it failed — keeps "Google found nothing here" apart from "the address service is down".
+    const [reverseFailure, setReverseFailure] = useState<ReverseFailure>("none");
     const [geoState, setGeoState] = useState<GeoState>("idle");
     const [locationMessage, setLocationMessage] = useState("");
     const reverseRef = useRef(0);
@@ -283,6 +310,7 @@ export default function CheckoutPage() {
         setAreaOptions([]);
         setAreaSearching(false);
         setAreaDiagnostics(null);
+        setReverseFailure("none");
         setSelected(null);
         setRates([]);
         setRateState("idle");
@@ -359,28 +387,35 @@ export default function CheckoutPage() {
 
     // Reverse-geocode a CONFIRMED coordinate with the Google Maps JS API and auto-fill the
     // address + auto-match the Biteship area. Only called from `confirmLocation` (after
-    // "GUNAKAN LOKASI INI"), never while the map is being panned.
+    // "GUNAKAN LOKASI INI"), never while the map is being panned: no Google request is ever
+    // spent on a moving pin.
     const reverseGeocodeAndFill = async (coords: DeliveryCoordinates) => {
         const requestId = ++reverseRef.current;
         // Full-precision pin this request belongs to: a response that comes back
         // after the customer confirmed a different point must be discarded.
         const requestedPin = { latitude: coords.latitude, longitude: coords.longitude };
         setReverseState("loading");
+        setReverseFailure("none");
         try {
             // The Maps JS API is loaded lazily; the picker normally already triggered it,
-            // so this resolves immediately. A missing or blocked key REJECTS here and is
-            // handled by the catch below (manual area fallback) — an address is never
-            // invented. Google stays the geocoder; Biteship stays authoritative for the
-            // area match and the shipping rates.
+            // so this resolves immediately. The Geocoder class itself arrives with its own
+            // library, so it is awaited too — reading it straight off the loaded API was the
+            // same race that once broke the Places widget. Google stays the geocoder; Biteship
+            // stays authoritative for the area match and the shipping rates.
             await loadGoogleMaps();
-            const address = await reverseGeocodeWithGoogle(requestedPin, getGoogleMapsApi());
+            const geocoder = await loadGoogleMapsGeocoder();
+            const address = await reverseGeocodeWithGoogle(requestedPin, geocoder);
             // Stale-response guard: a superseded request, or a response for a pin that
             // is no longer the confirmed one, must NEVER overwrite the latest pin.
             if (isStaleResponse(reverseRef.current, requestId) || isStalePin(requestedPin, confirmedPinRef.current)) return;
             const result: LocationSearchResult | null = toLocationSearchResult(address);
-            if (!result) {
+            // "Recognized" is Google's own answer: a valid formatted address is enough even
+            // when the structured components are empty (normal in Indonesia). Only an answer
+            // with no address text AND no component at all is unrecognized.
+            if (!result || !isRecognizedGoogleAddress(address)) {
                 setReverseState("error");
-                // Reveal the manual Kecamatan/Kelurahan fallback when the geocoder fails.
+                setReverseFailure("no_address");
+                // Reveal the manual Kecamatan/Kelurahan fallback when there is no address here.
                 setAreaState("not_found");
                 return;
             }
@@ -397,6 +432,9 @@ export default function CheckoutPage() {
             // Only the geocoded parts are replaced. The manually typed detail
             // (blok / RT / RW / patokan) lives in the form and is left untouched.
             setDestinationAddress(nextAddress);
+            // Google SUCCEEDED. From here the address is known and nothing below may turn that
+            // into an address failure: whether Biteship can match an area is a SEPARATE step,
+            // and it only ever changes the area state.
             setReverseState("done");
             void matchArea({
                 province: nextAddress.province,
@@ -407,9 +445,12 @@ export default function CheckoutPage() {
             });
             // Close the fullscreen picker only now that the address was recognized.
             setMapOpen(false);
-        } catch {
+        } catch (error) {
             if (isStaleResponse(reverseRef.current, requestId)) return;
+            // The address SERVICE failed. That is not "this location cannot be recognized", so
+            // it is classified and reported honestly, while the Biteship picker stays available.
             setReverseState("error");
+            setReverseFailure(classifyGoogleGeocodeFailure(error));
             setAreaState("not_found");
         }
     };
@@ -830,7 +871,22 @@ export default function CheckoutPage() {
                                     <p className="mt-2 break-words text-[#2E2A26]">{destinationStreet || "Alamat belum terisi"}</p>
                                     {destinationLocality && <p className="text-sm text-[#2E2A26]">{destinationLocality}</p>}
                                     <p className="text-sm text-[#6D6558]">{destinationRegion}</p>
-                                    {reverseState === "error" && <p className="mt-2 text-sm font-semibold text-red-700">Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.</p>}
+                                    {/* Google's own answer, shown as the success it is — independent of
+                                        whether Biteship could already match an area. */}
+                                    {reverseState === "done" && destinationAddress?.displayName && (
+                                        <p className="mt-2 flex items-start gap-2 text-sm font-semibold text-[#184D47]">
+                                            <Check size={16} className="mt-0.5 shrink-0" />
+                                            <span>{ADDRESS_FOUND_LABEL}: <span className="font-normal break-words">{destinationAddress.displayName}</span></span>
+                                        </p>
+                                    )}
+                                    {/* Only a REAL Google failure is reported, and an unavailability is
+                                        never dressed up as an unrecognizable address. Once an official
+                                        Biteship area is matched, the delivery address is complete. */}
+                                    {reverseState === "error" && areaState !== "matched" && (
+                                        <p className={`mt-2 text-sm font-semibold ${reverseFailure === "no_address" ? "text-red-700" : "text-[#8B6B3F]"}`}>
+                                            {reverseFailure === "no_address" ? REVERSE_NO_ADDRESS_CARD : REVERSE_UNAVAILABLE_CARD}
+                                        </p>
+                                    )}
                                     <button type="button" onClick={openLocationPicker} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-white">
                                         <MapPin size={14} /> Ubah Lokasi
                                     </button>
@@ -858,15 +914,19 @@ export default function CheckoutPage() {
                                 </div>
 
                                 {areaState === "matched" && destinationArea && (
-                                    <p className="flex items-center gap-2 rounded-xl bg-[#EAF1ED] p-3 text-sm font-bold text-[#184D47]"><Check size={16} /> Area pengiriman ditemukan: {[destinationArea.name, destinationArea.district, destinationArea.city, destinationArea.province, destinationArea.postalCode].filter(Boolean).join(", ")}</p>
+                                    <p className="flex items-center gap-2 rounded-xl bg-[#EAF1ED] p-3 text-sm font-bold text-[#184D47]"><Check size={16} /> Area pengiriman tersedia: {[destinationArea.name, destinationArea.district, destinationArea.city, destinationArea.province, destinationArea.postalCode].filter(Boolean).join(", ")}</p>
                                 )}
                                 {areaState === "matching" && <p className="text-sm text-[#6D6558]"><Loader2 size={14} className="mr-1 inline animate-spin" />Mencocokkan area pengiriman...</p>}
-                                {/* The manual area search is a FALLBACK: it only ever appears when the
-                                    automatic match genuinely could not resolve an official area. */}
+                                {/*
+                                    The address Google recognized and the Biteship area match are TWO
+                                    separate successes. When Google answered but no official area was
+                                    matched yet, the customer is asked for the area — never told the
+                                    address failed.
+                                */}
                                 {areaState === "not_found" && (
                                     <div className="rounded-xl bg-[#FFF2D6] p-3">
-                                        <p className="text-sm font-bold text-[#123524]">{AREA_FALLBACK_TITLE}</p>
-                                        <p className="mt-1 text-xs text-[#6D6558]">{AREA_FALLBACK_HINT}</p>
+                                        <p className="text-sm font-bold text-[#123524]">{reverseState === "done" ? AREA_FALLBACK_TITLE_AFTER_ADDRESS : AREA_FALLBACK_TITLE}</p>
+                                        <p className="mt-1 text-xs text-[#6D6558]">{reverseState === "done" ? AREA_FALLBACK_HINT_AFTER_ADDRESS : AREA_FALLBACK_HINT}</p>
                                         <div className="mt-3">
                                             <AreaAutocomplete
                                                 query={areaQuery}
@@ -962,7 +1022,7 @@ export default function CheckoutPage() {
             {mapOpen && (
                 <div className="fixed inset-0 z-[100] flex h-[100dvh] w-full flex-col overflow-hidden bg-[#F8F5EE]" role="dialog" aria-modal="true" aria-label="Tentukan Lokasi Pengiriman">
                     {/* Header */}
-                    <header className="flex items-center gap-2 border-b border-[#C9A45B]/30 bg-white px-3 py-3">
+                    <header className="flex shrink-0 items-center gap-2 border-b border-[#C9A45B]/30 bg-white px-3 py-3">
                         <button type="button" onClick={closeLocationPicker} aria-label="Tutup peta" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#123524] hover:bg-[#F0E7D8]">
                             <ArrowLeft size={20} />
                         </button>
@@ -980,27 +1040,42 @@ export default function CheckoutPage() {
                         </button>
                     </header>
 
-                    {/* Search */}
-                    <div className="relative z-30 border-b border-[#C9A45B]/30 bg-white px-4 py-3">
-                        <CheckoutLocationSearch onSelect={handleSearchSelect} />
-                        {locationMessage && <p className="mt-2 text-xs text-[#8B6B3F]">{locationMessage}</p>}
+                    {/*
+                        Body. On a phone the whole block scrolls with ONE finger (the map is in
+                        cooperative mode, so a single finger never pans it) and the CTA below stays
+                        outside the scroll area. On desktop the map simply fills the free height.
+                        Gestures are never globally cancelled: no `touch-action: none`, no
+                        preventDefault on touchmove/wheel.
+                    */}
+                    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+
+                        {/* Search */}
+                        <div className="relative z-30 shrink-0 border-b border-[#C9A45B]/30 bg-white px-4 py-3">
+                            <CheckoutLocationSearch onSelect={handleSearchSelect} />
+                            {locationMessage && <p className="mt-2 text-xs text-[#8B6B3F]">{locationMessage}</p>}
+                        </div>
+
+                        {/* Map — the majority of the viewport on desktop, a comfortable fixed height
+                            on a phone so the confirmation button below can never be covered. */}
+                        <div className="relative h-[44dvh] min-h-[240px] shrink-0 sm:h-auto sm:min-h-0 sm:flex-1">
+                            <CheckoutLocationMap
+                                fullscreen
+                                center={draftLocation}
+                                zoom={mapZoom}
+                                onCenterChange={handleCenterChange}
+                                onZoomChange={setMapZoom}
+                                onInteractionStart={handleInteractionStart}
+                                onInteractionEnd={handleInteractionEnd}
+                            />
+                        </div>
                     </div>
 
-                    {/* Map — fills the majority of the viewport */}
-                    <div className="relative min-h-0 flex-1">
-                        <CheckoutLocationMap
-                            fullscreen
-                            center={draftLocation}
-                            zoom={mapZoom}
-                            onCenterChange={handleCenterChange}
-                            onZoomChange={setMapZoom}
-                            onInteractionStart={handleInteractionStart}
-                            onInteractionEnd={handleInteractionEnd}
-                        />
-                    </div>
-
-                    {/* Bottom confirmation panel */}
-                    <div className="border-t border-[#C9A45B]/30 bg-white px-4 pb-3 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
+                    {/* Bottom confirmation panel — OUTSIDE the scrolling area, so
+                        "GUNAKAN LOKASI INI" always stays visible and easy to tap. */}
+                    <div
+                        className="shrink-0 border-t border-[#C9A45B]/30 bg-white px-4 pb-3 pt-3"
+                        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+                    >
                         {reverseState === "loading" ? (
                             <p className="flex items-center justify-center gap-2 text-sm font-semibold text-[#6D6558]"><Loader2 size={16} className="animate-spin" /> Mengenali alamat...</p>
                         ) : (
@@ -1009,10 +1084,29 @@ export default function CheckoutPage() {
                             </p>
                         )}
 
+                        {/* Only a REAL address failure is an error. A failed address service is reported
+                            in amber as a service problem, never as an unrecognizable location. */}
                         {reverseState === "error" && (
-                            <div role="alert" className="mt-2 rounded-xl bg-red-50 p-3 text-center text-sm text-red-700">
-                                <p>Alamat lokasi belum dapat dikenali. Geser titik sedikit lalu coba kembali.</p>
-                                <button type="button" onClick={confirmLocation} className="mt-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-100">Coba Lagi</button>
+                            <div
+                                role="alert"
+                                className={
+                                    reverseFailure === "no_address"
+                                        ? "mt-2 rounded-xl bg-red-50 p-3 text-center text-sm text-red-700"
+                                        : "mt-2 rounded-xl bg-[#FFF2D6] p-3 text-center text-sm text-[#8B6B3F]"
+                                }
+                            >
+                                <p>{reverseFailure === "no_address" ? REVERSE_NO_ADDRESS_MESSAGE : REVERSE_UNAVAILABLE_MESSAGE}</p>
+                                <button
+                                    type="button"
+                                    onClick={confirmLocation}
+                                    className={
+                                        reverseFailure === "no_address"
+                                            ? "mt-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-100"
+                                            : "mt-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-[#C9A45B] px-4 text-sm font-bold text-[#8B6B3F] hover:bg-[#FFF2D6]"
+                                    }
+                                >
+                                    Coba Lagi
+                                </button>
                             </div>
                         )}
 

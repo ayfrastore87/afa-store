@@ -166,12 +166,21 @@ function pickComponent(components: GoogleAddressComponentInput[], candidates: st
 /**
  * Google's Indonesian address levels, weakest last. Nothing is ever invented: a level
  * Google does not report stays null so Biteship area matching can decide.
+ *
+ * The numbered `sublocality_level_*` entries are appended AFTER the previously supported
+ * candidates on purpose, so an address that already resolved keeps the exact same value while an
+ * answer that only carries a finer/lower sublocality level (Google reports different levels in
+ * different Indonesian regions) can still be filled in. A `sublocality_level_1` is the
+ * kecamatan-level hint, so it stays available for `district` as well.
  */
 const ROAD_CANDIDATES = [["route"], ["street_address"]];
 const HOUSE_NUMBER_CANDIDATES = [["street_number"], ["premise"], ["subpremise"]];
 const VILLAGE_CANDIDATES = [
     ["administrative_area_level_4"],
     ["neighborhood"],
+    ["sublocality_level_4"],
+    ["sublocality_level_3"],
+    ["sublocality_level_2"],
     ["sublocality_level_1"],
     ["sublocality"],
 ];
@@ -362,13 +371,119 @@ export function normalizeGoogleGeocodeResults(
     return normalized;
 }
 
+/* ==========================================================================
+ * Result evaluation — which Google answer is the best usable one
+ * ==========================================================================
+ *
+ * A Google reverse geocode answers with SEVERAL results of different types
+ * (`street_address`, `premise`, `subpremise`, `route`, `neighborhood`, `sublocality`,
+ * `sublocality_level_*`, `administrative_area_level_*`, `postal_code`, `plus_code`, ...) and
+ * their order is a prominence hint, not a guarantee. Taking `results[0]` therefore either threw
+ * away the address (when the first entry carries only a plus code) or accepted an entry with no
+ * address at all. The helpers below weigh the evidence an answer really carries instead.
+ */
+
+/**
+ * How much address evidence one normalized result carries.
+ *
+ * `formattedAddress` alone is enough to be RECOGNIZED (Google did answer), while a street line
+ * and the administrative levels are what make the address usable for Biteship area matching.
+ */
+export function scoreGoogleAddress(address: NormalizedGoogleAddress | null | undefined): number {
+    if (!address) return 0;
+    let score = 0;
+    if (text(address.formattedAddress)) score += 1;
+    if (text(address.road)) score += 4;
+    if (text(address.houseNumber)) score += 2;
+    if (text(address.village)) score += 2;
+    if (text(address.district)) score += 2;
+    if (text(address.city)) score += 1;
+    if (text(address.province)) score += 1;
+    if (text(address.postcode)) score += 1;
+    return score;
+}
+
+/**
+ * True when Google really recognized SOMETHING at this pin.
+ *
+ * A valid `formatted_address` is enough even when every structured component is empty — normal
+ * for many Indonesian coordinates — so "no structured fields" must never be reported as
+ * "address unrecognized". Only a result with no address text AND no component at all is
+ * unrecognized (e.g. a plus-code-only answer).
+ */
+export function isRecognizedGoogleAddress(address: NormalizedGoogleAddress | null | undefined): boolean {
+    return scoreGoogleAddress(address) > 0;
+}
+
+/**
+ * Best usable result of a reverse-geocode response: highest evidence wins, and an equal score
+ * keeps the earlier entry (Google's own prominence order). Returns null only when Google
+ * answered with nothing recognizable at all, so the caller can fall back honestly.
+ */
+export function pickBestGoogleGeocodeResult(results: NormalizedGoogleAddress[]): NormalizedGoogleAddress | null {
+    let best: NormalizedGoogleAddress | null = null;
+    let bestScore = 0;
+    for (const result of results) {
+        const score = scoreGoogleAddress(result);
+        if (score > bestScore) {
+            best = result;
+            bestScore = score;
+        }
+    }
+    return best;
+}
+
+
+/* ==========================================================================
+ * Failure classification — "no address here" vs "address service unavailable"
+ * ==========================================================================
+ */
+
+export type GoogleGeocodeFailureKind = "no_address" | "unavailable";
+
+/**
+ * Statuses that mean "Google answered, and there is no address for this point". Every other
+ * status (quota, authorization, transport, an API that could not load) is a TEMPORARY problem.
+ */
+const GOOGLE_GEOCODE_EMPTY_STATUSES = ["ZERO_RESULTS", "NOT_FOUND"];
+
+/** The status token of a Geocoder rejection (the API rejects with the raw status string). */
+function failureToken(error: unknown): string | null {
+    if (typeof error === "string") {
+        const value = error.trim();
+        return value.length > 0 ? value.toUpperCase() : null;
+    }
+    const record = asRecord(error);
+    if (!record) return null;
+    return firstText(record.status, record.code, record.message)?.toUpperCase() ?? null;
+}
+
+/**
+ * Classify a failed reverse geocode WITHOUT ever handing upstream text to the UI.
+ *
+ * The Maps JS Geocoder rejects with the plain status string for every non-OK status, and
+ * treating all of them as one error made an exhausted quota, a transport failure or a key that
+ * may not use the API look like "Alamat lokasi belum dapat dikenali" — for a location Google
+ * Maps displays perfectly. Only a genuine empty answer is `no_address`.
+ */
+export function classifyGoogleGeocodeFailure(error: unknown): GoogleGeocodeFailureKind {
+    const token = failureToken(error);
+    if (!token) return "unavailable";
+    return GOOGLE_GEOCODE_EMPTY_STATUSES.some((status) => token.includes(status)) ? "no_address" : "unavailable";
+}
+
 /**
  * Reverse geocode a confirmed pin with the official Maps JS API Geocoder.
  *
  * The pin stays authoritative and keeps full float precision (coordinates are never
- * rounded to a fixed number of decimals). A missing, empty or broken response resolves
- * to null so the caller can fall back to the manual kecamatan/kelurahan picker instead
- * of displaying invented admin names.
+ * rounded to a fixed number of decimals). Every usable result is evaluated — never blindly
+ * `results[0]` — and a response without any recognizable address resolves to null so the caller
+ * can fall back to the manual kecamatan/kelurahan picker instead of displaying invented admin
+ * names.
+ *
+ * A provider failure (non-OK status, transport error) still REJECTS with the provider's status,
+ * so the caller can tell "no address here" from "the address service is unavailable" via
+ * `classifyGoogleGeocodeFailure`.
  */
 export async function reverseGeocodeWithGoogle(
     pin: { latitude: number; longitude: number } | null | undefined,
@@ -386,5 +501,8 @@ export async function reverseGeocodeWithGoogle(
         region: GOOGLE_REVERSE_REGION,
     });
     const results = normalizeGoogleGeocodeResults(response, { latitude, longitude });
-    return results[0] ?? null;
+    // Every result is weighed, so a leading plus-code/bare entry can no longer hide the
+    // `street_address`/administrative answer behind it — and an answer with no address at all
+    // stays "unrecognized" instead of becoming an empty address.
+    return pickBestGoogleGeocodeResult(results);
 }

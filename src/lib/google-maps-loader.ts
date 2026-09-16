@@ -44,6 +44,7 @@ const GOOGLE_MAPS_SCRIPT_BASE = "https://maps.googleapis.com/maps/api/js";
 /** Library names handed to `google.maps.importLibrary`. */
 export const GOOGLE_MAPS_CORE_LIBRARY = "maps";
 export const GOOGLE_MAPS_PLACES_LIBRARY = "places";
+export const GOOGLE_MAPS_GEOCODING_LIBRARY = "geocoding";
 
 /** Hard bound on one load attempt: a request that never finishes must never hang checkout. */
 export const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 15000;
@@ -111,6 +112,25 @@ export interface GoogleMapsLoaderEnvironment {
 /** The Places API (New) autocomplete widget class, once its library is really usable. */
 export interface GoogleMapsPlacesNamespace {
     PlaceAutocompleteElement: new (options?: GoogleMapsPlaceAutocompleteElementOptions) => GoogleMapsPlaceAutocompleteElement;
+}
+
+/** The reverse-geocoding class, once the `geocoding` library is really usable. */
+export interface GoogleMapsGeocoderNamespace {
+    maps: { Geocoder: new () => GoogleGeocoder };
+}
+
+/**
+ * The Geocoder class, in either shape the API hands a library over in: directly
+ * `{ Geocoder }` (what `importLibrary("geocoding")` resolves to) or attached to `maps`.
+ * Returns null instead of guessing, so a missing class stays detectable.
+ */
+function geocoderClassFrom(source: unknown): GoogleMapsGeocoderNamespace["maps"]["Geocoder"] | null {
+    if (!source || typeof source !== "object") return null;
+    const direct = (source as { Geocoder?: unknown }).Geocoder;
+    if (typeof direct === "function") return direct as unknown as GoogleMapsGeocoderNamespace["maps"]["Geocoder"];
+    const nested = (source as { maps?: { Geocoder?: unknown } }).maps?.Geocoder;
+    if (typeof nested === "function") return nested as unknown as GoogleMapsGeocoderNamespace["maps"]["Geocoder"];
+    return null;
 }
 
 /**
@@ -432,6 +452,39 @@ export async function loadGoogleMapsPlaces(
         ).catch(() => null);
         const widget = placesWidgetFrom(library) ?? placesWidgetFrom(namespaceOf(resolved)?.maps?.places);
         if (widget) return { PlaceAutocompleteElement: widget };
+    }
+
+    throw new GoogleMapsLoadError("LOAD_FAILED", GOOGLE_MAPS_LOAD_FAILED_MESSAGE);
+}
+
+/**
+ * The reverse-geocoding class, handed over only when it can really be constructed.
+ *
+ * `google.maps.Geocoder` belongs to the `geocoding` library, which — exactly like `places`
+ * with `loading=async` — may attach after the core modules. Reading `google.maps.Geocoder`
+ * straight after `loadGoogleMaps()` therefore raced that library, and a missing class made
+ * `reverseGeocodeWithGoogle` resolve to null, which checkout could only report as "Alamat
+ * lokasi belum dapat dikenali" for a location Google Maps displays perfectly. Consumers await
+ * this instead, and a class that never arrives becomes a typed, retryable error that the UI can
+ * explain (service unavailable) and that never blocks the manual Biteship area picker.
+ */
+export async function loadGoogleMapsGeocoder(
+    environment?: GoogleMapsLoaderEnvironment,
+): Promise<GoogleMapsGeocoderNamespace> {
+    const resolved = environment ?? createGoogleMapsEnvironment();
+    await loadGoogleMaps(environment);
+
+    const attached = geocoderClassFrom(namespaceOf(resolved)?.maps);
+    if (attached) return { maps: { Geocoder: attached } };
+
+    const importLibrary = namespaceOf(resolved)?.maps?.importLibrary;
+    if (typeof importLibrary === "function" && resolved) {
+        const library = await withDeadline(
+            Promise.resolve().then(() => importLibrary(GOOGLE_MAPS_GEOCODING_LIBRARY)),
+            resolved,
+        ).catch(() => null);
+        const geocoder = geocoderClassFrom(library) ?? geocoderClassFrom(namespaceOf(resolved)?.maps);
+        if (geocoder) return { maps: { Geocoder: geocoder } };
     }
 
     throw new GoogleMapsLoadError("LOAD_FAILED", GOOGLE_MAPS_LOAD_FAILED_MESSAGE);

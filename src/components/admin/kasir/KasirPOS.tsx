@@ -19,11 +19,33 @@ import {
     Search,
     ShoppingCart,
     Smartphone,
+    Store,
     Trash2,
+    Truck,
     User,
 } from "lucide-react";
 import { fetchProducts, type Product } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
+import {
+    isValidDeliveryLocation,
+    isValidRecipientName,
+    isValidRecipientPhone,
+    locationSignature,
+    mustInvalidateShipping,
+} from "@/lib/checkout-address";
+import {
+    DEFAULT_KASIR_ORDER_TYPE,
+    emptyKasirDeliveryDraft,
+    kasirCartKey,
+    kasirDeliveryReadiness,
+    kasirDeliveryRequest,
+    kasirDeliverySignature,
+    kasirOrderTotal,
+    kasirOrderTypeLabel,
+    type KasirDeliveryDraft,
+    type KasirOrderType,
+} from "@/lib/kasir-delivery";
+import KasirDeliveryPanel from "./KasirDeliveryPanel";
 import {
     PAYMENT_METHODS,
     formatRupiah,
@@ -54,7 +76,12 @@ type KasirOrderResponse = {
     success: boolean;
     orderId: string;
     invoice: string;
+    subtotal: number;
+    shipping: number;
     total: number;
+    orderType: KasirOrderType;
+    courier?: string | null;
+    service?: string | null;
     paymentMethod: KasirPaymentMethod;
     source: string;
     cashReceived: number | null;
@@ -81,6 +108,13 @@ export default function KasirPOS() {
     const [customerName, setCustomerName] = useState("");
     const [customerWhatsapp, setCustomerWhatsapp] = useState("");
     const [source, setSource] = useState<"TATAP_MUKA" | "WHATSAPP">("TATAP_MUKA");
+    // JENIS PESANAN. Pickup keeps the existing cashier flow; Kirim enables the delivery block.
+    const [orderType, setOrderType] = useState<KasirOrderType>(DEFAULT_KASIR_ORDER_TYPE);
+    const [deliveryDraft, setDeliveryDraft] = useState<KasirDeliveryDraft>(() => emptyKasirDeliveryDraft());
+
+    const patchDelivery = useCallback((patch: Partial<KasirDeliveryDraft>) => {
+        setDeliveryDraft((current) => ({ ...current, ...patch }));
+    }, []);
 
     const loadCatalog = useCallback(async () => {
         setLoading(true);
@@ -107,7 +141,16 @@ export default function KasirPOS() {
 
     async function submitOrder() {
         if (submitting || cart.length === 0) return;
-        if (paymentMethod === "TUNAI" && (Number(cashReceived) || 0) < subtotal) {
+        if (orderType === "DELIVERY" && !deliveryReadiness.ready) {
+            await Swal.fire({
+                title: "Pengiriman Belum Lengkap",
+                text: deliveryReadiness.reason || "Lengkapi data pengiriman terlebih dahulu.",
+                icon: "warning",
+                confirmButtonColor: "#184D47",
+            });
+            return;
+        }
+        if (paymentMethod === "TUNAI" && (Number(cashReceived) || 0) < orderTotal) {
             await Swal.fire({
                 title: "Uang Kurang",
                 text: "Uang yang diterima kurang dari total belanja.",
@@ -127,6 +170,11 @@ export default function KasirPOS() {
                     customerWhatsapp: customerWhatsapp.trim(),
                     source,
                     paymentMethod,
+                    orderType,
+                    // The delivery object is sent ONLY for Kirim: a pickup order keeps the
+                    // exact previous payload. The client price/weight is never sent — the
+                    // server re-quotes Biteship with authoritative product data.
+                    delivery: orderType === "DELIVERY" ? kasirDeliveryRequest(deliveryDraft) : undefined,
                     cashReceived: paymentMethod === "TUNAI" ? Number(cashReceived) || 0 : undefined,
                     items: cart.map((line) => ({ productId: line.productId, quantity: line.quantity })),
                 }),
@@ -140,11 +188,17 @@ export default function KasirPOS() {
                 throw new Error(payload?.message || "Transaksi gagal diproses.");
             }
 
-            const changeLabel = payload.paymentMethod === "TUNAI" && payload.change != null ? `\nKembalian: ${formatRupiah(payload.change)}` : "";
+            const changeLabel = payload.paymentMethod === "TUNAI" && payload.change != null
+                ? `<div><b>Kembalian</b><br/>${formatRupiah(payload.change)}</div>`
+                : "";
+            const shippingLabel =
+                payload.orderType === "DELIVERY"
+                    ? `<div><b>Ongkir</b><br/>${formatRupiah(payload.shipping)}${payload.courier ? ` (${payload.courier}${payload.service ? ` — ${payload.service}` : ""})` : ""}</div>`
+                    : "";
 
             await Swal.fire({
                 title: "Transaksi Berhasil",
-                html: `<div style="text-align:left;display:grid;gap:8px"><div><b>Invoice</b><br/>${payload.invoice}</div><div><b>Total</b><br/>${formatRupiah(payload.total)}</div>${changeLabel ? `<div><b>Kembalian</b><br/>${formatRupiah(payload.change!)}</div>` : ""}</div>`,
+                html: `<div style="text-align:left;display:grid;gap:8px"><div><b>Invoice</b><br/>${payload.invoice}</div><div><b>Jenis Pesanan</b><br/>${kasirOrderTypeLabel(payload.orderType)}</div><div><b>Total</b><br/>${formatRupiah(payload.total)}</div>${shippingLabel}${changeLabel}</div>`,
                 icon: "success",
                 confirmButtonColor: "#184D47",
             });
@@ -218,11 +272,52 @@ export default function KasirPOS() {
     const subtotal = useMemo(() => cart.reduce((sum, line) => sum + line.price * line.quantity, 0), [cart]);
     const totalItems = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
     const cashValue = Number(cashReceived) || 0;
-    const change = Math.max(0, cashValue - subtotal);
+
+    // ---- DELIVERY (Kirim) ---------------------------------------------------
+    // The same shared helpers as the customer checkout. These client checks only gate the
+    // button: POST /api/admin/kasir/order re-validates everything (products, weights, pin,
+    // area id, courier selection) and re-quotes Biteship server-side.
+    const deliveryItems = useMemo(
+        () => cart.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        [cart],
+    );
+    const deliverySignature = kasirDeliverySignature(
+        kasirCartKey(deliveryItems),
+        locationSignature({
+            latitude: deliveryDraft.latitude,
+            longitude: deliveryDraft.longitude,
+            destinationAreaId: deliveryDraft.areaId,
+            formattedAddress: deliveryDraft.address,
+        }),
+    );
+    const deliveryLocationValid =
+        isValidDeliveryLocation({
+            formattedAddress: deliveryDraft.address,
+            latitude: deliveryDraft.latitude,
+            longitude: deliveryDraft.longitude,
+            destinationAreaId: deliveryDraft.areaId,
+        }) && deliveryDraft.areaId.trim().length > 0;
+    const deliveryReadiness =
+        orderType === "DELIVERY"
+            ? kasirDeliveryReadiness({
+                  recipientValid: isValidRecipientName(customerName) && isValidRecipientPhone(customerWhatsapp),
+                  locationValid: deliveryLocationValid,
+                  quoteSelected: Boolean(deliveryDraft.courierCode && deliveryDraft.serviceCode),
+                  quoteMatchesDestination: !mustInvalidateShipping(deliveryDraft.quoteSignature, deliverySignature),
+              })
+            : { ready: true, reason: null };
+
+    // Ongkir is only ever charged when the delivery is fully validated, and a pickup
+    // order never carries shipping at all.
+    const deliveryShipping = orderType === "DELIVERY" && deliveryReadiness.ready ? deliveryDraft.shipping : 0;
+    const orderTotal = kasirOrderTotal({ subtotal, orderType, shipping: deliveryShipping });
+    const change = Math.max(0, cashValue - orderTotal);
 
     function clearCart() {
         setCart([]);
         setCashReceived("");
+        // An emptied cart owns no destination or quote: the next order starts clean.
+        setDeliveryDraft(emptyKasirDeliveryDraft());
     }
 
     return (
@@ -456,13 +551,81 @@ export default function KasirPOS() {
                         </div>
 
                         <div className="space-y-4 border-t border-[#184D47]/10 p-5">
+                            {/* JENIS PESANAN — Ambil Sendiri (default) or Kirim */}
+                            <div>
+                                <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Jenis Pesanan</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(["PICKUP", "DELIVERY"] as KasirOrderType[]).map((type) => {
+                                        const Icon = type === "PICKUP" ? Store : Truck;
+                                        return (
+                                            <button
+                                                key={type}
+                                                type="button"
+                                                onClick={() => setOrderType(type)}
+                                                className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl border text-xs font-bold transition ${orderType === type ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]/70 hover:border-[#184D47]/40"}`}
+                                            >
+                                                <Icon size={18} />
+                                                {kasirOrderTypeLabel(type)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* PENERIMA — required for Kirim */}
+                            <div className="space-y-3">
+                                <p className="text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">
+                                    {orderType === "DELIVERY" ? "Penerima" : "Pelanggan"}
+                                </p>
+                                <label className="flex items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white px-3">
+                                    <User size={16} className="shrink-0 text-[#C9A45B]" />
+                                    <input
+                                        value={customerName}
+                                        onChange={(event) => setCustomerName(event.target.value)}
+                                        placeholder={orderType === "DELIVERY" ? "Nama penerima (wajib)" : "Nama pelanggan"}
+                                        className="h-12 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#184D47]/40"
+                                    />
+                                </label>
+                                <label className="flex items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white px-3">
+                                    <Phone size={16} className="shrink-0 text-[#C9A45B]" />
+                                    <input
+                                        value={customerWhatsapp}
+                                        onChange={(event) => setCustomerWhatsapp(event.target.value)}
+                                        placeholder={orderType === "DELIVERY" ? "Nomor WhatsApp penerima (wajib)" : "Nomor WhatsApp (opsional)"}
+                                        inputMode="tel"
+                                        className="h-12 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#184D47]/40"
+                                    />
+                                </label>
+                            </div>
+
+                            {/* ALAMAT + PENGIRIMAN — only for Kirim */}
+                            {orderType === "DELIVERY" ? (
+                                <KasirDeliveryPanel
+                                    draft={deliveryDraft}
+                                    onPatch={patchDelivery}
+                                    items={deliveryItems}
+                                    recipientName={customerName}
+                                    recipientPhone={customerWhatsapp}
+                                />
+                            ) : null}
+                        </div>
+
+                        <div className="space-y-4 border-t border-[#184D47]/10 p-5">
                             <div className="flex justify-between text-sm font-semibold">
-                                <span className="text-[#184D47]/60">Subtotal</span>
+                                <span className="text-[#184D47]/60">Subtotal Produk</span>
                                 <span className="font-black">{rupiah.format(subtotal)}</span>
                             </div>
+                            {orderType === "DELIVERY" ? (
+                                <div className="flex justify-between text-sm font-semibold">
+                                    <span className="text-[#184D47]/60">Ongkir</span>
+                                    <span className="font-black">
+                                        {deliveryShipping > 0 ? rupiah.format(deliveryShipping) : "Belum dipilih"}
+                                    </span>
+                                </div>
+                            ) : null}
                             <div className="flex justify-between border-t border-[#184D47]/10 pt-3 text-lg font-black">
                                 <span>Total</span>
-                                <span className="text-[#0F4C45]">{rupiah.format(subtotal)}</span>
+                                <span className="text-[#0F4C45]">{rupiah.format(orderTotal)}</span>
                             </div>
 
                             <div>
@@ -521,34 +684,20 @@ export default function KasirPOS() {
                                 </div>
                             </div>
 
-                            <div className="space-y-3">
-                                <label className="flex items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white px-3">
-                                    <User size={16} className="shrink-0 text-[#C9A45B]" />
-                                    <input
-                                        value={customerName}
-                                        onChange={(event) => setCustomerName(event.target.value)}
-                                        placeholder="Nama pelanggan"
-                                        className="h-12 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#184D47]/40"
-                                    />
-                                </label>
-                                <label className="flex items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white px-3">
-                                    <Phone size={16} className="shrink-0 text-[#C9A45B]" />
-                                    <input
-                                        value={customerWhatsapp}
-                                        onChange={(event) => setCustomerWhatsapp(event.target.value)}
-                                        placeholder="Nomor WhatsApp (opsional)"
-                                        inputMode="tel"
-                                        className="h-12 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#184D47]/40"
-                                    />
-                                </label>
-                            </div>
+                            {/* Penerima/pelanggan inputs live in the PENERIMA section above. */}
 
                             <button
                                 type="button"
                                 onClick={() => void submitOrder()}
-                                disabled={submitting || totalItems === 0}
+                                disabled={submitting || totalItems === 0 || (orderType === "DELIVERY" && !deliveryReadiness.ready)}
                                 className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-                                title={totalItems === 0 ? "Tambahkan produk terlebih dahulu" : "Proses transaksi"}
+                                title={
+                                    totalItems === 0
+                                        ? "Tambahkan produk terlebih dahulu"
+                                        : orderType === "DELIVERY" && !deliveryReadiness.ready
+                                            ? deliveryReadiness.reason ?? "Lengkapi data pengiriman"
+                                            : "Proses transaksi"
+                                }
                             >
                                 {submitting ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
                                 {submitting ? "Memproses..." : "Proses Transaksi"}

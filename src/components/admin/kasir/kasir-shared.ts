@@ -91,9 +91,75 @@ export type KasirOrderDetail = {
     paymentStatus: string;
     status: string;
     subtotal: number;
+    /** Ongkir actually charged (0 for a pickup order). */
+    shipping: number;
     total: number;
     cashReceived: number | null;
     change: number | null;
     createdAt: string;
+    /** JENIS PESANAN, derived server-side from the persisted Order shipping fields. */
+    orderType: KasirOrderType;
+    /** PENGIRIMAN data, or null for a pickup order. Public data only. */
+    delivery: KasirDeliveryDetail | null;
     items: KasirOrderDetailItem[];
 };
+
+/**
+ * JENIS PESANAN. Kept separate from `source` (COD / WhatsApp): the transaction
+ * source never represents the courier or the fulfilment type.
+ */
+export type KasirOrderType = "PICKUP" | "DELIVERY";
+
+/** Normalized delivery status shown in the UI, with the raw provider status preserved. */
+export type KasirDeliveryStatusView = {
+    key: string;
+    label: string;
+    raw: string;
+    known: boolean;
+};
+
+/**
+ * Delivery data returned by GET /api/admin/kasir/orders/[id]. It deliberately carries NO
+ * internal identifier (Biteship area id, quote ref, provider order id or coordinates):
+ * the same payload feeds the on-screen struk, so a receipt structurally cannot leak them.
+ */
+export type KasirDeliveryDetail = {
+    recipientName: string;
+    recipientPhone: string;
+    address: string;
+    note: string | null;
+    shipping: number;
+    courier: string | null;
+    service: string | null;
+    status: KasirDeliveryStatusView;
+    hasShipment: boolean;
+    trackingId: string | null;
+    labelUrl: string | null;
+    shipmentAction: { canCreate: boolean; canRefresh: boolean; label: string; hint: string };
+    destination: {
+        province: string | null;
+        city: string | null;
+        district: string | null;
+        village: string | null;
+        postalCode: string | null;
+    };
+};
+
+/** Delivery status badge colors, keyed by the normalized status key. */
+export const DELIVERY_STATUS_BADGE: Record<string, string> = {
+    MENUNGGU_PENGIRIMAN: "bg-amber-100 text-amber-800",
+    KURIR_DICARI: "bg-sky-100 text-sky-800",
+    DIPROSES: "bg-sky-100 text-sky-800",
+    KURIR_MENUJU_PICKUP: "bg-indigo-100 text-indigo-800",
+    PESANAN_DIAMBIL: "bg-indigo-100 text-indigo-800",
+    DALAM_PENGIRIMAN: "bg-[#184D47] text-white",
+    TERKIRIM: "bg-emerald-100 text-emerald-800",
+    DIKEMBALIKAN: "bg-orange-100 text-orange-800",
+    DITAHAN: "bg-orange-100 text-orange-800",
+    GAGAL: "bg-red-100 text-red-700",
+    TIDAK_DIKENAL: "bg-neutral-200 text-neutral-700",
+};
+
+export function deliveryStatusBadgeClass(key: string | null | undefined) {
+    return DELIVERY_STATUS_BADGE[String(key ?? "")] ?? DELIVERY_STATUS_BADGE.TIDAK_DIKENAL;
+}

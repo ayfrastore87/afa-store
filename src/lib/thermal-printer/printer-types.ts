@@ -38,6 +38,23 @@ export interface ReceiptItem {
     subtotalLabel: string;
 }
 
+/**
+ * PENGIRIMAN block of a DELIVERY receipt. Every field is already display-ready and
+ * contains ONLY public data: no Biteship area id, quote ref, provider order id or
+ * coordinate ever reaches this shape (see src/lib/kasir-delivery.ts).
+ */
+export interface ReceiptDeliveryData {
+    recipientName: string;
+    recipientPhone: string;
+    address: string;
+    courier?: string | null;
+    service?: string | null;
+    eta?: string | null;
+    /** Nomor resi / tracking id — printed only when the integration really has one. */
+    trackingId?: string | null;
+    shippingLabel: string;
+}
+
 // Neutral receipt payload. The engine never hardcodes a transaction; the kasir
 // UI maps its currently open order onto this shape. Field names mirror the
 // existing AFA STORE receipt so output stays identical.
@@ -55,5 +72,9 @@ export interface ReceiptData {
     paymentStatus: string;
     cashReceivedLabel?: string | null;
     changeLabel?: string | null;
+    /** Ongkir row. Optional: a pickup / already-shipping-included order omits it. */
+    shippingLabel?: string | null;
+    /** PENGIRIMAN block. Optional: only a delivery order sets it. */
+    delivery?: ReceiptDeliveryData | null;
     footer: string[];
 }

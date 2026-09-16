@@ -1,11 +1,19 @@
 import "server-only";
 
+import {
+    hasRealShipment,
+    kasirShipmentAction,
+    normalizeKasirDeliveryStatus,
+    resolveKasirOrderType,
+} from "@/lib/kasir-delivery";
+
 // ---------------------------------------------------------------------------
 // Shared server-side constants and helpers for the AFA STORE Kasir (POS) API.
 //
-// TAHAP C: validation + read-only contracts only. These helpers never create
-// transactions and never mutate stock. Atomic persistence (order + payment +
-// invoice + stock decrement) is deferred to TAHAP D.
+// The kasir can now create PICKUP or DELIVERY orders. Delivery orders reuse the
+// existing Google Maps + Biteship architecture (see src/lib/kasir-delivery.ts) and
+// the SAME Order shipping columns as the online checkout — no schema change, no
+// second shipping engine.
 // ---------------------------------------------------------------------------
 
 export const KASIR_SOURCES = ["TATAP_MUKA", "WHATSAPP"] as const;
@@ -52,20 +60,82 @@ type KasirOrderRecord = {
     invoice: string;
     customer: string;
     phone: string;
+    address: string;
+    note: string | null;
     source: string;
     paymentMethod: string;
     paymentStatus: string;
     status: string;
     subtotal: number;
+    shipping: number;
     total: number;
     cashReceived: number | null;
     change: number | null;
     createdAt: Date;
-    items: KasirOrderItem[];
+    courier: string | null;
+    courierCode: string | null;
+    service: string | null;
+    serviceCode: string | null;
+    shippingQuoteRef: string | null;
+    destinationAreaId: string | null;
+    originAreaId: string | null;
+    destinationLatitude: number | null;
+    destinationLongitude: number | null;
+    destinationProvince: string | null;
+    destinationCity: string | null;
+    destinationDistrict: string | null;
+    destinationVillage: string | null;
+    destinationPostalCode: string | null;
+    biteshipOrderId: string | null;
+    biteshipStatus: string | null;
+    biteshipTrackingId: string | null;
+    biteshipLabelUrl: string | null;
+    trackingNumber: string | null;
     payment: { status: string; method: string } | null;
+    items: KasirOrderItem[];
 };
 
 export function formatKasirOrder(order: KasirOrderRecord) {
+    const orderType = resolveKasirOrderType(order);
+    const paymentStatus = order.payment?.status ?? order.paymentStatus;
+    const hasShipment = hasRealShipment(order.biteshipOrderId);
+    const shipmentAction = kasirShipmentAction({
+        biteshipOrderId: order.biteshipOrderId,
+        courierCode: order.courierCode,
+        serviceCode: order.serviceCode,
+        destinationAreaId: order.destinationAreaId,
+        paymentStatus,
+        orderStatus: order.status,
+    });
+
+    // Internal identifiers (destinationAreaId, originAreaId, shippingQuoteRef, the Biteship
+    // order id, provider codes and coordinates) are deliberately NOT part of this payload:
+    // they must never reach the browser UI — or a printed struk.
+    const delivery =
+        orderType === "DELIVERY"
+            ? {
+                  recipientName: order.customer,
+                  recipientPhone: order.phone,
+                  address: order.address,
+                  note: order.note,
+                  shipping: order.shipping,
+                  courier: order.courier,
+                  service: order.service,
+                  status: normalizeKasirDeliveryStatus({ biteshipStatus: order.biteshipStatus, hasShipment }),
+                  hasShipment,
+                  trackingId: order.biteshipTrackingId || order.trackingNumber || null,
+                  labelUrl: order.biteshipLabelUrl,
+                  shipmentAction,
+                  destination: {
+                      province: order.destinationProvince,
+                      city: order.destinationCity,
+                      district: order.destinationDistrict,
+                      village: order.destinationVillage,
+                      postalCode: order.destinationPostalCode,
+                  },
+              }
+            : null;
+
     return {
         id: order.id,
         invoice: order.invoice,
@@ -73,13 +143,17 @@ export function formatKasirOrder(order: KasirOrderRecord) {
         phone: order.phone,
         source: order.source,
         paymentMethod: order.paymentMethod,
-        paymentStatus: order.payment?.status ?? order.paymentStatus,
+        paymentStatus,
         status: order.status,
         subtotal: order.subtotal,
+        // A pickup order never exposes a shipping amount (it is always 0 anyway).
+        shipping: orderType === "DELIVERY" ? order.shipping : 0,
         total: order.total,
         cashReceived: order.cashReceived,
         change: order.change,
         createdAt: order.createdAt,
+        orderType,
+        delivery,
         items: order.items.map((item) => ({
             id: item.id,
             name: item.name,

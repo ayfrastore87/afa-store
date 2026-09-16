@@ -583,4 +583,36 @@ header > div {
     text-align: center;
     font-weight: 700;
   }
+
+  /* PENGIRIMAN block (delivery orders only).
+     A 58mm sheet is only 50mm of content: every delivery line must wrap inside it.
+     `word-break: break-word` + `overflow-wrap: anywhere` keep a long unbroken address
+     (or a long street name) from being clipped off the right edge. */
+  #kasir-receipt .receipt-section-title {
+    margin: 0 0 1mm 0;
+    text-align: center;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+
+  #kasir-receipt .receipt-address-label {
+    margin: 1.5mm 0 0.5mm 0;
+    font-weight: 700;
+  }
+
+  #kasir-receipt .receipt-address {
+    display: block;
+    margin: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.3;
+  }
+
+  #kasir-receipt .receipt-address-note {
+    margin: 0.5mm 0 0 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }

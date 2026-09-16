@@ -125,6 +125,9 @@ export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }
 
 function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptData {
     const isTunai = order.paymentMethod === "TUNAI";
+    // PENGIRIMAN block: delivery orders only. It is built from the SAME server payload
+    // that already excludes internal identifiers (area id / quote ref / provider order id).
+    const delivery = order.delivery;
     return {
         storeName: "AFA STORE",
         invoice: order.invoice,
@@ -145,6 +148,20 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
         paymentStatus: statusLabel(order.paymentStatus),
         cashReceivedLabel: isTunai && order.cashReceived != null ? formatRupiah(order.cashReceived) : null,
         changeLabel: isTunai && order.change != null ? formatRupiah(order.change) : null,
+        // Ongkir only exists on a delivery order (a pickup order has no shipping row).
+        shippingLabel: delivery && delivery.shipping > 0 ? formatRupiah(delivery.shipping) : null,
+        delivery: delivery
+            ? {
+                  recipientName: delivery.recipientName || "-",
+                  recipientPhone: delivery.recipientPhone || "-",
+                  address: delivery.address || "-",
+                  courier: delivery.courier,
+                  service: delivery.service,
+                  // Printed only when the integration really returned a resi / tracking id.
+                  trackingId: delivery.trackingId,
+                  shippingLabel: formatRupiah(delivery.shipping),
+              }
+            : null,
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],
     };
 }

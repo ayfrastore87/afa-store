@@ -173,3 +173,54 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ message: "Gagal membuat pengiriman Biteship. Silakan coba lagi." }, { status: 500 });
     }
 }
+
+// ---------------------------------------------------------------------------
+// GET /api/admin/orders/[id]/biteship
+//
+// Admin-only TRACKING REFRESH for an order that already has a real Biteship order.
+// It never creates a shipment (POST owns that, with its compare-and-set claim), never
+// touches order/payment/stock, and never reaches Biteship with a claim placeholder.
+// The browser only ever talks to THIS route — the API key stays server-side. It is
+// invoked from an explicit "Lacak Pengiriman" action, so there is no polling.
+// ---------------------------------------------------------------------------
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const admin = await getCurrentAdmin();
+    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+    const { id } = await params;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return NextResponse.json({ message: "Pesanan tidak ditemukan." }, { status: 404 });
+
+    // No real provider order yet (missing, or our own in-flight claim placeholder).
+    if (!order.biteshipOrderId || order.biteshipOrderId.startsWith(CLAIM_PREFIX)) {
+        return NextResponse.json({ message: "Pesanan ini belum memiliki pengiriman Biteship." }, { status: 409 });
+    }
+
+    try {
+        const remote = await retrieveBiteshipOrder(order.biteshipOrderId);
+        if (!remote) {
+            return NextResponse.json({ message: "Status pengiriman belum dapat diambil. Silakan coba lagi." }, { status: 502 });
+        }
+        // Persist the latest provider state, keeping the last known value when the
+        // provider no longer returns a field. The raw provider status is stored as-is.
+        const updated = await prisma.order.update({
+            where: { id },
+            data: {
+                biteshipStatus: remote.status ?? order.biteshipStatus,
+                biteshipTrackingId: remote.trackingId ?? order.biteshipTrackingId,
+                biteshipLabelUrl: remote.labelUrl ?? order.biteshipLabelUrl,
+            },
+        });
+        return NextResponse.json({ order: biteshipOrderView(updated), refreshedAt: new Date().toISOString() });
+    } catch (error) {
+        if (error instanceof BiteshipUnavailableError) {
+            return NextResponse.json({ message: error.message }, { status: 503 });
+        }
+        if (error instanceof BiteshipError) {
+            return NextResponse.json({ message: error.message }, { status: 400 });
+        }
+        console.error("biteship_tracking_failed", { orderId: order.id, message: error instanceof Error ? error.message : String(error) });
+        return NextResponse.json({ message: "Status pengiriman belum dapat diperbarui." }, { status: 500 });
+    }
+}

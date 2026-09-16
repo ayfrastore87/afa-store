@@ -220,9 +220,15 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
 
     chunks.push(cmdLine(dividerLine(width)));
 
-    // Totals.
+    // Totals. Ongkir is printed between the subtotal and the total ONLY when the
+    // order really carries a shipping charge (delivery) — a pickup order never shows it.
     for (const line of formatColumns("Subtotal", data.subtotalLabel, width)) {
         chunks.push(cmdLine(line));
+    }
+    if (data.shippingLabel != null && data.shippingLabel !== "") {
+        for (const line of formatColumns("Ongkir", data.shippingLabel, width)) {
+            chunks.push(cmdLine(line));
+        }
     }
     chunks.push(cmdBold(true));
     for (const line of formatColumns("TOTAL", data.totalLabel, width)) {
@@ -246,6 +252,41 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
     for (const [label, value] of payment) {
         for (const line of formatColumns(label, value, width)) {
             chunks.push(cmdLine(line));
+        }
+    }
+
+    // PENGIRIMAN block (delivery orders only). Public data only — never an area id,
+    // quote ref, provider order id or coordinate. The address wraps at the full width.
+    if (data.delivery) {
+        const delivery = data.delivery;
+        chunks.push(cmdLine(dividerLine(width)));
+        chunks.push(cmdBold(true));
+        chunks.push(cmdLine(formatReceiptLine("PENGIRIMAN", width, "center")));
+        chunks.push(cmdBold(false));
+
+        const deliveryRows: Array<[string, string]> = [
+            ["Nama Penerima", delivery.recipientName || "-"],
+            ["No. Telepon", delivery.recipientPhone || "-"],
+        ];
+        if (delivery.courier) deliveryRows.push(["Kurir", delivery.courier]);
+        if (delivery.service) deliveryRows.push(["Layanan", delivery.service]);
+        if (delivery.eta) deliveryRows.push(["Estimasi", delivery.eta]);
+        for (const [label, value] of deliveryRows) {
+            for (const line of formatColumns(label, value, width)) {
+                chunks.push(cmdLine(line));
+            }
+        }
+
+        chunks.push(cmdLine("Alamat"));
+        for (const line of wrapText(delivery.address || "-", width)) {
+            chunks.push(cmdLine(line));
+        }
+
+        // Only ever printed when the integration really returned a resi / tracking id.
+        if (delivery.trackingId) {
+            for (const line of formatColumns("No. Resi", delivery.trackingId, width)) {
+                chunks.push(cmdLine(line));
+            }
         }
     }
 

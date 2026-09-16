@@ -16,13 +16,16 @@ import {
 import {
     formatDate,
     formatRupiah,
+    deliveryStatusBadgeClass,
     paymentMethodLabel,
     sourceLabel,
     statusLabel,
     type KasirOrderDetail,
 } from "./kasir-shared";
+import { kasirOrderTypeLabel } from "@/lib/kasir-delivery";
 import KasirReceipt from "./KasirReceipt";
 import KasirPrinterPanel from "./KasirPrinterPanel";
+import KasirShipmentActions from "./KasirShipmentActions";
 
 // TAHAP D: detail transaksi terhubung ke GET /api/admin/kasir/orders/[id].
 // TAHAP E: satu tombol "Print" menjalankan alur cetak terpadu (BLE via
@@ -44,6 +47,9 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
         try {
             const response = await fetch(`/api/admin/kasir/orders/${id}`, {
                 headers: { Accept: "application/json" },
+                // Today's transaction (and its latest persisted shipment/tracking data) is
+                // always read fresh, so a reprint never uses stale client state.
+                cache: "no-store",
             });
             const payload = (await response.json().catch(() => null)) as KasirOrderDetailResponse | null;
             if (response.status === 404) {
@@ -112,6 +118,8 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     }
 
     const isTunai = order.paymentMethod === "TUNAI";
+    // PENGIRIMAN block: present for a delivery order only.
+    const delivery = order.delivery;
 
     return (
         <>
@@ -132,6 +140,20 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                     <Info label="Sumber" value={sourceLabel(order.source)} />
                     <Info label="No. WhatsApp" value={order.phone || "-"} />
                     <Info label="Status Pesanan" value={statusLabel(order.status)} />
+                    <Info label="Jenis Pesanan" value={kasirOrderTypeLabel(order.orderType)} />
+                    {delivery ? (
+                        <div className="rounded-2xl bg-[#f8f6f0] p-3">
+                            <p className="text-xs font-bold text-[#184D47]/50">Status Pengiriman</p>
+                            <p className="mt-1">
+                                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${deliveryStatusBadgeClass(delivery.status.key)}`}>
+                                    {delivery.status.label}
+                                </span>
+                            </p>
+                            {delivery.status.raw ? (
+                                <p className="mt-1 text-[11px] font-semibold text-[#184D47]/50">Status provider: {delivery.status.raw}</p>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </section>
 
                 <section>
@@ -156,6 +178,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
 
                 <section className="space-y-2 rounded-2xl bg-[#f8f6f0] p-4">
                     <Row label="Subtotal" value={formatRupiah(order.subtotal)} />
+                    {delivery ? <Row label="Ongkir" value={formatRupiah(order.shipping)} /> : null}
                     <Row label="Total" value={formatRupiah(order.total)} bold />
                 </section>
 
@@ -178,6 +201,53 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                         </>
                     )}
                 </section>
+
+                {delivery ? (
+                    <section className="space-y-3 rounded-2xl border border-[#184D47]/10 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Pengiriman</p>
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${deliveryStatusBadgeClass(delivery.status.key)}`}>
+                                {delivery.status.label}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <Row label="Nama Penerima" value={delivery.recipientName || "-"} />
+                            <Row label="No. WhatsApp" value={delivery.recipientPhone || "-"} />
+                            <Row label="Kurir" value={delivery.courier || "-"} />
+                            <Row label="Layanan" value={delivery.service || "-"} />
+                            <Row label="Ongkir" value={formatRupiah(delivery.shipping)} />
+                            <Row label="No. Resi / Tracking" value={delivery.trackingId || "Belum tersedia"} />
+                        </div>
+                        <div className="rounded-2xl bg-[#f8f6f0] p-3">
+                            <p className="text-xs font-bold text-[#184D47]/50">Alamat Pengiriman</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words font-semibold">{delivery.address || "-"}</p>
+                            {delivery.note ? (
+                                <p className="mt-2 text-xs font-semibold text-[#184D47]/60">Catatan: {delivery.note}</p>
+                            ) : null}
+                        </div>
+                        {delivery.labelUrl ? (
+                            <a
+                                href={delivery.labelUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#184D47]/20 bg-white px-3 text-xs font-black text-[#184D47] transition hover:bg-[#EAF1ED]"
+                            >
+                                Buka Label Biteship
+                            </a>
+                        ) : null}
+                        <KasirShipmentActions
+                            orderId={order.id}
+                            canCreate={delivery.shipmentAction.canCreate}
+                            canRefresh={delivery.shipmentAction.canRefresh}
+                            hint={delivery.shipmentAction.hint}
+                            onUpdated={loadDetail}
+                        />
+                    </section>
+                ) : null}
+
+                <p className="text-xs font-semibold text-[#184D47]/50">
+                    Cetak ulang struk selalu memakai data transaksi dan pengiriman terbaru yang tersimpan.
+                </p>
             </div>
             </Shell>
         </>

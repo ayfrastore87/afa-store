@@ -15,12 +15,19 @@ import {
 import {
     formatDate,
     formatRupiah,
+    deliveryStatusBadgeClass,
     paymentMethodLabel,
     sourceLabel,
     statusLabel,
+    type KasirDeliveryDetail,
 } from "./kasir-shared";
+import { kasirOrderTypeLabel } from "@/lib/kasir-delivery";
+import KasirShipmentActions from "./KasirShipmentActions";
 
 // TAHAP D: halaman riwayat terhubung ke GET /api/admin/kasir/orders.
+// Delivery orders additionally expose their persisted courier, tracking id and
+// normalized delivery status (raw provider status preserved), plus the shipment
+// actions that reuse POST/GET /api/admin/orders/[id]/biteship.
 
 type SourceFilter = "SEMUA" | "TATAP_MUKA" | "WHATSAPP";
 
@@ -34,10 +41,14 @@ type KasirOrder = {
     paymentStatus: string;
     status: string;
     subtotal: number;
+    shipping: number;
     total: number;
     cashReceived: number | null;
     change: number | null;
     createdAt: string;
+    /** JENIS PESANAN (Ambil Sendiri / Kirim), derived from the persisted order. */
+    orderType: string;
+    delivery: KasirDeliveryDetail | null;
 };
 
 type KasirOrdersResponse = {
@@ -163,21 +174,21 @@ export default function KasirHistory() {
                         <EmptyState />
                     </div>
                 ) : (
-                    <OrderTable orders={orders} total={total} page={page} totalPages={totalPages} onPrev={() => setPage((v) => Math.max(1, v - 1))} onNext={() => setPage((v) => v + 1)} />
+                    <OrderTable orders={orders} total={total} page={page} totalPages={totalPages} onPrev={() => setPage((v) => Math.max(1, v - 1))} onNext={() => setPage((v) => v + 1)} onReload={() => void loadOrders()} />
                 )}
             </main>
         </div>
     );
 }
 
-function OrderTable({ orders, total, page, totalPages, onPrev, onNext }: { orders: KasirOrder[]; total: number; page: number; totalPages: number; onPrev: () => void; onNext: () => void }) {
+function OrderTable({ orders, total, page, totalPages, onPrev, onNext, onReload }: { orders: KasirOrder[]; total: number; page: number; totalPages: number; onPrev: () => void; onNext: () => void; onReload: () => void }) {
     return (
         <>
             <div className="hidden overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-xl shadow-[#184D47]/10 lg:block">
                 <table className="w-full text-left text-sm">
                     <thead className="bg-[#184D47] text-white">
                         <tr>
-                            {["Invoice", "Tanggal", "Pelanggan", "Sumber", "Metode Pembayaran", "Total", "Status", "Aksi"].map((head) => (
+                            {["Invoice", "Tanggal", "Pelanggan", "Jenis", "Sumber", "Metode Pembayaran", "Total", "Status", "Aksi"].map((head) => (
                                 <th key={head} className="p-4 font-black">{head}</th>
                             ))}
                         </tr>
@@ -188,11 +199,46 @@ function OrderTable({ orders, total, page, totalPages, onPrev, onNext }: { order
                                 <td className="p-4 font-black text-[#0F4C45]">{order.invoice}</td>
                                 <td className="p-4 font-semibold text-[#184D47]/70">{formatDate(order.createdAt)}</td>
                                 <td className="p-4 font-semibold">{order.customer || "-"}</td>
+                                <td className="p-4">
+                                    <span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black text-[#184D47]">
+                                        {kasirOrderTypeLabel(order.orderType)}
+                                    </span>
+                                    {order.delivery ? (
+                                        <span className={`ml-1 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${deliveryStatusBadgeClass(order.delivery.status.key)}`}>
+                                            {order.delivery.status.label}
+                                        </span>
+                                    ) : null}
+                                    {order.delivery?.courier ? (
+                                        <p className="mt-1 text-[10px] font-semibold text-[#184D47]/60">
+                                            {order.delivery.courier}
+                                            {order.delivery.service ? ` — ${order.delivery.service}` : ""}
+                                        </p>
+                                    ) : null}
+                                    {order.delivery?.trackingId ? (
+                                        <p className="text-[10px] font-semibold text-[#184D47]/60">Resi {order.delivery.trackingId}</p>
+                                    ) : null}
+                                </td>
                                 <td className="p-4"><span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black text-[#184D47]">{sourceLabel(order.source)}</span></td>
                                 <td className="p-4 font-semibold">{paymentMethodLabel(order.paymentMethod)}</td>
                                 <td className="p-4 font-black">{formatRupiah(order.total)}</td>
                                 <td className="p-4"><span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">{statusLabel(order.status)}</span></td>
-                                <td className="p-4"><Link href={`/admin/kasir/${order.id}`} className="font-black text-[#184D47] underline hover:text-[#C9A45B]">Detail</Link></td>
+                                <td className="p-4">
+                                    <div className="flex flex-col items-start gap-2">
+                                        <Link href={`/admin/kasir/${order.id}`} className="font-black text-[#184D47] underline hover:text-[#C9A45B]">Lihat Detail</Link>
+                                        {/* Cetak ulang selalu memuat ulang order dari server, jadi struk
+                                            memakai data pengiriman / resi terbaru yang tersimpan. */}
+                                        <Link href={`/admin/kasir/${order.id}`} className="font-black text-[#184D47]/70 underline hover:text-[#C9A45B]">Cetak Ulang Struk</Link>
+                                        {order.delivery ? (
+                                            <KasirShipmentActions
+                                                orderId={order.id}
+                                                canCreate={order.delivery.shipmentAction.canCreate}
+                                                canRefresh={order.delivery.shipmentAction.canRefresh}
+                                                compact
+                                                onUpdated={onReload}
+                                            />
+                                        ) : null}
+                                    </div>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -208,8 +254,24 @@ function OrderTable({ orders, total, page, totalPages, onPrev, onNext }: { order
                         </div>
                         <p className="mt-2 text-sm font-semibold">{order.customer || "-"}</p>
                         <p className="text-xs text-[#184D47]/60">{formatDate(order.createdAt)}</p>
+                        {order.delivery ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black ${deliveryStatusBadgeClass(order.delivery.status.key)}`}>
+                                    {order.delivery.status.label}
+                                </span>
+                                {order.delivery.courier ? (
+                                    <span className="text-[10px] font-semibold text-[#184D47]/60">{order.delivery.courier}</span>
+                                ) : null}
+                                {order.delivery.trackingId ? (
+                                    <span className="text-[10px] font-semibold text-[#184D47]/60">Resi {order.delivery.trackingId}</span>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <div className="mt-3 flex items-center justify-between">
-                            <span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black text-[#184D47]">{sourceLabel(order.source)}</span>
+                            <span className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black text-[#184D47]">{sourceLabel(order.source)}</span>
+                                <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#184D47] ring-1 ring-[#184D47]/15">{kasirOrderTypeLabel(order.orderType)}</span>
+                            </span>
                             <span className="text-sm font-black">{formatRupiah(order.total)}</span>
                         </div>
                     </Link>

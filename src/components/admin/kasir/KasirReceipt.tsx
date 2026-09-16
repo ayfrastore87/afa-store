@@ -9,7 +9,15 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { formatDate, formatRupiah, paymentMethodLabel, statusLabel, type KasirOrderDetail } from "./kasir-shared";
+import { kasirOrderTypeLabel } from "@/lib/kasir-delivery";
+import {
+    formatDate,
+    formatRupiah,
+    paymentMethodLabel,
+    sourceLabel,
+    statusLabel,
+    type KasirOrderDetail,
+} from "./kasir-shared";
 
 export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
     // Portal to <body> so the receipt can be the only visible element in print,
@@ -38,6 +46,8 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
     }, [mounted]);
 
     const isTunai = order.paymentMethod === "TUNAI";
+    // PENGIRIMAN block: present for a delivery order only (null for pickup).
+    const delivery = order.delivery;
 
     const receipt = (
         <div id="kasir-receipt">
@@ -88,6 +98,9 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
                 {/* Totals */}
                 <dl className="receipt-meta">
                     <Row label="Subtotal" value={formatRupiah(order.subtotal)} />
+                    {delivery && delivery.shipping > 0 ? (
+                        <Row label="Ongkir" value={formatRupiah(delivery.shipping)} />
+                    ) : null}
                     <div className="receipt-total">
                         <span>TOTAL</span>
                         <span>{formatRupiah(order.total)}</span>
@@ -105,8 +118,30 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
                             <Row label="Kembalian" value={order.change != null ? formatRupiah(order.change) : "-"} />
                         </>
                     ) : null}
+                    <Row label="Sumber" value={sourceLabel(order.source)} />
                     <Row label="Status Bayar" value={statusLabel(order.paymentStatus)} bold />
                 </dl>
+
+                {/* PENGIRIMAN — delivery orders only. Public data only: no Biteship area id,
+                    quote ref, provider order id, coordinate or secret is ever rendered here. */}
+                {delivery ? (
+                    <>
+                        <Divider />
+                        <p className="receipt-section-title">PENGIRIMAN</p>
+                        <dl className="receipt-meta">
+                            <Row label="Jenis" value={kasirOrderTypeLabel(order.orderType)} />
+                            <Row label="Nama Penerima" value={delivery.recipientName || "-"} />
+                            <Row label="No. Telepon" value={delivery.recipientPhone || "-"} />
+                            {delivery.courier ? <Row label="Kurir" value={delivery.courier} /> : null}
+                            {delivery.service ? <Row label="Layanan" value={delivery.service} /> : null}
+                            {delivery.status?.raw ? <Row label="Status" value={delivery.status.label} /> : null}
+                            {delivery.trackingId ? <Row label="No. Resi" value={delivery.trackingId} /> : null}
+                        </dl>
+                        <p className="receipt-address-label">Alamat Pengiriman</p>
+                        <p className="receipt-address">{delivery.address || "-"}</p>
+                        {delivery.note ? <p className="receipt-address-note">Catatan: {delivery.note}</p> : null}
+                    </>
+                ) : null}
 
                 <Divider />
 

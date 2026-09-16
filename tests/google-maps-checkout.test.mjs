@@ -452,7 +452,12 @@ test("panning the map never geocodes and never touches Biteship", () => {
 // ===== search component =====
 
 test("search uses the official Places autocomplete widget and never confirms a location", () => {
-    assert.match(locationSearch, /new api\.maps\.places\.PlaceAutocompleteElement\(/);
+    // The widget class is awaited through the loader (`importLibrary("places")`) instead of
+    // being read off `google.maps` right after the API loads: with `loading=async` that read
+    // raced the places script and built `new undefined(...)`.
+    assert.match(locationSearch, /loadGoogleMapsPlaces\(\)/);
+    assert.match(locationSearch, /new places\.PlaceAutocompleteElement\(/);
+    assert.doesNotMatch(code(locationSearch), /api\.maps\.places/);
     assert.match(locationSearch, /addEventListener\("gmp-select", handleSelect\)/);
     // Older builds only emit the legacy event name, so both are wired.
     assert.match(locationSearch, /addEventListener\("gmp-placeselect", handleSelect\)/);

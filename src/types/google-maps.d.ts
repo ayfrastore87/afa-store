@@ -8,7 +8,9 @@
 // actually use:
 //   - `google.maps.Map` + the pan/zoom events we listen to,
 //   - `google.maps.Geocoder` (reverse geocoding of a confirmed pin),
-//   - `google.maps.places.PlaceAutocompleteElement` (Places API "New" widget).
+//   - `google.maps.importLibrary` (the API's own "wait for a library" call),
+//   - `google.maps.places.PlaceAutocompleteElement` (Places API "New" widget), which is
+//     attached only once the `places` library has been loaded.
 //
 // The API key is NEVER hardcoded and never logged: it is read from the
 // NEXT_PUBLIC_GOOGLE_MAPS_API_KEY environment variable by the loader.
@@ -110,15 +112,31 @@ interface GoogleMapsPlace {
     fetchFields?(request: { fields: string[] }): Promise<unknown>;
 }
 
+/**
+ * The `places` library namespace.
+ *
+ * With `loading=async` the library — and therefore the widget class — is attached AFTER the
+ * core modules, so it is not guaranteed to exist just because `window.google` does. Consumers
+ * await the loader's `loadGoogleMapsPlaces()` (which uses `importLibrary("places")`) instead of
+ * reading this straight after the API loads.
+ */
+interface GoogleMapsPlacesLibrary {
+    PlaceAutocompleteElement?: new (options?: GoogleMapsPlaceAutocompleteElementOptions) => GoogleMapsPlaceAutocompleteElement;
+}
+
 interface GoogleMapsApi {
     maps: {
         Map: new (element: HTMLElement, options?: GoogleMapsMapOptions) => GoogleMapsMap;
         Geocoder: new () => GoogleGeocoder;
         /** Removes every listener the API registered on an instance (map teardown). */
         event?: { clearInstanceListeners?: (instance: unknown) => void };
-        places: {
-            PlaceAutocompleteElement: new (options?: GoogleMapsPlaceAutocompleteElementOptions) => GoogleMapsPlaceAutocompleteElement;
-        };
+        /**
+         * Resolves once a library is usable: the documented way to wait for a library whose
+         * script has been requested but whose classes are not attached yet.
+         */
+        importLibrary?: (library: string) => Promise<unknown>;
+        /** Present once the bootstrap ran; its classes arrive with the async module scripts. */
+        places?: GoogleMapsPlacesLibrary;
     };
 }
 

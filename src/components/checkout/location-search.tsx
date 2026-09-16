@@ -5,7 +5,7 @@ import { Loader2, TriangleAlert } from "lucide-react";
 
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
 import { GOOGLE_PLACE_FIELDS, normalizeGooglePlace, toLocationSearchResult } from "@/lib/google-geocoding";
-import { getGoogleMapsApi, loadGoogleMaps, GoogleMapsLoadError } from "@/lib/google-maps-loader";
+import { GoogleMapsLoadError, loadGoogleMapsPlaces } from "@/lib/google-maps-loader";
 
 type Props = {
     onSelect: (result: LocationSearchResult) => void;
@@ -81,12 +81,13 @@ export function CheckoutLocationSearch({ onSelect, placeholder = "Cari alamat, j
 
         setStatus("loading");
         setMessage("");
-        loadGoogleMaps()
-            .then(() => {
-                const api = getGoogleMapsApi();
+        loadGoogleMapsPlaces()
+            .then((places) => {
                 const host = containerRef.current;
-                if (disposed || !api || !host) return;
-                element = new api.maps.places.PlaceAutocompleteElement({
+                if (disposed || !host) return;
+                // The class is handed over only once the `places` library is really usable, so
+                // this can no longer become `new undefined()` when the widget script is slow.
+                element = new places.PlaceAutocompleteElement({
                     // Indonesian places only, matching the checkout's other locale hints.
                     includedRegionCodes: ["id"],
                     requestedLanguage: "id",

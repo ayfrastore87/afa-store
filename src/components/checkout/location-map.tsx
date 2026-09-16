@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, MapPin, Minus, Plus, TriangleAlert } from "lucide-react";
 
 import type { DeliveryCoordinates } from "@/lib/coordinates";
-import { getGoogleMapsApi, loadGoogleMaps, GoogleMapsLoadError } from "@/lib/google-maps-loader";
+import { getGoogleMapsApi, loadGoogleMaps, GoogleMapsLoadError, GOOGLE_MAPS_LOAD_FAILED_MESSAGE } from "@/lib/google-maps-loader";
 
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 20;
@@ -91,6 +91,11 @@ export function CheckoutLocationMap({
             .then(() => {
                 const api = getGoogleMapsApi();
                 if (disposed || !api || !containerRef.current) return;
+                // `loadGoogleMaps()` only resolves once `Map` exists; if that ever drifts, fail
+                // with a typed, retryable error instead of a `TypeError` the UI cannot explain.
+                if (typeof api.maps.Map !== "function") {
+                    throw new GoogleMapsLoadError("LOAD_FAILED", GOOGLE_MAPS_LOAD_FAILED_MESSAGE);
+                }
                 const map = new api.maps.Map(containerRef.current, {
                     center: { lat: centerRef.current.latitude, lng: centerRef.current.longitude },
                     zoom: zoomRef.current,

@@ -13,6 +13,7 @@ import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
 import { reverseGeocodeWithGoogle, toLocationSearchResult, isRecognizedGoogleAddress, classifyGoogleGeocodeFailure, type GoogleGeocodeFailureKind } from "@/lib/google-geocoding";
 import { loadGoogleMaps, loadGoogleMapsGeocoder } from "@/lib/google-maps-loader";
+import { fallbackAddressToSearchResult, requestFallbackReverseAddress, type FallbackSearchResult } from "@/lib/reverse-geocode-fallback";
 import { addAreaCandidates, buildAreaSearchQueries, isHighConfidenceAreaMatch, pickBestAreaMatch, scoreAreaCandidate, type AreaAddressInput } from "@/lib/area-match";
 import {
     addressFieldsForMode,
@@ -177,11 +178,15 @@ type ReverseState = "idle" | "loading" | "done" | "error";
  *   - `unavailable` the address SERVICE failed (quota, authorization, network, API not
  *     loadable). The location is not at fault, so the customer must never be told their address
  *     could not be recognized — the Biteship picker is the honest fallback.
+ *
+ * Either kind is only reported AFTER both automatic sources had their one bounded attempt:
+ * Google first, then the free same-origin fallback. A reported failure therefore really means
+ * "nothing could name this point automatically right now" — the pin itself is never the suspect.
  */
 type ReverseFailure = "none" | GoogleGeocodeFailureKind;
 
 const REVERSE_NO_ADDRESS_MESSAGE = "Alamat lokasi belum dapat dikenali. Geser titik sedikit lalu coba kembali.";
-const REVERSE_UNAVAILABLE_MESSAGE = "Layanan alamat Google sedang tidak dapat dihubungi. Coba lagi, atau pilih kecamatan/kelurahan pengiriman secara manual.";
+const REVERSE_UNAVAILABLE_MESSAGE = "Layanan alamat Google sedang tidak dapat dihubungi. Cadangan alamat otomatis juga belum tersedia. Coba lagi, atau pilih kecamatan/kelurahan pengiriman secara manual.";
 /** Same split, worded for the confirmed-location card (no retry button there). */
 const REVERSE_NO_ADDRESS_CARD = "Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.";
 const REVERSE_UNAVAILABLE_CARD = "Alamat dari peta sedang tidak dapat diambil. Pilih kecamatan/kelurahan pengiriman untuk melanjutkan pengecekan ongkir.";
@@ -243,6 +248,9 @@ export default function CheckoutPage() {
     const [geoState, setGeoState] = useState<GeoState>("idle");
     const [locationMessage, setLocationMessage] = useState("");
     const reverseRef = useRef(0);
+    // The free fallback request belonging to the CURRENT confirmation. A newer confirmation
+    // aborts the previous one (latest request wins) and unmounting aborts whatever is in flight.
+    const reverseAbortRef = useRef<AbortController | null>(null);
     // Mirror of the latest CONFIRMED pin so a stale reverse-geocode response can be
     // detected even before React re-renders with the new state.
     const confirmedPinRef = useRef<DeliveryCoordinates | null>(null);
@@ -323,6 +331,7 @@ export default function CheckoutPage() {
         return () => {
             if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
             areaAbortRef.current?.abort();
+            reverseAbortRef.current?.abort();
         };
     }, []);
 
@@ -412,47 +421,93 @@ export default function CheckoutPage() {
             // "Recognized" is Google's own answer: a valid formatted address is enough even
             // when the structured components are empty (normal in Indonesia). Only an answer
             // with no address text AND no component at all is unrecognized.
+            //
+            // Unrecognized is not the end: the free server-side fallback gets its ONE bounded
+            // attempt first, and only if that finds nothing here either is the manual
+            // Kecamatan/Kelurahan picker revealed.
             if (!result || !isRecognizedGoogleAddress(address)) {
                 setReverseState("error");
                 setReverseFailure("no_address");
-                // Reveal the manual Kecamatan/Kelurahan fallback when there is no address here.
+                if (await reverseFallbackAndFill(requestedPin, requestId)) return;
                 setAreaState("not_found");
                 return;
             }
-            const a = result.address;
-            const nextAddress: DestinationAddress = {
-                streetLine: [a.road, a.houseNumber].filter(Boolean).join(" ") || result.displayName,
-                displayName: result.displayName || "",
-                province: a.province || "",
-                city: a.city || a.regency || "",
-                district: a.district || "",
-                village: a.village || "",
-                postalCode: a.postcode || "",
-            };
-            // Only the geocoded parts are replaced. The manually typed detail
-            // (blok / RT / RW / patokan) lives in the form and is left untouched.
-            setDestinationAddress(nextAddress);
-            // Google SUCCEEDED. From here the address is known and nothing below may turn that
-            // into an address failure: whether Biteship can match an area is a SEPARATE step,
-            // and it only ever changes the area state.
-            setReverseState("done");
-            void matchArea({
-                province: nextAddress.province,
-                city: nextAddress.city,
-                district: nextAddress.district,
-                village: nextAddress.village,
-                postcode: nextAddress.postalCode,
-            });
-            // Close the fullscreen picker only now that the address was recognized.
-            setMapOpen(false);
+            applyResolvedAddress(result);
         } catch (error) {
             if (isStaleResponse(reverseRef.current, requestId)) return;
             // The address SERVICE failed. That is not "this location cannot be recognized", so
-            // it is classified and reported honestly, while the Biteship picker stays available.
+            // it is classified and reported honestly — and only AFTER the free fallback had its
+            // one bounded attempt, so a Google outage still leaves a named location.
             setReverseState("error");
             setReverseFailure(classifyGoogleGeocodeFailure(error));
+            if (await reverseFallbackAndFill(requestedPin, requestId)) return;
             setAreaState("not_found");
         }
+    };
+
+    /**
+     * Commit an address that was really recognized — by Google or by the free fallback — and start
+     * the SEPARATE Biteship area match. Both callers reach this only after the same two stale
+     * guards, so it can never resurrect a superseded pin.
+     *
+     * Both sources hand over the SAME internal shape, so the address fields, the card and the
+     * Biteship matcher behave identically whichever one answered. The source itself is deliberately
+     * NOT forwarded to the matcher: one place named twice is not two independent confirmations, and
+     * a false area match is worse than asking the customer.
+     */
+    const applyResolvedAddress = (result: LocationSearchResult | FallbackSearchResult) => {
+        const a = result.address;
+        const nextAddress: DestinationAddress = {
+            streetLine: [a.road, a.houseNumber].filter(Boolean).join(" ") || result.displayName,
+            displayName: result.displayName || "",
+            province: a.province || "",
+            city: a.city || a.regency || "",
+            district: a.district || "",
+            village: a.village || "",
+            postalCode: a.postcode || "",
+        };
+        // Only the geocoded parts are replaced. The manually typed detail
+        // (blok / RT / RW / patokan) lives in the form and is left untouched.
+        setDestinationAddress(nextAddress);
+        // The address is known. From here nothing below may turn that into an address failure:
+        // whether Biteship can match an area is a SEPARATE step, and it only changes the area state.
+        setReverseState("done");
+        void matchArea({
+            province: nextAddress.province,
+            city: nextAddress.city,
+            district: nextAddress.district,
+            village: nextAddress.village,
+            postcode: nextAddress.postalCode,
+        });
+        // Close the fullscreen picker only now that the address was recognized.
+        setMapOpen(false);
+    };
+
+    /**
+     * The free, server-side FALLBACK for a confirmed pin: asked at most ONCE per confirmation, and
+     * only when Google could not name the point (the service was unavailable, or it answered with
+     * nothing recognizable).
+     *
+     * The browser asks OUR OWN same-origin route, which performs the single provider call on the
+     * server. No provider key or user agent exists client-side, and no raw provider payload reaches
+     * the UI: the route answers in the same internal shape the Google path produces. The route never
+     * caches an unavailability, so trying again really does try again.
+     *
+     * Resolves `true` when the location was named, so the caller stops instead of reporting a
+     * failure. The guards match the Google path: a newer confirmation aborts this request, and an
+     * answer for a pin that is no longer confirmed can never write anything.
+     */
+    const reverseFallbackAndFill = async (pin: DeliveryCoordinates, requestId: number): Promise<boolean> => {
+        reverseAbortRef.current?.abort();
+        const fallbackController = new AbortController();
+        reverseAbortRef.current = fallbackController;
+        const fallback = await requestFallbackReverseAddress(pin.latitude, pin.longitude, {
+            signal: fallbackController.signal,
+        });
+        if (isStaleResponse(reverseRef.current, requestId) || isStalePin(pin, confirmedPinRef.current)) return false;
+        if (fallback.status !== "ok") return false;
+        applyResolvedAddress(fallbackAddressToSearchResult(fallback.address));
+        return true;
     };
 
     /**

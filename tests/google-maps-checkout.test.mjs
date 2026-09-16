@@ -34,6 +34,8 @@ import {
     GOOGLE_MAPS_SCRIPT_ID,
     GoogleMapsLoadError,
     buildGoogleMapsScriptUrl,
+    ignoreLateGoogleMapsCallback,
+    injectGoogleMapsScript,
     loadGoogleMaps,
     loadGoogleMapsGeocoder,
     readGoogleMapsApiKey,
@@ -893,6 +895,7 @@ test("mobile keeps the picker scrollable and never hijacks page gestures", () =>
     );
     assert.doesNotMatch(withoutSubmit, /preventDefault/);
     assert.doesNotMatch([code(locationMap), code(locationSearch), code(mapGestureLib)].join("\n"), /preventDefault/);
+});
 
 test("no Google API key is hardcoded, logged, or embedded in the picker", () => {
     for (const source of [checkoutPage, locationMap, locationSearch, geocodingLib, loaderLib, mapGestureLib]) {
@@ -960,4 +963,57 @@ test("the Geocoder class is awaited with its own library instead of read off the
     assert.doesNotMatch(GOOGLE_MAPS_LOAD_FAILED_MESSAGE, /key|AIza|http/i);
 });
 
+test("a callback firing after the attempt settled is ignored instead of throwing", async () => {
+    // The callback NAME is baked into the bootstrap URL, so Google can still call it after the
+    // attempt is over: a bootstrap that stayed slow, a retry, or a second copy of the script.
+    // `delete`-ing the global turned that late call into `TypeError: afaGoogleMapsReady is not a
+    // function`, thrown from Google's own script — outside every `catch` this app owns. It must stay
+    // CALLABLE for the rest of the page session, as one shared no-op.
+    assert.doesNotMatch(loaderLib, /delete global\[GOOGLE_MAPS_CALLBACK\]/);
+    assert.match(
+        loaderLib,
+        /if \(global\[GOOGLE_MAPS_CALLBACK\] === handleReady\) global\[GOOGLE_MAPS_CALLBACK\] = ignoreLateGoogleMapsCallback;/,
+    );
+    assert.equal(ignoreLateGoogleMapsCallback(), undefined);
+
+    // The name is installed BEFORE the tag is appended, and stays callable after the attempt resolves.
+    const settled = fakeLoaderEnvironment({});
+    const load = injectGoogleMapsScript("TEST-KEY-123", settled);
+    assert.equal(typeof settled.global[GOOGLE_MAPS_CALLBACK], "function");
+    // The bootstrap attaches its classes, then fires the callback it was handed.
+    settled.global.google.maps = { Map: function Map() {} };
+    settled.global[GOOGLE_MAPS_CALLBACK]();
+    await load;
+    assert.equal(settled.global[GOOGLE_MAPS_CALLBACK], ignoreLateGoogleMapsCallback);
+    assert.doesNotThrow(() => settled.global[GOOGLE_MAPS_CALLBACK]());
+    assert.doesNotThrow(() => settled.global[GOOGLE_MAPS_CALLBACK]());
+
+    // A FAILED attempt leaves it callable too: a bootstrap landing after the deadline is ignored
+    // instead of throwing at the customer.
+    const timedOut = { ...fakeLoaderEnvironment({}), timeoutMs: 20 };
+    await assert.rejects(
+        () => injectGoogleMapsScript("TEST-KEY-123", timedOut),
+        (error) => error.code === "LOAD_FAILED" && error.message === GOOGLE_MAPS_LOAD_FAILED_MESSAGE,
+    );
+    assert.equal(timedOut.global[GOOGLE_MAPS_CALLBACK], ignoreLateGoogleMapsCallback);
+    assert.doesNotThrow(() => timedOut.global[GOOGLE_MAPS_CALLBACK]());
+
+    // A newer attempt's live handler is never clobbered by an older attempt settling late.
+    const shared = fakeLoaderEnvironment({});
+    const first = injectGoogleMapsScript("TEST-KEY-123", shared);
+    const firstHandler = shared.global[GOOGLE_MAPS_CALLBACK];
+    const second = injectGoogleMapsScript("TEST-KEY-123", shared);
+    const secondHandler = shared.global[GOOGLE_MAPS_CALLBACK];
+    assert.equal(typeof firstHandler, "function");
+    assert.notEqual(firstHandler, secondHandler, "each attempt installs its own handler");
+
+    shared.global.google.maps = { Map: function Map() {} };
+    firstHandler();
+    await first;
+    assert.equal(shared.global[GOOGLE_MAPS_CALLBACK], secondHandler, "the newer attempt keeps its handler");
+
+    secondHandler();
+    await second;
+    assert.equal(shared.global[GOOGLE_MAPS_CALLBACK], ignoreLateGoogleMapsCallback);
+    assert.doesNotThrow(() => shared.global[GOOGLE_MAPS_CALLBACK]());
 });

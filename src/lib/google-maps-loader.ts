@@ -274,6 +274,19 @@ function withDeadline<T>(work: Promise<T>, environment: GoogleMapsLoaderEnvironm
 let loadPromise: Promise<void> | null = null;
 
 /**
+ * Stable, always-callable replacement for the callback of an attempt that already settled.
+ *
+ * The callback NAME is baked into the bootstrap URL, so Google can still invoke it after the
+ * attempt is over: a bootstrap that stayed slow, a retry, or a second copy of the script left in
+ * the page. Removing the global made that late invocation a
+ * `TypeError: afaGoogleMapsReady is not a function` thrown from Google's own script — outside
+ * every `catch` this app owns, and able to break whatever Google ran next. One shared no-op keeps
+ * the name resolvable for the rest of the page session, so a late signal is ignored instead of
+ * throwing.
+ */
+export const ignoreLateGoogleMapsCallback = (): void => undefined;
+
+/**
  * Inject the official bootstrap `<script>` and resolve only once the API is really usable.
  *
  * Three Production hazards are handled here:
@@ -316,9 +329,14 @@ export function injectGoogleMapsScript(apiKey: string, environment: GoogleMapsLo
                 script.removeEventListener("load", handleLoad);
                 script.removeEventListener("error", handleError);
             }
-            // Never leave the callback behind: Google invokes the name baked into the URL, so
-            // a stale global would consume the *next* attempt's signal and hang it.
-            if (global[GOOGLE_MAPS_CALLBACK] === handleReady) delete global[GOOGLE_MAPS_CALLBACK];
+            // Never leave the callback name UNRESOLVABLE: Google invokes the name baked into the
+            // URL, and a bootstrap that arrives late — or a second copy of it — would then call a
+            // missing global. That is the `afaGoogleMapsReady is not a function` TypeError thrown
+            // from Google's own script, outside every `catch` this app owns. A stable shared no-op
+            // keeps the name callable for the rest of the page session, so a late signal is simply
+            // ignored. It is installed only while the global is still THIS attempt's handler, so a
+            // newer attempt's callback can never be overwritten.
+            if (global[GOOGLE_MAPS_CALLBACK] === handleReady) global[GOOGLE_MAPS_CALLBACK] = ignoreLateGoogleMapsCallback;
             if (error) reject(error);
             else resolve();
         }

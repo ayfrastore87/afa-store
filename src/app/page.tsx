@@ -75,7 +75,7 @@ export default function Home() {
       .sort((a, b) => priority(a.name) - priority(b.name) || a.name.localeCompare(b.name, "id"));
   }, [products]);
   const fallbackHeroProducts = useMemo(() => products.slice(0, 3), [products]);
-  const heroSlides = useMemo(() => banners.length ? banners : fallbackHeroProducts.map((product) => ({ id: product.id, title: product.name, subtitle: [product.flavor, product.size].filter(Boolean).join(" • ") || `Jelajahi ${product.category ?? "produk"} AFA STORE.`, image: product.image, ctaLabel: "Belanja Sekarang", ctaUrl: `/products/${product.slug}` })), [banners, fallbackHeroProducts]);
+  const heroSlides = useMemo(() => banners.length ? banners : fallbackHeroProducts.map((product) => ({ id: product.id, title: product.name, subtitle: [product.flavor, product.size].filter(Boolean).join(" • ") || `Jelajahi ${product.category ?? "produk"} AFA STORE.`, image: product.image, ctaLabel: "Belanja Sekarang", ctaUrl: null })), [banners, fallbackHeroProducts]);
   const requireAuth = async (next: string) => {
     if (!(await hasAuthenticatedUser())) { router.push(loginPath(next)); return false; }
     return true;
@@ -134,7 +134,8 @@ export default function Home() {
     setBannerIndex((nextIndex + heroSlides.length) % heroSlides.length);
   };
   const selectCatalogCategory = (category: string) => {
-    setFilter(category);
+    const validCategory = categoryGroups.some((group) => group.name === category) ? category : filter;
+    setFilter(validCategory);
     setQuery("");
     window.requestAnimationFrame(() => katalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };

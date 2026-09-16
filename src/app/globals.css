@@ -223,6 +223,22 @@ h3,
 }
 
 .section-shell { width: min(1440px, calc(100% - 48px)); margin-inline: auto; }
+.product-section,
+.category-cluster,
+#beranda > div.relative.z-10 {
+  width: min(1440px, calc(100% - 48px));
+  margin-inline: auto;
+}
+.product-grid { width: 100%; }
+header > div {
+  width: min(1440px, 100%);
+  margin-inline: auto;
+}
+.product-section + section {
+  width: min(1440px, calc(100% - 48px));
+  max-width: 1440px;
+  margin-inline: auto;
+}
 .category-cluster > div:last-child {
   scrollbar-width: thin;
   scrollbar-color: rgba(167, 131, 58, .45) transparent;
@@ -230,6 +246,12 @@ h3,
 .skeleton { background: linear-gradient(100deg, rgba(201,164,91,.12) 30%, rgba(255,255,255,.8) 45%, rgba(201,164,91,.12) 60%); background-size: 200% 100%; animation: skeleton-shimmer 1.5s ease-in-out infinite; }
 @keyframes skeleton-shimmer { to { background-position: -200% 0; } }
 @media (max-width: 767px) { .section-shell { width: calc(100% - 32px); } }
+@media (max-width: 767px) {
+  .product-section,
+  .category-cluster,
+  #beranda > div.relative.z-10,
+  .product-section + section { width: calc(100% - 32px); }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } .skeleton { background: rgba(201,164,91,.14); } }
 
 .gold-gradient {

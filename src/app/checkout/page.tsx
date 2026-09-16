@@ -13,6 +13,35 @@ import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
 import { buildAreaSearchQueries, pickBestAreaMatch, type AreaAddressInput } from "@/lib/area-match";
 import {
+    addressFieldsForMode,
+    cleanFieldValue,
+    formatDeliveryAddress,
+    isDistinctDropshipSender,
+    isStalePin,
+    isStaleResponse,
+    isValidDeliveryLocation,
+    isValidRecipientName,
+    isValidRecipientPhone,
+    joinAddressParts,
+    locationSignature,
+    mustInvalidateShipping,
+    resolvePickerCenter,
+    savedAddressPin,
+    streetLevelAddress,
+    ADDRESS_DETAIL_PLACEHOLDER,
+    ADDRESS_MODE_HINTS,
+    ADDRESS_MODE_LABELS,
+    ADDRESS_NOTE_PLACEHOLDER,
+    DEFAULT_ADDRESS_MODE,
+    RECIPIENT_NAME_PLACEHOLDER,
+    RECIPIENT_PHONE_PLACEHOLDER,
+    SENDER_NAME_PLACEHOLDER,
+    SENDER_PHONE_PLACEHOLDER,
+    type AddressFields,
+    type AddressMode,
+    type DeliveryAddressParts,
+} from "@/lib/checkout-address";
+import {
     formatShippingDuration,
     groupShippingRatesByCategory,
     SHIPPING_CATEGORY_LABELS,
@@ -33,9 +62,55 @@ type ProfileAddress = {
     detail: string;
     note?: string | null;
     isDefault: boolean;
+    // Optional: a saved address only ever has coordinates when the API really
+    // returns them. Missing coordinates are NEVER fabricated (no 0,0 fallback).
+    latitude?: number | null;
+    longitude?: number | null;
+};
+
+/**
+ * Address derived from the CONFIRMED map point (reverse geocode) or from an
+ * official Biteship area the customer picked manually. This is the single
+ * authoritative address for the destination; the manual "detail" (blok/RT/RW)
+ * lives in the form and is only recombined with this at submit time.
+ */
+type DestinationAddress = {
+    streetLine: string;
+    displayName: string;
+    province: string;
+    city: string;
+    district: string;
+    village: string;
+    postalCode: string;
+};
+
+/** Neutral value used when a map/area patch lands before any address was resolved. */
+const EMPTY_DESTINATION_ADDRESS: DestinationAddress = {
+    streetLine: "",
+    displayName: "",
+    province: "",
+    city: "",
+    district: "",
+    village: "",
+    postalCode: "",
 };
 
 type Area = { id: string; name: string; type?: string; postalCode?: string; province?: string; city?: string; district?: string; village?: string };
+
+/**
+ * Authoritative Biteship area components as an address patch. Only components the area
+ * really carries are returned, so applying it can never blank a known value, never
+ * invent one, and never touch the geocoded street line or the customer's own detail.
+ */
+function areaAddressPatch(a: Area): Partial<DestinationAddress> {
+    const patch: Partial<DestinationAddress> = {};
+    if (a.province) patch.province = a.province;
+    if (a.city) patch.city = a.city;
+    if (a.district || a.name) patch.district = a.district || a.name;
+    if (a.village) patch.village = a.village;
+    if (a.postalCode) patch.postalCode = a.postalCode;
+    return patch;
+}
 
 type Rate = {
     courierCode: string;
@@ -50,8 +125,6 @@ type Rate = {
     shipmentCategory?: ShipmentCategory;
     quoteRef: string | null;
 };
-
-type AddressMode = "profile" | "dropship" | "other";
 
 const PAYMENT_METHOD = "QRIS" as const;
 const paymentMethods = [PAYMENT_METHOD] as const;
@@ -68,9 +141,10 @@ type ReverseState = "idle" | "loading" | "done" | "error";
 
 type GeoState = "idle" | "locating";
 
+// Real field VALUES start empty. Example texts live in the `placeholder`
+// attribute only, so a hint can never be submitted as customer data.
 const emptyForm = {
-    recipientName: "", phone: "", email: "", address: "", note: "",
-    province: "", city: "", district: "", village: "", postalCode: "",
+    recipientName: "", phone: "", email: "", addressDetail: "", note: "",
     paymentMethod: "QRIS",
 };
 
@@ -94,10 +168,13 @@ export default function CheckoutPage() {
     const [paying, setPaying] = useState(false);
     const [processing, setProcessing] = useState(false);
 
-    const [mode, setMode] = useState<AddressMode>("other");
+    const [mode, setMode] = useState<AddressMode>(DEFAULT_ADDRESS_MODE);
     const [profileAddresses, setProfileAddresses] = useState<ProfileAddress[]>([]);
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
     const [form, setForm] = useState(emptyForm);
+    // Destination address resolved from the confirmed map point / Biteship area.
+    // It never carries the manually typed detail, so a map change cannot erase it.
+    const [destinationAddress, setDestinationAddress] = useState<DestinationAddress | null>(null);
 
     const [senderName, setSenderName] = useState("");
     const [senderPhone, setSenderPhone] = useState("");
@@ -117,6 +194,9 @@ export default function CheckoutPage() {
     const [geoState, setGeoState] = useState<GeoState>("idle");
     const [locationMessage, setLocationMessage] = useState("");
     const reverseRef = useRef(0);
+    // Mirror of the latest CONFIRMED pin so a stale reverse-geocode response can be
+    // detected even before React re-renders with the new state.
+    const confirmedPinRef = useRef<DeliveryCoordinates | null>(null);
     const [mapOpen, setMapOpen] = useState(false);
 
     // Biteship area auto-match + fallback search.
@@ -126,19 +206,49 @@ export default function CheckoutPage() {
     const [areaOptions, setAreaOptions] = useState<Area[]>([]);
     const [areaSearching, setAreaSearching] = useState(false);
     const areaRequestRef = useRef(0);
+    // Separate sequence for the automatic reverse-geocode → Biteship area match, so a
+    // newer match always wins over an older one (the manual fallback search keeps
+    // using `areaRequestRef`).
+    const areaMatchRef = useRef(0);
 
     const [rates, setRates] = useState<Rate[]>([]);
     const [rateState, setRateState] = useState<RateState>("idle");
     const [rateError, setRateError] = useState("");
     const [selected, setSelected] = useState<{ courierCode: string; serviceCode: string } | null>(null);
     const rateRequestRef = useRef(0);
+    // Destination signature the current rate list (and its quoteRef) belongs to. A quote
+    // whose signature no longer matches the live destination is never usable. It is kept
+    // in STATE (not a ref) so render-time checks read a plain value and the UI re-renders
+    // the moment a quote stops matching the destination.
+    const [quoteSignature, setQuoteSignature] = useState("");
     const [rateReload, setRateReload] = useState(0);
 
     const submittingRef = useRef(false);
     const keyRef = useRef<string | null>(null);
     const fingerprintRef = useRef("");
 
-    const setAreaField = (patch: Partial<typeof emptyForm>) => setForm((f) => ({ ...f, ...patch }));
+    /** Apply a deterministic recipient/address patch (real values only, never hints). */
+    const applyAddressFields = (fields: AddressFields) => {
+        setForm((f) => ({
+            ...f,
+            recipientName: fields.recipientName,
+            phone: fields.phone,
+            addressDetail: fields.addressDetail,
+            note: fields.note,
+        }));
+    };
+
+    /**
+     * Patch the map/area-derived destination address. Only the supplied components are
+     * replaced, so a map or area update can never blank a known value and can never
+     * touch the customer's own detail (blok / RT / RW / patokan) which lives in the form.
+     */
+    const patchDestinationAddress = (patch: Partial<DestinationAddress>) => {
+        setDestinationAddress((current) => ({ ...EMPTY_DESTINATION_ADDRESS, ...(current ?? {}), ...patch }));
+    };
+
+    // Saved address currently chosen in "Alamat Saya" (null when none is selected).
+    const selectedProfile = profileAddresses.find((a) => a.id === selectedProfileId) ?? null;
 
     const resetAll = () => {
         setDestinationArea(null);
@@ -150,6 +260,8 @@ export default function CheckoutPage() {
         setRates([]);
         setRateState("idle");
         setRateError("");
+        // No quote belongs to the destination being replaced.
+        setQuoteSignature("");
     };
 
     useEffect(() => {
@@ -175,35 +287,46 @@ export default function CheckoutPage() {
                 const list = d.addresses || [];
                 setProfileAddresses(list);
                 const chosen = list.find((a) => a.isDefault) || list[0];
-                if (chosen) { setMode("profile"); selectProfile(chosen); }
+                if (chosen) { setMode("saved"); selectProfile(chosen); }
             })
             .catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // "Alamat Saya": the recipient block is replaced wholesale from the saved record.
+    // The map draft only moves when that record really has coordinates — missing
+    // coordinates are never fabricated from the address text.
     const selectProfile = (a: ProfileAddress) => {
         setSelectedProfileId(a.id);
-        setForm({
-            ...emptyForm,
-            recipientName: a.recipientName,
-            phone: a.phone,
-            province: a.province,
-            city: a.city,
-            district: a.district,
-            village: a.village,
-            postalCode: a.postalCode,
-            address: a.detail,
-            note: a.note || "",
-            paymentMethod: "QRIS",
-        });
-        resetAll();
+        applyAddressFields(addressFieldsForMode("saved", a));
+        const storedPin = savedAddressPin(a);
+        if (storedPin) { setDraftLocation(storedPin); setMapZoom(17); }
     };
 
     const update = (name: keyof typeof emptyForm, value: string) => setForm((f) => ({ ...f, [name]: value }));
 
+    /**
+     * Mode switching is deterministic and resetless-by-design:
+     * - `dropship` / `other` -> the recipient block becomes EMPTY, so the account
+     *   holder's saved recipient can never leak into a dropship/other order;
+     * - `saved`              -> the recipient block is reloaded from the selected
+     *   (or default) saved address, or stays EMPTY when there is none.
+     * The map-confirmed destination is independent of the recipient identity, so an
+     * already confirmed ongkir is not thrown away by switching tabs.
+     */
     const switchMode = (next: AddressMode) => {
+        if (next === mode) return;
         setMode(next);
-        resetAll();
+        if (next === "saved") {
+            const saved = profileAddresses.find((a) => a.id === selectedProfileId) ?? profileAddresses.find((a) => a.isDefault) ?? profileAddresses[0] ?? null;
+            setSelectedProfileId(saved?.id ?? null);
+            applyAddressFields(addressFieldsForMode("saved", saved));
+            const storedPin = savedAddressPin(saved);
+            if (storedPin) { setDraftLocation(storedPin); setMapZoom(17); }
+            return;
+        }
+        setSelectedProfileId(null);
+        applyAddressFields(addressFieldsForMode(next, null));
     };
 
     // Reverse-geocode a CONFIRMED coordinate and auto-fill the address + auto-match the
@@ -211,11 +334,16 @@ export default function CheckoutPage() {
     // while the map is being panned.
     const reverseGeocodeAndFill = async (coords: DeliveryCoordinates) => {
         const requestId = ++reverseRef.current;
+        // Full-precision pin this request belongs to: a response that comes back
+        // after the customer confirmed a different point must be discarded.
+        const requestedPin = { latitude: coords.latitude, longitude: coords.longitude };
         setReverseState("loading");
         try {
             const r = await fetch(`/api/location/reverse?lat=${coords.latitude}&lng=${coords.longitude}`);
             const d = await r.json().catch(() => ({}));
-            if (requestId !== reverseRef.current) return;
+            // Stale-response guard: a superseded request, or a response for a pin that
+            // is no longer the confirmed one, must NEVER overwrite the latest pin.
+            if (isStaleResponse(reverseRef.current, requestId) || isStalePin(requestedPin, confirmedPinRef.current)) return;
             if (!r.ok || !d.result) {
                 setReverseState("error");
                 // Reveal the manual Kecamatan/Kelurahan fallback when the geocoder fails.
@@ -224,42 +352,45 @@ export default function CheckoutPage() {
             }
             const result = d.result as LocationSearchResult;
             const a = result.address;
-            const nextForm = {
-                ...form,
-                address: [a.road, a.houseNumber].filter(Boolean).join(" ") || result.displayName,
+            const nextAddress: DestinationAddress = {
+                streetLine: [a.road, a.houseNumber].filter(Boolean).join(" ") || result.displayName,
+                displayName: result.displayName || "",
                 province: a.province || "",
                 city: a.city || a.regency || "",
                 district: a.district || "",
                 village: a.village || "",
                 postalCode: a.postcode || "",
             };
-            setForm(nextForm);
+            // Only the geocoded parts are replaced. The manually typed detail
+            // (blok / RT / RW / patokan) lives in the form and is left untouched.
+            setDestinationAddress(nextAddress);
             setReverseState("done");
             void matchArea({
-                province: nextForm.province,
-                city: nextForm.city,
-                district: nextForm.district,
-                village: nextForm.village,
-                postcode: nextForm.postalCode,
+                province: nextAddress.province,
+                city: nextAddress.city,
+                district: nextAddress.district,
+                village: nextAddress.village,
+                postcode: nextAddress.postalCode,
             });
             // Close the fullscreen picker only now that the address was recognized.
             setMapOpen(false);
         } catch {
-            if (requestId === reverseRef.current) {
-                setReverseState("error");
-                setAreaState("not_found");
-            }
+            if (isStaleResponse(reverseRef.current, requestId)) return;
+            setReverseState("error");
+            setAreaState("not_found");
         }
     };
 
     // Auto-match reverse-geocoded address to an OFFICIAL Biteship area result.
     const matchArea = async (address: AreaAddressInput) => {
         if (!Object.values(address).some(Boolean)) { setAreaState("not_found"); return; }
+        const requestId = ++areaMatchRef.current;
         setAreaState("matching");
         const queries = buildAreaSearchQueries(address);
         const candidates: Area[] = [];
         const seenIds = new Set<string>();
         for (const q of queries) {
+            if (isStaleResponse(areaMatchRef.current, requestId)) return;
             try {
                 const r = await fetch(`/api/shipping/areas?input=${encodeURIComponent(q)}`);
                 const d = await r.json().catch(() => ({}));
@@ -279,12 +410,19 @@ export default function CheckoutPage() {
             // STRONG candidate across every query before ever selecting one.
             const best = pickBestAreaMatch(candidates, address);
             if (best) {
+                // Never apply a match that a newer location already superseded.
+                if (isStaleResponse(areaMatchRef.current, requestId)) return;
                 setDestinationArea(best);
                 setAreaQuery(best.name);
                 setAreaState("matched");
+                // The matched Biteship area is authoritative for the administrative
+                // components (province/city/district/village/postalCode) that the quote is
+                // based on. The geocoded street line and the customer's own detail survive.
+                patchDestinationAddress(areaAddressPatch(best));
                 return;
             }
         }
+        if (isStaleResponse(areaMatchRef.current, requestId)) return;
         setDestinationArea(null);
         setSelected(null);
         setAreaState("not_found");
@@ -338,11 +476,14 @@ export default function CheckoutPage() {
         );
     };
 
-    // The single confirmation point: freeze the draft as the confirmed location, reset any
-    // previous shipping, then reverse-geocode → Biteship area match → rates.
+    // The single confirmation point: freeze the draft as the confirmed location, drop the
+    // previous destination (area + rates + quoteRef) and resolved address, then
+    // reverse-geocode → Biteship area match → rates.
     const confirmLocation = () => {
         if (!draftLocation || reverseState === "loading" || areaState === "matching") return;
         resetAll();
+        setDestinationAddress(null);
+        confirmedPinRef.current = draftLocation;
         setConfirmedLocation(draftLocation);
         void reverseGeocodeAndFill(draftLocation);
     };
@@ -351,7 +492,9 @@ export default function CheckoutPage() {
     // clears the previously confirmed location. The old address/ongkir are only replaced
     // once a NEW location is successfully confirmed via `confirmLocation`.
     const openLocationPicker = () => {
-        if (confirmedLocation) setDraftLocation(confirmedLocation);
+        // Confirmed pin wins; a saved address only contributes when it really has stored
+        // coordinates. Missing coordinates fall back to the default center (never fabricated).
+        setDraftLocation(resolvePickerCenter(confirmedLocation, mode === "saved" ? selectedProfile : null, DEFAULT_MAP_CENTER));
         setInteracting(false);
         setSettled(true);
         setMapOpen(true);
@@ -394,11 +537,28 @@ export default function CheckoutPage() {
         setAreaOptions([]);
         setAreaState("matched");
         setSelected(null);
-        setAreaField({ province: a.province || "", city: a.city || "", district: a.district || a.name, postalCode: a.postalCode || "" });
+        // Manual area pick: sync ONLY the official Biteship area components into the
+        // destination address. The geocoded street line and any component the area does
+        // not carry are left untouched — nothing is blanked and nothing is invented.
+        patchDestinationAddress(areaAddressPatch(a));
     };
+
+    // Everything the shipping quote depends on: the confirmed pin, the authoritative
+    // Biteship destinationAreaId, and the resolved (geocoded / area) address. Any change
+    // here invalidates the previous rates list, its quoteRef and the chosen courier.
+    const destinationSignature = locationSignature({
+        latitude: confirmedLocation?.latitude,
+        longitude: confirmedLocation?.longitude,
+        destinationAreaId: destinationArea?.id ?? "",
+        formattedAddress: destinationAddress?.displayName ?? "",
+    });
 
     // Auto-fetch rates once a valid destinationAreaId is selected.
     useEffect(() => {
+        // No quote belongs to the new destination yet: any previous signature is dropped
+        // immediately, so a stale ongkir/quoteRef can never be submitted in the window
+        // between the destination change and the fresh quote arriving.
+        setQuoteSignature("");
         if (!session?.items?.length || !destinationArea) { setRates([]); setRateState("idle"); setSelected(null); return; }
         const requestId = ++rateRequestRef.current;
         setRateState("loading");
@@ -424,43 +584,81 @@ export default function CheckoutPage() {
                 if (!list.length) { setRateState("empty"); return; }
                 setRates(list);
                 setRateState("ready");
+                // These rates (and their quoteRef) now belong to THIS destination only.
+                setQuoteSignature(destinationSignature);
             })
             .catch(() => { if (requestId === rateRequestRef.current) { setRateState("unavailable"); setRateError("Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi."); } });
-    }, [destinationArea, session?.items, rateReload]);
+        // `destinationSignature` re-runs the quote whenever the pin, the Biteship area or
+        // the resolved address changes, so an old ongkir can never survive a new location.
+    }, [destinationArea, destinationSignature, session?.items, rateReload]);
 
     const selectRate = (rate: Rate) => setSelected({ courierCode: rate.courierCode, serviceCode: rate.serviceCode });
     const selectedRate = selected ? rates.find((r) => r.courierCode === selected.courierCode && r.serviceCode === selected.serviceCode) ?? null : null;
     const shipping = selectedRate?.price ?? 0;
-    const total = (session?.subtotal ?? 0) + shipping;
     const groupedRates = groupShippingRatesByCategory(rates);
 
-    const destinationValid = Boolean(destinationArea?.id);
-    const shippingReady = Boolean(selectedRate);
-    const dropshipValid = mode !== "dropship" || senderName.trim().length > 0;
-    const canSubmit = destinationValid && shippingReady && dropshipValid && !paying && !processing;
+    // ---- Destination address: map/area components (auto-filled) + the customer's own detail ----
+    const destinationFieldValues = {
+        streetLine: destinationAddress ? destinationAddress.streetLine || destinationAddress.displayName : "",
+        village: destinationAddress?.village ?? "",
+        district: destinationAddress?.district ?? "",
+        city: destinationAddress?.city ?? "",
+        province: destinationAddress?.province ?? "",
+        postalCode: destinationAddress?.postalCode ?? "",
+    };
+    // The manual detail (blok / RT / RW / patokan) is only recombined here; it never
+    // replaces a map component, and a map update never erases it.
+    const destinationParts: DeliveryAddressParts = { ...destinationFieldValues, detail: form.addressDetail };
+    const destinationStreet = streetLevelAddress(destinationParts);
+    const destinationLocality = joinAddressParts([destinationParts.village, destinationParts.district]);
+    const destinationRegion = joinAddressParts([destinationParts.city, destinationParts.province, destinationParts.postalCode]);
+
+    // A destination is only deliverable with a confirmed full-precision pin, an
+    // authoritative Biteship destinationAreaId and a real formatted address.
+    const destinationValid = isValidDeliveryLocation({
+        formattedAddress: formatDeliveryAddress(destinationParts),
+        latitude: confirmedLocation?.latitude,
+        longitude: confirmedLocation?.longitude,
+        destinationAreaId: destinationArea?.id,
+    });
+    // A quote is only usable while it still belongs to the CURRENT destination signature.
+    const shippingReady = Boolean(selectedRate) && !mustInvalidateShipping(quoteSignature, destinationSignature);
+    const recipientValid = isValidRecipientName(form.recipientName) && isValidRecipientPhone(form.phone);
+    const dropshipValid = mode !== "dropship" || isDistinctDropshipSender(senderName, form.recipientName);
+    const canSubmit = destinationValid && shippingReady && recipientValid && dropshipValid && !paying && !processing;
+    // Only a quote that still belongs to the CURRENT destination may be added to the total.
+    const total = (session?.subtotal ?? 0) + (shippingReady ? shipping : 0);
 
     const submit = async (event: React.FormEvent) => {
         event.preventDefault();
         if (submittingRef.current || !session) return;
-        if (!destinationArea || !selectedRate) { setError("Pilih jasa kurir sebelum melanjutkan."); return; }
-        if (mode === "dropship" && !senderName.trim()) { setError("Nama pengirim (dropshipper) wajib diisi."); return; }
+        if (!isValidRecipientName(form.recipientName)) { setError("Nama penerima wajib diisi."); return; }
+        if (!isValidRecipientPhone(form.phone)) { setError("Nomor HP penerima wajib diisi."); return; }
+        if (mode === "dropship" && !isDistinctDropshipSender(senderName, form.recipientName)) { setError("Nama pengirim (dropshipper) wajib diisi."); return; }
+        if (!destinationValid) { setError("Tentukan titik lokasi pengiriman di peta sebelum melanjutkan."); return; }
+        if (!destinationArea) { setError("Pilih kecamatan / kelurahan tujuan pengiriman."); return; }
+        // The quote must still belong to the CURRENT destination, otherwise the ongkir
+        // (and its quoteRef) was issued for another location and cannot be submitted.
+        if (!shippingReady) { setError("Ongkir sudah tidak berlaku untuk lokasi ini. Pilih ulang jasa kurir."); return; }
+        if (!selectedRate) { setError("Pilih jasa kurir sebelum melanjutkan."); return; }
         submittingRef.current = true;
         setPaying(true);
         setError("");
 
         const payload = {
-            recipientName: form.recipientName,
-            phone: form.phone,
-            email: form.email || undefined,
-            address: form.address,
-            note: form.note || undefined,
-            province: form.province,
-            city: form.city,
-            district: form.district,
-            postalCode: form.postalCode,
+            recipientName: cleanFieldValue(form.recipientName),
+            phone: cleanFieldValue(form.phone),
+            email: cleanFieldValue(form.email) || undefined,
+            // Street address = map/area street line + the customer's OWN detail.
+            address: destinationStreet,
+            note: cleanFieldValue(form.note) || undefined,
+            province: destinationFieldValues.province,
+            city: destinationFieldValues.city,
+            district: destinationFieldValues.district,
+            postalCode: destinationFieldValues.postalCode,
             paymentMethod: form.paymentMethod,
-            senderName: mode === "dropship" ? (senderName || undefined) : undefined,
-            senderPhone: mode === "dropship" ? (senderPhone || undefined) : undefined,
+            senderName: mode === "dropship" ? cleanFieldValue(senderName) || undefined : undefined,
+            senderPhone: mode === "dropship" ? cleanFieldValue(senderPhone) || undefined : undefined,
             hidePrice: mode === "dropship" ? hidePrice : undefined,
             destinationAreaId: destinationArea.id,
             courierCode: selectedRate.courierCode,
@@ -470,11 +668,11 @@ export default function CheckoutPage() {
             quoteRef: selectedRate.quoteRef,
             destinationLatitude: confirmedLocation?.latitude,
             destinationLongitude: confirmedLocation?.longitude,
-            destinationProvince: form.province,
-            destinationCity: form.city,
-            destinationDistrict: form.district,
-            destinationVillage: form.village,
-            destinationPostalCode: form.postalCode,
+            destinationProvince: destinationFieldValues.province,
+            destinationCity: destinationFieldValues.city,
+            destinationDistrict: destinationFieldValues.district,
+            destinationVillage: destinationFieldValues.village,
+            destinationPostalCode: destinationFieldValues.postalCode,
         };
 
         const fingerprint = JSON.stringify({ payload, items: session.items.map(({ id, qty }) => ({ id, qty })) });
@@ -508,14 +706,16 @@ export default function CheckoutPage() {
                     <div className="space-y-6">
                         <Panel title="Alamat Pengiriman">
                             <div className="grid grid-cols-3 gap-2">
-                                <ModeButton icon={<Home size={16} />} label="Alamat Saya" active={mode === "profile"} onClick={() => switchMode("profile")} />
-                                <ModeButton icon={<PackageOpen size={16} />} label="Dropshipper" active={mode === "dropship"} onClick={() => switchMode("dropship")} />
-                                <ModeButton icon={<MapPin size={16} />} label="Alamat Lain" active={mode === "other"} onClick={() => switchMode("other")} />
+                                <ModeButton icon={<Home size={16} />} label={ADDRESS_MODE_LABELS.saved} active={mode === "saved"} onClick={() => switchMode("saved")} />
+                                <ModeButton icon={<PackageOpen size={16} />} label={ADDRESS_MODE_LABELS.dropship} active={mode === "dropship"} onClick={() => switchMode("dropship")} />
+                                <ModeButton icon={<MapPin size={16} />} label={ADDRESS_MODE_LABELS.other} active={mode === "other"} onClick={() => switchMode("other")} />
                             </div>
 
-                            {mode === "profile" && (
+                            <p className="mt-3 text-xs text-[#6D6558]">{ADDRESS_MODE_HINTS[mode]}</p>
+
+                            {mode === "saved" && (
                                 <div className="mt-4 space-y-2">
-                                    {profileAddresses.length === 0 && <p className="text-sm text-[#6D6558]">Belum ada alamat tersimpan. Gunakan mode Lain.</p>}
+                                    {profileAddresses.length === 0 && <p className="text-sm text-[#6D6558]">Belum ada alamat tersimpan. Gunakan mode {ADDRESS_MODE_LABELS.other}.</p>}
                                     {profileAddresses.map((a) => (
                                         <button type="button" key={a.id} onClick={() => selectProfile(a)} className={`w-full rounded-xl border p-3 text-left ${selectedProfileId === a.id ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
                                             <span className="flex items-center justify-between gap-2">
@@ -542,11 +742,9 @@ export default function CheckoutPage() {
                             ) : (
                                 <div className="rounded-2xl border border-[#184D47]/30 bg-[#EAF1ED] p-5">
                                     <p className="flex items-center gap-2 text-sm font-bold text-[#184D47]"><Check size={16} /> Lokasi pengiriman dipilih</p>
-                                    <p className="mt-2 break-words text-[#2E2A26]">{form.address || "Alamat belum terisi"}</p>
-                                    {[form.village, form.district].filter(Boolean).length > 0 && (
-                                        <p className="text-sm text-[#2E2A26]">{[form.village, form.district].filter(Boolean).join(", ")}</p>
-                                    )}
-                                    <p className="text-sm text-[#6D6558]">{[form.city, form.province, form.postalCode].filter(Boolean).join(", ")}</p>
+                                    <p className="mt-2 break-words text-[#2E2A26]">{destinationStreet || "Alamat belum terisi"}</p>
+                                    {destinationLocality && <p className="text-sm text-[#2E2A26]">{destinationLocality}</p>}
+                                    <p className="text-sm text-[#6D6558]">{destinationRegion}</p>
                                     {reverseState === "error" && <p className="mt-2 text-sm font-semibold text-red-700">Alamat lokasi belum dapat dikenali. Silakan coba titik lain atau pilih area pengiriman secara manual.</p>}
                                     <button type="button" onClick={openLocationPicker} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#184D47] px-4 text-sm font-bold text-[#184D47] hover:bg-white">
                                         <MapPin size={14} /> Ubah Lokasi
@@ -558,17 +756,20 @@ export default function CheckoutPage() {
                         <Panel title="Data Penerima">
                             <div className="grid gap-3">
                                 <div className="grid gap-3 sm:grid-cols-2">
-                                    <Field label="Nama Penerima *" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder="Contoh: Siti Nurhaliza" />
-                                    <Field label="Nomor HP *" value={form.phone} onChange={(v) => update("phone", v)} placeholder="Contoh: 0812 3456 7890" />
+                                    <Field label="Nama Penerima *" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder={RECIPIENT_NAME_PLACEHOLDER} />
+                                    <Field label="Nomor HP *" value={form.phone} onChange={(v) => update("phone", v)} placeholder={RECIPIENT_PHONE_PLACEHOLDER} />
                                 </div>
-                                <Field label="Alamat Lengkap *" value={form.address} onChange={(v) => update("address", v)} placeholder="Contoh: Jl. Melati No. 12 RT 03/RW 05" />
 
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    <Field label="Provinsi" value={form.province} onChange={(v) => update("province", v)} placeholder="Provinsi" />
-                                    <Field label="Kota / Kabupaten" value={form.city} onChange={(v) => update("city", v)} placeholder="Kota / Kabupaten" />
-                                    <Field label="Kecamatan" value={form.district} onChange={(v) => update("district", v)} placeholder="Kecamatan" />
-                                    <Field label="Kelurahan / Desa" value={form.village} onChange={(v) => update("village", v)} placeholder="Kelurahan / Desa" />
-                                    <Field label="Kode Pos" value={form.postalCode} onChange={(v) => update("postalCode", v)} placeholder="Kode Pos" />
+                                {/* The street line and the administrative components come from the
+                                    confirmed map pin / Biteship area. Only the customer's own
+                                    detail (blok / nomor / RT-RW / patokan) is typed here. */}
+                                <Field label="Detail Alamat (Blok / No. / RT-RW / Patokan)" value={form.addressDetail} onChange={(v) => update("addressDetail", v)} placeholder={ADDRESS_DETAIL_PLACEHOLDER} />
+
+                                <div className="rounded-xl border border-[#C9A45B]/30 bg-[#F8F5EE] p-3">
+                                    <p className="text-xs font-bold tracking-wide text-[#6D6558]">ALAMAT DARI PETA / AREA</p>
+                                    <p className="mt-1 break-words text-sm text-[#2E2A26]">{destinationStreet || "Belum ada alamat dari peta."}</p>
+                                    {destinationLocality && <p className="text-sm text-[#2E2A26]">{destinationLocality}</p>}
+                                    <p className="text-sm text-[#6D6558]">{destinationRegion}</p>
                                 </div>
 
                                 {areaState === "matched" && destinationArea && (
@@ -596,8 +797,8 @@ export default function CheckoutPage() {
                             {mode === "dropship" && (
                                 <div className="mt-4 grid gap-3 rounded-2xl bg-[#FFF2D6] p-4">
                                     <p className="text-sm font-bold text-[#123524]">Data Pengirim / Dropshipper</p>
-                                    <Field label="Nama Pengirim *" value={senderName} onChange={setSenderName} placeholder="Contoh: AFA Gift" />
-                                    <Field label="Nomor HP Pengirim" value={senderPhone} onChange={setSenderPhone} placeholder="Contoh: 0812 0000 0000" />
+                                    <Field label="Nama Pengirim *" value={senderName} onChange={setSenderName} placeholder={SENDER_NAME_PLACEHOLDER} />
+                                    <Field label="Nomor HP Pengirim" value={senderPhone} onChange={setSenderPhone} placeholder={SENDER_PHONE_PLACEHOLDER} />
                                     <label className="flex items-start gap-3 text-sm text-[#2E2A26]">
                                         <input type="checkbox" checked={hidePrice} onChange={(e) => setHidePrice(e.target.checked)} className="mt-1 h-4 w-4 accent-[#184D47]" />
                                         <span>Sembunyikan harga dari penerima</span>
@@ -606,9 +807,9 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
-                            {(mode === "profile" || mode === "other") && (
+                            {mode !== "dropship" && (
                                 <div className="mt-4">
-                                    <Field label="Catatan (opsional)" value={form.note} onChange={(v) => update("note", v)} placeholder="Catatan pengiriman" />
+                                    <Field label="Catatan (opsional)" value={form.note} onChange={(v) => update("note", v)} placeholder={ADDRESS_NOTE_PLACEHOLDER} />
                                 </div>
                             )}
                         </Panel>

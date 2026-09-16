@@ -124,7 +124,10 @@ test("5. tracking refresh never calls shipment creation", () => {
 
 // 6. The sync writes shipment/tracking fields only.
 test("6. provider status sync updates shipment fields only", () => {
-    assert.match(updateBlock, /biteshipStatus: remote\.status \?\? order\.biteshipStatus,/);
+    // The incoming provider status is resolved through the progression policy first, so a
+    // duplicated / stale / unrecognized value can never overwrite a newer stored state.
+    assert.match(code(getHandler), /const nextStatus = resolveKasirDeliveryStatusUpdate\(order\.biteshipStatus, remote\.status\);/);
+    assert.match(updateBlock, /biteshipStatus: nextStatus,/, "the resolved status is what gets persisted");
     assert.match(updateBlock, /biteshipTrackingId: remote\.trackingId \?\? order\.biteshipTrackingId,/);
     assert.match(updateBlock, /biteshipLabelUrl: remote\.labelUrl \?\? order\.biteshipLabelUrl,/);
     assert.doesNotMatch(updateBlock, /payment|stock|subtotal|total|discount|voucher|items|cashReceived/i);

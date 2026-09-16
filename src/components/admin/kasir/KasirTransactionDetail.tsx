@@ -31,6 +31,7 @@ import {
 import KasirReceipt from "./KasirReceipt";
 import KasirPrinterPanel from "./KasirPrinterPanel";
 import KasirShipmentActions from "./KasirShipmentActions";
+import KasirDeliveryTimeline from "./KasirDeliveryTimeline";
 
 // TAHAP D: detail transaksi terhubung ke GET /api/admin/kasir/orders/[id].
 // TAHAP E: satu tombol "Print" menjalankan alur cetak terpadu (BLE via
@@ -275,6 +276,9 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                                 {delivery.status.label}
                             </span>
                         </div>
+                        {/* Timeline tahapan pengiriman: murni dari status provider yang
+                            tersimpan di server (tidak dihitung ulang di browser). */}
+                        <KasirDeliveryTimeline timeline={delivery.timeline} />
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <Row label="Nama Penerima" value={delivery.recipientName || "-"} />
                             <Row label="No. WhatsApp" value={delivery.recipientPhone || "-"} />

@@ -323,16 +323,33 @@ export const KASIR_DELIVERY_STATUS_LABELS: Record<KasirDeliveryStatusKey, string
 };
 
 /**
- * Biteship ORDER statuses -> normalized display state. Only statuses the existing
- * integration really stores in `Order.biteshipStatus` are listed. Any other value is
- * NEVER translated into a made-up transition: it is shown verbatim (key TIDAK_DIKENAL)
- * so the raw provider status stays the source of truth in the UI.
+ * Biteship ORDER statuses -> normalized display state.
+ *
+ * The keys come from the OFFICIAL provider vocabulary audited in the Biteship API
+ * reference: the order status flow (docs/api/orders/overview) uses snake_case
+ * (`confirmed`, `scheduled`, `allocated`, `picking_up`, `picked`, `in_transit`,
+ * `dropping_off`, `delivered`, `cancelled`, `on_hold`, `return_in_transit`,
+ * `returned`, `rejected`, `disposed`, `courier_not_found`) while the tracking status
+ * vocabulary (docs/api/trackings/status) spells the SAME states in camelCase
+ * (`pickingUp`, `inTransit`, `droppingOff`, `returnInTransit`, `onHold`,
+ * `courierNotFound`), so both spellings are accepted for one state.
+ *
+ * Any value that is NOT in this table is never translated into a made-up transition:
+ * it is shown verbatim (key TIDAK_DIKENAL) so the raw provider status stays the
+ * source of truth in the UI.
  */
 const BITESHIP_ORDER_STATUS_MAP: Record<string, KasirDeliveryStatusKey> = {
     confirmed: "KURIR_DICARI",
+    // `scheduled` = "Order has been scheduled to be delivered. AWB has been generated"
+    // (official flow, step 2). AFA STORE never books a scheduled pickup
+    // (`delivery_type` is always "now"), so this only matters for defensive mapping.
+    scheduled: "DIPROSES",
     allocated: "DIPROSES",
     picking_up: "KURIR_MENUJU_PICKUP",
     picked: "PESANAN_DIAMBIL",
+    // Official flow: `in_transit` is the middle mile and `dropping_off` the last mile,
+    // both "on the way to the destination".
+    in_transit: "DALAM_PENGIRIMAN",
     dropping_off: "DALAM_PENGIRIMAN",
     delivered: "TERKIRIM",
     cancelled: "GAGAL",
@@ -341,8 +358,16 @@ const BITESHIP_ORDER_STATUS_MAP: Record<string, KasirDeliveryStatusKey> = {
     courier_not_found: "GAGAL",
     disposed: "GAGAL",
     returned: "DIKEMBALIKAN",
+    return_in_transit: "DIKEMBALIKAN",
     return_in_progress: "DIKEMBALIKAN",
     on_hold: "DITAHAN",
+    // The tracking/webhook vocabulary for the very same states.
+    pickingup: "KURIR_MENUJU_PICKUP",
+    intransit: "DALAM_PENGIRIMAN",
+    droppingoff: "DALAM_PENGIRIMAN",
+    returnintransit: "DIKEMBALIKAN",
+    onhold: "DITAHAN",
+    couriernotfound: "GAGAL",
 };
 
 export type KasirDeliveryStatus = {
@@ -406,6 +431,257 @@ export function shouldAutoRefreshKasirDeliveryStatus(input: {
         nonEmptyText(input.statusKey) ||
         normalizeKasirDeliveryStatus({ biteshipStatus: input.biteshipStatus, hasShipment: true }).key;
     return !isKasirDeliveryStatusTerminal(key);
+}
+
+/* ==========================================================================
+ * Delivery timeline — the stages a shipment REALLY reached (never fabricated)
+ *
+ * Every step is derived from the normalized provider status only: a step is
+ * "completed" / "current" when the persisted provider state justifies it, and a
+ * state that leaves the normal flow (failed / cancelled / returned / still
+ * unrecognized) is rendered as an explicit interruption instead of fake progress.
+ * An unknown provider status can therefore NEVER advance the timeline to "Terkirim".
+ * ========================================================================== */
+
+export const KASIR_DELIVERY_TIMELINE_STAGES = [
+    "PESANAN_DIBUAT",
+    "KURIR_DICARI",
+    "KURIR_MENUJU_PICKUP",
+    "PESANAN_DIAMBIL",
+    "DALAM_PENGIRIMAN",
+    "TERKIRIM",
+] as const;
+export type KasirDeliveryTimelineStage = (typeof KASIR_DELIVERY_TIMELINE_STAGES)[number];
+
+export const KASIR_DELIVERY_TIMELINE_LABELS: Record<KasirDeliveryTimelineStage, string> = {
+    PESANAN_DIBUAT: "Pesanan Dibuat",
+    KURIR_DICARI: "Kurir Dicari",
+    KURIR_MENUJU_PICKUP: "Kurir Menuju Pickup",
+    PESANAN_DIAMBIL: "Pesanan Diambil",
+    DALAM_PENGIRIMAN: "Dalam Pengiriman",
+    TERKIRIM: "Terkirim",
+};
+
+export type KasirDeliveryTimelineState = "completed" | "current" | "pending";
+
+export type KasirDeliveryTimelineStep = {
+    stage: KasirDeliveryTimelineStage;
+    label: string;
+    state: KasirDeliveryTimelineState;
+};
+
+export type KasirDeliveryTimeline = {
+    steps: KasirDeliveryTimelineStep[];
+    /** Normalized state the timeline was derived from (the same object the badge shows). */
+    statusKey: KasirDeliveryStatusKey;
+    statusLabel: string;
+    /** Raw persisted provider status, still shown verbatim next to the timeline. */
+    raw: string;
+    /** 1-based stage that is "current" (index into `steps` + 1), or null when none is. */
+    currentStage: number | null;
+    /** True when the shipment did NOT continue the normal delivery flow. */
+    interrupted: boolean;
+    /** Honest, short explanation for an interrupted timeline (null when normal). */
+    note: string | null;
+};
+
+type KasirDeliveryTimelineRule = {
+    /** How many stages (1-based, in KASIR_DELIVERY_TIMELINE_STAGES order) are done. */
+    completedThrough: number;
+    /** 1-based stage that is "current", or null when no stage may be claimed. */
+    currentStage: number | null;
+    interrupted: boolean;
+    note: string | null;
+};
+
+/**
+ * One rule per normalized status. Stage 1 ("Pesanan Dibuat") is always done because the
+ * order row exists; every later stage is claimed only when the provider state proves it.
+ */
+const KASIR_DELIVERY_TIMELINE_RULES: Record<KasirDeliveryStatusKey, KasirDeliveryTimelineRule> = {
+    MENUNGGU_PENGIRIMAN: {
+        completedThrough: 1,
+        currentStage: null,
+        interrupted: false,
+        note: "Pengiriman belum dibuat untuk pesanan ini.",
+    },
+    KURIR_DICARI: { completedThrough: 1, currentStage: 2, interrupted: false, note: null },
+    // `allocated` / `scheduled`: the courier is assigned but not on the way yet, so the
+    // timeline deliberately stays at "Kurir Dicari" instead of claiming more progress.
+    DIPROSES: { completedThrough: 1, currentStage: 2, interrupted: false, note: null },
+    KURIR_MENUJU_PICKUP: { completedThrough: 2, currentStage: 3, interrupted: false, note: null },
+    PESANAN_DIAMBIL: { completedThrough: 3, currentStage: 4, interrupted: false, note: null },
+    DALAM_PENGIRIMAN: { completedThrough: 4, currentStage: 5, interrupted: false, note: null },
+    TERKIRIM: { completedThrough: 5, currentStage: 6, interrupted: false, note: null },
+    // A return means the parcel WAS handed to the courier and is going back: "Pesanan
+    // Diambil" is therefore reached, while nothing after it may be claimed.
+    DIKEMBALIKAN: {
+        completedThrough: 4,
+        currentStage: null,
+        interrupted: true,
+        note: "Paket dikembalikan ke pengirim.",
+    },
+    // A hold can happen at any point, so no position is claimed.
+    DITAHAN: {
+        completedThrough: 1,
+        currentStage: null,
+        interrupted: true,
+        note: "Pengiriman sedang ditahan oleh jasa kirim.",
+    },
+    GAGAL: {
+        completedThrough: 1,
+        currentStage: null,
+        interrupted: true,
+        note: "Pengiriman gagal atau dibatalkan.",
+    },
+    TIDAK_DIKENAL: {
+        completedThrough: 1,
+        currentStage: null,
+        interrupted: true,
+        note: "Status pengiriman ini belum dikenali, jadi timeline tidak dilanjutkan.",
+    },
+};
+
+/**
+ * Timeline for a delivery order, derived ONLY from the persisted provider status.
+ * No caller may pass a stage in, so the UI can never race ahead of the provider.
+ */
+export function kasirDeliveryTimeline(input: {
+    biteshipStatus?: string | null;
+    hasShipment?: boolean;
+}): KasirDeliveryTimeline {
+    const status = normalizeKasirDeliveryStatus({ biteshipStatus: input.biteshipStatus, hasShipment: input.hasShipment });
+    const rule = KASIR_DELIVERY_TIMELINE_RULES[status.key];
+    const steps: KasirDeliveryTimelineStep[] = KASIR_DELIVERY_TIMELINE_STAGES.map((stage, index) => {
+        const position = index + 1;
+        const state: KasirDeliveryTimelineState =
+            position === rule.currentStage ? "current" : position <= rule.completedThrough ? "completed" : "pending";
+        return { stage, label: KASIR_DELIVERY_TIMELINE_LABELS[stage], state };
+    });
+    return {
+        steps,
+        statusKey: status.key,
+        statusLabel: status.label,
+        raw: status.raw,
+        currentStage: rule.currentStage,
+        interrupted: rule.interrupted,
+        note: rule.note,
+    };
+}
+
+/* ==========================================================================
+ * Status progression — duplicated / out-of-order provider updates
+ *
+ * The provider is the source of truth, but a read can return an OLDER value than the one
+ * already stored, the very same value again, or a value this application does not
+ * recognize. The persisted status may therefore only be replaced when the incoming value
+ * is not a regression, and a repeated value is idempotent by construction. The ranks
+ * follow the official order status flow, where the middle mile (`in_transit`) and the
+ * last mile (`dropping_off`) share one step and therefore one rank.
+ * ========================================================================== */
+
+/** Canonical token for a provider status: `picking_up` and `pickingUp` become one token. */
+function canonicalKasirProviderStatus(value: unknown): string {
+    return nonEmptyText(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+}
+
+const KASIR_PROVIDER_STATUS_RANK: Record<string, number> = {
+    confirmed: 1,
+    scheduled: 2,
+    allocated: 2,
+    pickingup: 3,
+    picked: 4,
+    intransit: 5,
+    droppingoff: 5,
+    delivered: 6,
+};
+
+/** States in which the normal flow has ENDED (success or not). */
+const KASIR_FINAL_PROVIDER_STATUSES: readonly string[] = [
+    "delivered",
+    "cancelled",
+    "canceled",
+    "rejected",
+    "returned",
+    "disposed",
+    "couriernotfound",
+];
+
+/** States that may appear at any point and resolve again later (a hold, a return). */
+const KASIR_UNRANKED_PROVIDER_STATUSES: readonly string[] = ["onhold", "returnintransit", "returninprogress"];
+
+const KASIR_FINAL_SUCCESS_STATUS = "delivered";
+
+/** Linear progress rank of an official provider status, or null when it has no rank. */
+export function kasirDeliveryStatusRank(value: unknown): number | null {
+    const token = canonicalKasirProviderStatus(value);
+    if (!token) return null;
+    return KASIR_PROVIDER_STATUS_RANK[token] ?? null;
+}
+
+/** True when this provider status ends the normal delivery flow. */
+export function isFinalKasirDeliveryStatus(value: unknown): boolean {
+    const token = canonicalKasirProviderStatus(value);
+    return token ? KASIR_FINAL_PROVIDER_STATUSES.includes(token) : false;
+}
+
+function isKnownKasirProviderStatus(value: unknown): boolean {
+    const token = canonicalKasirProviderStatus(value);
+    if (!token) return false;
+    return (
+        KASIR_PROVIDER_STATUS_RANK[token] !== undefined ||
+        KASIR_UNRANKED_PROVIDER_STATUSES.includes(token) ||
+        KASIR_FINAL_PROVIDER_STATUSES.includes(token)
+    );
+}
+
+/**
+ * True when an incoming provider status may replace the persisted one. This is the single
+ * place that decides whether an update is accepted, so no caller can let a finished
+ * shipment move backwards.
+ */
+export function canAdvanceKasirDeliveryStatus(persisted: unknown, incoming: unknown): boolean {
+    const from = canonicalKasirProviderStatus(persisted);
+    const to = canonicalKasirProviderStatus(incoming);
+    // Nothing to store: an empty provider value never erases a stored status.
+    if (!to) return false;
+    // First real status for this order.
+    if (!from) return true;
+    // The identical status again: an accepted, idempotent no-op.
+    if (from === to) return true;
+    // "delivered" is final success: it never moves to ANY other state.
+    if (from === KASIR_FINAL_SUCCESS_STATUS) return false;
+    // The other final states (cancelled / rejected / returned / disposed / no courier) are
+    // final too, but a newer FINAL truth may replace them (a delivery reported last wins).
+    // A still-running state never revives them.
+    if (isFinalKasirDeliveryStatus(from)) return isFinalKasirDeliveryStatus(to);
+    // A final state always wins over a still-running one.
+    if (isFinalKasirDeliveryStatus(to)) return true;
+    // An unrecognized value never overwrites a known state; a known value does replace an
+    // unrecognized stored one.
+    if (!isKnownKasirProviderStatus(to)) return false;
+    if (!isKnownKasirProviderStatus(from)) return true;
+    const fromRank = kasirDeliveryStatusRank(from);
+    const toRank = kasirDeliveryStatusRank(to);
+    if (fromRank !== null && toRank !== null) return toRank >= fromRank;
+    // At least one side has no rank (a hold / return in progress): those may appear at any
+    // point and may clear again, so the newest value is kept.
+    return true;
+}
+
+/**
+ * The status that should be PERSISTED for this order: the incoming provider value when it
+ * is not a regression, otherwise the already stored one. Returns null only when neither
+ * side has a value. Never invents a status and never fabricates an order of events.
+ */
+export function resolveKasirDeliveryStatusUpdate(persisted: unknown, incoming: unknown): string | null {
+    const stored = nonEmptyText(persisted);
+    const next = nonEmptyText(incoming);
+    if (!next) return stored || null;
+    if (!canAdvanceKasirDeliveryStatus(stored, next)) return stored || null;
+    return next;
 }
 
 /* ==========================================================================

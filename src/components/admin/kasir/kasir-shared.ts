@@ -1,6 +1,8 @@
 // Shared helpers, labels, and constants for the AFA STORE Kasir (POS) UI.
 // TAHAP B: UI only — no transactions are created and no stock is mutated here.
 
+import type { KasirDeliveryTimeline } from "@/lib/kasir-delivery";
+
 export const rupiah = new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
@@ -132,6 +134,12 @@ export type KasirDeliveryDetail = {
     courier: string | null;
     service: string | null;
     status: KasirDeliveryStatusView;
+    /**
+     * Tahapan pengiriman yang benar-benar sudah dilalui, diturunkan server-side dari
+     * status provider yang tersimpan (src/lib/kasir-delivery.ts). Tidak ada tahap yang
+     * dihitung di browser, jadi timeline tidak pernah mendahului provider.
+     */
+    timeline: KasirDeliveryTimeline;
     hasShipment: boolean;
     trackingId: string | null;
     labelUrl: string | null;

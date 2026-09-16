@@ -2,6 +2,7 @@ import "server-only";
 
 import {
     hasRealShipment,
+    kasirDeliveryTimeline,
     kasirShipmentAction,
     normalizeKasirDeliveryStatus,
     resolveKasirOrderType,
@@ -127,6 +128,10 @@ export function formatKasirOrder(order: KasirOrderRecord) {
                   courier: order.courier,
                   service: order.service,
                   status: normalizeKasirDeliveryStatus({ biteshipStatus: order.biteshipStatus, hasShipment }),
+                  // Timeline pengiriman, diturunkan dari status provider yang TERSIMPAN
+                  // (aturan murni di src/lib/kasir-delivery.ts). Tidak ada tahap yang
+                  // dikarang di browser: status tak dikenal tidak pernah menjadi "Terkirim".
+                  timeline: kasirDeliveryTimeline({ biteshipStatus: order.biteshipStatus, hasShipment }),
                   hasShipment,
                   trackingId: order.biteshipTrackingId || order.trackingNumber || null,
                   labelUrl: order.biteshipLabelUrl,

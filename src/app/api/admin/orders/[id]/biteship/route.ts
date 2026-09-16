@@ -8,6 +8,7 @@ import {
     hasCourierCode,
 } from "@/lib/biteship-order";
 import { normalizeRecipientPhone } from "@/lib/checkout-address";
+import { resolveKasirDeliveryStatusUpdate } from "@/lib/kasir-delivery";
 import { resolveProductWeight } from "@/lib/shipping-weight";
 import {
     BiteshipError,
@@ -198,7 +199,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 // It never creates a shipment (POST owns that, with its compare-and-set claim), never
 // touches order/payment/stock, and never reaches Biteship with a claim placeholder.
 // The browser only ever talks to THIS route — the API key stays server-side. It is
-// invoked from an explicit "Lacak Pengiriman" action, so there is no polling.
+// invoked from an explicit "PERBARUI STATUS" action (plus a conservative automatic
+// refresh while the cashier detail page is open).
+//
+// Provider values are applied through `resolveKasirDeliveryStatusUpdate`, so a
+// duplicated, out-of-order or unrecognized provider state can never move a shipment
+// backwards and can never replace a finished one.
 // ---------------------------------------------------------------------------
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const admin = await getCurrentAdmin();
@@ -220,11 +226,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
             return NextResponse.json({ message: "Status pengiriman belum dapat diambil. Silakan coba lagi." }, { status: 502 });
         }
         // Persist the latest provider state, keeping the last known value when the
-        // provider no longer returns a field. The raw provider status is stored as-is.
+        // provider no longer returns a field. The raw provider status is stored as-is,
+        // but only when the incoming value is not a regression: a duplicated, stale or
+        // unrecognized provider state can never move a finished shipment backwards.
+        const nextStatus = resolveKasirDeliveryStatusUpdate(order.biteshipStatus, remote.status);
         const updated = await prisma.order.update({
             where: { id },
             data: {
-                biteshipStatus: remote.status ?? order.biteshipStatus,
+                biteshipStatus: nextStatus,
                 biteshipTrackingId: remote.trackingId ?? order.biteshipTrackingId,
                 biteshipLabelUrl: remote.labelUrl ?? order.biteshipLabelUrl,
             },

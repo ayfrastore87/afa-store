@@ -23,6 +23,11 @@ export async function GET(request: Request) {
         const type = rawType === "single" || rawType === "double" ? rawType : "single";
 
         const areas = await searchBiteshipAreas(input, type);
+        if (process.env.NODE_ENV !== "production") {
+            // Development diagnostics only: which label was searched and how many official
+            // candidates came back. Never the API key, cookies or customer data.
+            console.info("shipping_areas_query", { input, type, count: areas.length });
+        }
         return NextResponse.json({ success: true, areas });
     } catch (error) {
         if (error instanceof BiteshipUnavailableError) {

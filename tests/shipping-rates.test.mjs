@@ -64,7 +64,7 @@ test("normalizes Biteship pricing rows to required fields only", () => {
         ],
     });
     assert.equal(rates.length, 2);
-    assert.deepEqual(rates[0], { courierCode: "sicepat", courierName: "SiCepat", serviceCode: "best", serviceName: "best", price: 15000, duration: null, quoteRef: "sicepat|best" });
+    assert.deepEqual(rates[0], { courierCode: "sicepat", courierName: "SiCepat", serviceCode: "best", serviceName: "best", serviceType: null, description: null, price: 15000, duration: null, quoteRef: "sicepat|best" });
     assert.equal(rates[1].courierCode, "jne");
     assert.equal(rates[1].price, 18000);
 });

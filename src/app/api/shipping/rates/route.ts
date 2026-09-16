@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/server-auth";
 import { getBiteshipRates, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
+import { BITESHIP_FAILURE_MESSAGES } from "@/lib/biteship-failure";
 import { denyArbitraryAreaId, normalizeAreaId } from "@/lib/shipping-destination";
 import { calculateTotalWeight } from "@/lib/shipping-weight";
 
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
         const body = (await request.json().catch(() => ({}))) as RateRequest;
         const destinationAreaId = normalizeAreaId(body.destinationAreaId);
         if (!destinationAreaId || denyArbitraryAreaId(destinationAreaId)) {
-            return NextResponse.json({ message: "Tujuan pengiriman tidak valid. Pilih kembali alamat tujuan." }, { status: 400 });
+            return NextResponse.json({ message: BITESHIP_FAILURE_MESSAGES.invalid_destination }, { status: 400 });
         }
         const items = parseItems(body.items);
         if (!items.length) return NextResponse.json({ message: "Keranjang kosong." }, { status: 400 });
@@ -69,7 +70,9 @@ export async function POST(request: Request) {
         });
 
         if (!result.rates.length) {
-            return NextResponse.json({ message: "Belum ada layanan pengiriman untuk tujuan ini." }, { status: 404 });
+            // Genuine "no service for this destination" — distinct from an upstream
+            // outage so the UI never blames the address for a provider problem.
+            return NextResponse.json({ message: BITESHIP_FAILURE_MESSAGES.no_rates, code: "NO_RATES" }, { status: 404 });
         }
 
         return NextResponse.json({
@@ -81,16 +84,26 @@ export async function POST(request: Request) {
                 courierName: rate.courierName,
                 serviceCode: rate.serviceCode,
                 serviceName: rate.serviceName,
+                description: rate.description,
                 price: rate.price,
                 duration: rate.duration,
+                shipmentCategory: rate.shipmentCategory,
                 quoteRef: rate.quoteRef,
             })),
         });
     } catch (error) {
         if (error instanceof BiteshipUnavailableError) {
-            const code = error.code === "CONFIGURATION" ? "CONFIGURATION" : "UPSTREAM";
-            // Never expose env/API key details — return a generic message plus a safe code.
-            return NextResponse.json({ message: code === "CONFIGURATION" ? "Layanan pengiriman belum dapat digunakan." : "Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi.", code }, { status: 503 });
+            const code = error.code === "CONFIGURATION" ? "CONFIGURATION" : error.kind === "provider" ? "PROVIDER" : "UPSTREAM";
+            // Never expose env/API key/upstream details — return a generic message plus a safe code.
+            // A provider/account failure (e.g. insufficient Biteship balance) is reported as its own
+            // code so the customer is never told the address is unsupported.
+            const message =
+                code === "CONFIGURATION"
+                    ? "Layanan pengiriman belum dapat digunakan."
+                    : code === "PROVIDER"
+                        ? BITESHIP_FAILURE_MESSAGES.provider
+                        : "Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi.";
+            return NextResponse.json({ message, code }, { status: 503 });
         }
         if (error instanceof BiteshipError) {
             return NextResponse.json({ message: error.message }, { status: 400 });

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, Truck, X } from "lucide-react";
+import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, X } from "lucide-react";
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
@@ -12,6 +12,12 @@ import { CheckoutLocationMap } from "@/components/checkout/location-map";
 import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
 import { buildAreaSearchQueries, pickBestAreaMatch, type AreaAddressInput } from "@/lib/area-match";
+import {
+    formatShippingDuration,
+    groupShippingRatesByCategory,
+    SHIPPING_CATEGORY_LABELS,
+    type ShipmentCategory,
+} from "@/lib/shipping-category";
 
 type Session = { items: CheckoutItem[]; subtotal: number };
 
@@ -31,7 +37,19 @@ type ProfileAddress = {
 
 type Area = { id: string; name: string; type?: string; postalCode?: string; province?: string; city?: string; district?: string; village?: string };
 
-type Rate = { courierCode: string; courierName: string; serviceCode: string; serviceName: string; price: number; duration: string | null; quoteRef: string | null };
+type Rate = {
+    courierCode: string;
+    courierName: string;
+    serviceCode: string;
+    serviceName: string;
+    description?: string | null;
+    price: number;
+    duration: string | null;
+    // Server-derived Biteship classification (⚡ instant / ☀ same day / 📦 regular).
+    // Optional so an older cached payload still classifies locally instead of vanishing.
+    shipmentCategory?: ShipmentCategory;
+    quoteRef: string | null;
+};
 
 type AddressMode = "profile" | "dropship" | "other";
 
@@ -396,6 +414,7 @@ export default function CheckoutPage() {
                 if (requestId !== rateRequestRef.current) return;
                 if (r.status === 503) {
                     if (d.code === "CONFIGURATION") { setRateState("configuration"); setRateError("Layanan pengiriman belum dapat digunakan."); }
+                    else if (d.code === "PROVIDER") { setRateState("unavailable"); setRateError("Tarif pengiriman belum dapat dimuat. Silakan coba lagi."); }
                     else { setRateState("unavailable"); setRateError("Layanan pengiriman sedang mengalami gangguan. Silakan coba lagi."); }
                     return;
                 }
@@ -413,7 +432,7 @@ export default function CheckoutPage() {
     const selectedRate = selected ? rates.find((r) => r.courierCode === selected.courierCode && r.serviceCode === selected.serviceCode) ?? null : null;
     const shipping = selectedRate?.price ?? 0;
     const total = (session?.subtotal ?? 0) + shipping;
-    const groupedRates = groupByCourier(rates);
+    const groupedRates = groupShippingRatesByCategory(rates);
 
     const destinationValid = Boolean(destinationArea?.id);
     const shippingReady = Boolean(selectedRate);
@@ -607,14 +626,14 @@ export default function CheckoutPage() {
                             ))}
                             <p className="mt-4 flex justify-between">Subtotal <b>{formatRupiah(session.subtotal)}</b></p>
                             <p className="flex justify-between">Pengiriman <b>{shippingReady ? formatRupiah(shipping) : "-"}</b></p>
-                            {shippingReady && selectedRate?.duration && <p className="flex justify-between text-xs text-[#6D6558]">Estimasi <b>{selectedRate.duration} hari</b></p>}
+                            {shippingReady && selectedRate?.duration && <p className="flex justify-between text-xs text-[#6D6558]">Estimasi <b>{formatShippingDuration(selectedRate.duration)}</b></p>}
                             <p className="mt-3 flex justify-between border-t pt-3 text-lg font-bold">Total <b>{formatRupiah(total)}</b></p>
                             <p className="mt-1 text-xs text-[#6D6558]">Total final divalidasi ulang oleh server saat checkout.</p>
                         </div>
 
                         <div className="luxury-card rounded-[28px] p-5 md:p-6">
                             <h2 className="mb-3 font-display text-2xl font-bold text-[#123524]">Pilih Metode Pengiriman</h2>
-                            <ShippingRates state={rateState} error={rateError} grouped={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
+                            <ShippingRates state={rateState} error={rateError} groups={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
                         </div>
 
                         <div className="luxury-card rounded-[28px] p-5 md:p-6">
@@ -763,13 +782,7 @@ function AreaAutocomplete({ query, searching, options, destination, onQueryChang
     );
 }
 
-function groupByCourier(rates: Rate[]) {
-    const map = new Map<string, Rate[]>();
-    for (const rate of rates) { const list = map.get(rate.courierCode) || []; list.push(rate); map.set(rate.courierCode, list); }
-    return Array.from(map.entries()).map(([code, list]) => ({ code, name: list[0].courierName, rates: list }));
-}
-
-function ShippingRates({ state, error, grouped, selected, onSelect, onRetry }: { state: RateState; error: string; grouped: { code: string; name: string; rates: Rate[] }[]; selected: { courierCode: string; serviceCode: string } | null; onSelect: (rate: Rate) => void; onRetry: () => void }) {
+function ShippingRates({ state, error, groups, selected, onSelect, onRetry }: { state: RateState; error: string; groups: { category: ShipmentCategory; rates: Rate[] }[]; selected: { courierCode: string; serviceCode: string } | null; onSelect: (rate: Rate) => void; onRetry: () => void }) {
     if (state === "idle") return <p className="text-sm text-[#6D6558]">Silakan pilih kecamatan/kelurahan tujuan terlebih dahulu.</p>;
     if (state === "loading") return <div className="flex items-center gap-2 text-sm font-bold text-[#123524]"><Loader2 size={16} className="animate-spin" />Mencari layanan pengiriman...</div>;
     if (state === "configuration") return <p role="alert" className="rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Layanan pengiriman belum dapat digunakan.</p>;
@@ -793,26 +806,39 @@ function ShippingRates({ state, error, grouped, selected, onSelect, onRetry }: {
     return (
         <fieldset>
             <legend className="sr-only">Pilih kurir dan layanan</legend>
-            <div className="space-y-3">
-                {grouped.map((group) => (
-                    <div key={group.code}>
-                        <p className="mb-2 flex items-center gap-2 text-sm font-bold text-[#123524]"><Truck size={16} />{group.name}</p>
-                        <div className="grid gap-2">
-                            {group.rates.map((rate) => (
-                                <label key={`${group.code}-${rate.serviceCode}`} className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
-                                    <span className="flex min-w-0 items-center gap-3">
-                                        <input type="radio" name="shipping-rate" checked={selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode} onChange={() => onSelect(rate)} />
-                                        <span className="min-w-0">
-                                            <span className="block text-sm font-bold">{rate.serviceName}</span>
-                                            {rate.duration && <span className="block text-xs text-[#6D6558]">Estimasi {rate.duration} hari</span>}
-                                        </span>
-                                    </span>
-                                    <b className="shrink-0 whitespace-nowrap">{formatRupiah(rate.price)}</b>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                ))}
+            <div className="space-y-5">
+                {groups.map((group) => {
+                    const meta = SHIPPING_CATEGORY_LABELS[group.category];
+                    return (
+                        <section key={group.category} aria-label={meta.title}>
+                            <div className="mb-2 border-t border-[#C9A45B]/30 pt-3">
+                                <p className="text-sm font-bold tracking-wide text-[#123524]"><span aria-hidden="true">{meta.icon}</span> {meta.title}</p>
+                                <p className="text-xs text-[#6D6558]">{meta.hint}</p>
+                                {group.category === "instant" && <p className="mt-1 text-xs text-[#8B6B3F]">Pengiriman instan tersedia sesuai jangkauan alamat.</p>}
+                            </div>
+                            <div className="grid gap-2">
+                                {group.rates.map((rate) => {
+                                    const estimate = formatShippingDuration(rate.duration);
+                                    const isSelected = selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode;
+                                    return (
+                                        <label key={`${rate.courierCode}-${rate.serviceCode}`} className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${isSelected ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
+                                            <span className="flex min-w-0 items-center gap-3">
+                                                <input type="radio" name="shipping-rate" checked={isSelected} onChange={() => onSelect(rate)} />
+                                                <span className="min-w-0">
+                                                    <span className="block text-sm font-bold">{rate.courierName}</span>
+                                                    <span className="block text-xs font-semibold text-[#123524]">{rate.serviceName}</span>
+                                                    {rate.description && rate.description !== rate.serviceName && <span className="block break-words text-xs text-[#6D6558]">{rate.description}</span>}
+                                                    {estimate && <span className="block text-xs text-[#6D6558]">Estimasi {estimate}</span>}
+                                                </span>
+                                            </span>
+                                            <b className="shrink-0 whitespace-nowrap">{formatRupiah(rate.price)}</b>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    );
+                })}
             </div>
         </fieldset>
     );

@@ -2,6 +2,8 @@ import "server-only";
 
 import { normalizeBiteshipRatesResponse } from "@/lib/biteship-normalize";
 import type { BiteshipRate } from "@/lib/biteship-normalize";
+import { classifyShippingService, type CategorizedRate } from "@/lib/shipping-category";
+import { BITESHIP_FAILURE_MESSAGES, isBiteshipProviderFailure, type BiteshipFailureKind } from "@/lib/biteship-failure";
 import {
     buildBiteshipOrderPayload,
     isBiteshipReferenceIdConflict,
@@ -30,10 +32,12 @@ export type BiteshipArea = {
     village?: string;
 };
 
+export type BiteshipCategorizedRate = BiteshipRate & CategorizedRate;
+
 export type BiteshipRatesResult = {
     originAreaId: string;
     destinationAreaId: string;
-    rates: BiteshipRate[];
+    rates: BiteshipCategorizedRate[];
 };
 
 type BiteshipRatesRawResponse = {
@@ -68,15 +72,19 @@ type BiteshipAreasRawResponse = {
 type BiteshipCourierRaw = { courier_code?: string; courier_name?: string; [key: string]: unknown };
 
 export class BiteshipError extends Error {
-    constructor(message: string, public readonly retryable: boolean = false) {
+    constructor(message: string, public readonly retryable: boolean = false, public readonly kind: BiteshipFailureKind = "unavailable") {
         super(message);
         this.name = "BiteshipError";
     }
 }
 
 export class BiteshipUnavailableError extends BiteshipError {
-    constructor(message = "Layanan pengiriman sedang tidak tersedia. Silakan coba lagi nanti.", public readonly code: "CONFIGURATION" | "UPSTREAM" = "UPSTREAM") {
-        super(message, true);
+    constructor(
+        message = "Layanan pengiriman sedang tidak tersedia. Silakan coba lagi nanti.",
+        public readonly code: "CONFIGURATION" | "UPSTREAM" = "UPSTREAM",
+        kind: BiteshipFailureKind = "unavailable",
+    ) {
+        super(message, true, kind);
         this.name = "BiteshipUnavailableError";
     }
 }
@@ -138,8 +146,17 @@ async function biteshipFetch(path: string, init: RequestInit) {
             throw new BiteshipUnavailableError();
         }
         if (!response.ok) {
+            const fields = pickBiteshipErrorFields(data);
+            console.error("biteship_request_failed", { path, status: response.status, ...fields });
+            // Account/provider failures (for example "No sufficient balance to call
+            // rates API") belong to OUR Biteship account, never to the customer's
+            // address: they are reported as a retryable provider problem so checkout
+            // can never answer "alamat tidak didukung". Only the sanitized fields
+            // above are logged — never the raw body, the API key or env names.
+            if (isBiteshipProviderFailure(response.status, fields)) {
+                throw new BiteshipUnavailableError(BITESHIP_FAILURE_MESSAGES.provider, "UPSTREAM", "provider");
+            }
             const retryable = response.status >= 500;
-            console.error("biteship_request_failed", { path, status: response.status, ...pickBiteshipErrorFields(data) });
             if (retryable) throw new BiteshipUnavailableError();
             throw new BiteshipError("Pilihan pengiriman sedang tidak tersedia. Silakan coba lagi.");
         }
@@ -233,7 +250,13 @@ export async function getBiteshipRates(request: BiteshipRateRequest): Promise<Bi
         body: JSON.stringify({ origin_area_id: configuredOrigin, destination_area_id: request.destinationAreaId, couriers, items }),
     });
     const raw = data as BiteshipRatesRawResponse;
-    const rates = await normalizeBiteshipRatesResponse(raw);
+    // Categories are computed server-side from the semantic fields Biteship
+    // returned (service/type/description + ETA). Availability is never invented:
+    // only pricing rows actually returned here reach the checkout.
+    const rates = (await normalizeBiteshipRatesResponse(raw)).map((rate) => ({
+        ...rate,
+        shipmentCategory: classifyShippingService(rate),
+    }));
     return {
         originAreaId: raw.origin?.area_id || configuredOrigin,
         destinationAreaId: raw.destination?.area_id || request.destinationAreaId,

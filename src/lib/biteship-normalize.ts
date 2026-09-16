@@ -3,6 +3,10 @@ export type BiteshipRate = {
     courierName: string;
     serviceCode: string;
     serviceName: string;
+    // Semantic fields kept verbatim from the Biteship pricing row so the rate can
+    // be classified (⚡ instant / ☀ same day / 📦 regular) without guessing.
+    serviceType: string | null;
+    description: string | null;
     price: number;
     duration: string | null;
     quoteRef: string | null;
@@ -18,6 +22,7 @@ export type BiteshipRawPricing = {
     company?: string;
     courier_company?: string;
     service_type?: string;
+    description?: string;
     tier?: string;
     [key: string]: unknown;
 };
@@ -39,6 +44,12 @@ function toNumber(value: unknown): number | null {
     return null;
 }
 
+function readText(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
 export function normalizeRate(raw: BiteshipRawPricing): BiteshipRate | null {
     const courierCode = (raw.courier_code || raw.company || raw.courier_company || "").toString().trim();
     const serviceCode = (raw.courier_service_code || raw.service_type || raw.tier || "").toString().trim();
@@ -48,7 +59,17 @@ export function normalizeRate(raw: BiteshipRawPricing): BiteshipRate | null {
     const serviceName = (raw.courier_service_name || serviceCode).toString().trim();
     const duration = typeof raw.duration === "string" && raw.duration.trim() ? raw.duration.trim() : null;
     const quoteRef = [courierCode, serviceCode].join("|");
-    return { courierCode, courierName, serviceCode, serviceName, price, duration, quoteRef };
+    return {
+        courierCode,
+        courierName,
+        serviceCode,
+        serviceName,
+        serviceType: readText(raw.service_type) ?? readText(raw.tier),
+        description: readText(raw.description),
+        price,
+        duration,
+        quoteRef,
+    };
 }
 
 export function normalizeBiteshipRatesResponse(data: unknown): BiteshipRate[] {

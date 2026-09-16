@@ -264,9 +264,25 @@ export async function getBiteshipRates(request: BiteshipRateRequest): Promise<Bi
     };
 }
 
+/**
+ * Short-lived, bounded cache of OFFICIAL Biteship area lookups. The same normalized
+ * query (kelurahan / postcode label) is asked repeatedly while a customer confirms
+ * several nearby pins, and the manual fallback search repeats the same inputs. The
+ * cache contains only public administrative data — never user or order data — and it
+ * is bounded so it can never grow without limit.
+ */
+const areasCache = new Map<string, { areas: BiteshipArea[]; at: number }>();
+const AREAS_CACHE_TTL_MS = 5 * 60_000;
+const AREAS_CACHE_MAX_ENTRIES = 200;
+
 export async function searchBiteshipAreas(input: string, type?: "single" | "double"): Promise<BiteshipArea[]> {
     const trimmed = input.trim();
     if (!trimmed) return [];
+
+    const cacheKey = `${type || "single"}:${trimmed.toLowerCase()}`;
+    const cached = areasCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < AREAS_CACHE_TTL_MS) return cached.areas;
+
     const params = new URLSearchParams({ countries: "ID", input: trimmed, type: type || "single" });
     const data = await biteshipFetch(`/v1/maps/areas?${params.toString()}`, { method: "GET" });
     const raw = data as BiteshipAreasRawResponse;
@@ -287,7 +303,14 @@ export async function searchBiteshipAreas(input: string, type?: "single" | "doub
             village: str(entry.administrative_division_level_4_name) || undefined,
         });
     }
-    return areas.slice(0, 30);
+    const result = areas.slice(0, 30);
+    areasCache.set(cacheKey, { areas: result, at: Date.now() });
+    if (areasCache.size > AREAS_CACHE_MAX_ENTRIES) {
+        // Map preserves insertion order, so the first key is the oldest entry.
+        const oldest = areasCache.keys().next();
+        if (!oldest.done) areasCache.delete(oldest.value);
+    }
+    return result;
 }
 
 /**

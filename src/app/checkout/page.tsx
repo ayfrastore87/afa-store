@@ -11,7 +11,7 @@ import type { DeliveryCoordinates } from "@/lib/coordinates";
 import { CheckoutLocationMap } from "@/components/checkout/location-map";
 import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
-import { buildAreaSearchQueries, pickBestAreaMatch, type AreaAddressInput } from "@/lib/area-match";
+import { addAreaCandidates, buildAreaSearchQueries, isHighConfidenceAreaMatch, pickBestAreaMatch, scoreAreaCandidate, type AreaAddressInput } from "@/lib/area-match";
 import {
     addressFieldsForMode,
     cleanFieldValue,
@@ -137,6 +137,26 @@ type RateState = "idle" | "loading" | "ready" | "empty" | "unavailable" | "confi
 
 type AreaState = "idle" | "matching" | "matched" | "not_found";
 
+/**
+ * Development-only area-match diagnostics (rendered/logged when NODE_ENV is not
+ * "production"). It only ever carries administrative names and counters — never the
+ * customer's name/phone, credentials, cookies or the checkout payload.
+ */
+type AreaDiagnostics = {
+    input: { village: string; district: string; city: string; province: string; postcode: string };
+    queries: number;
+    completed: number;
+    candidates: number;
+    score: number | null;
+    reasons: string[];
+    conflicts: string[];
+    resolved: boolean;
+};
+
+/** Shown to the customer while the fallback area search is the only path. */
+const AREA_FALLBACK_TITLE = "Area pengiriman belum ditemukan otomatis.";
+const AREA_FALLBACK_HINT = "Cari kelurahan atau kecamatan.";
+
 type ReverseState = "idle" | "loading" | "done" | "error";
 
 type GeoState = "idle" | "locating";
@@ -205,11 +225,15 @@ export default function CheckoutPage() {
     const [areaQuery, setAreaQuery] = useState("");
     const [areaOptions, setAreaOptions] = useState<Area[]>([]);
     const [areaSearching, setAreaSearching] = useState(false);
+    // Development-only match diagnostics (never populated in production).
+    const [areaDiagnostics, setAreaDiagnostics] = useState<AreaDiagnostics | null>(null);
     const areaRequestRef = useRef(0);
     // Separate sequence for the automatic reverse-geocode → Biteship area match, so a
     // newer match always wins over an older one (the manual fallback search keeps
-    // using `areaRequestRef`).
+    // using `areaRequestRef`). The in-flight auto-match requests are also aborted as
+    // soon as a newer pin supersedes them, so no stale lookup can win the race.
     const areaMatchRef = useRef(0);
+    const areaAbortRef = useRef<AbortController | null>(null);
 
     const [rates, setRates] = useState<Rate[]>([]);
     const [rateState, setRateState] = useState<RateState>("idle");
@@ -256,6 +280,7 @@ export default function CheckoutPage() {
         setAreaQuery("");
         setAreaOptions([]);
         setAreaSearching(false);
+        setAreaDiagnostics(null);
         setSelected(null);
         setRates([]);
         setRateState("idle");
@@ -267,6 +292,7 @@ export default function CheckoutPage() {
     useEffect(() => {
         return () => {
             if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+            areaAbortRef.current?.abort();
         };
     }, []);
 
@@ -381,48 +407,94 @@ export default function CheckoutPage() {
         }
     };
 
-    // Auto-match reverse-geocoded address to an OFFICIAL Biteship area result.
+    /**
+     * Development-only diagnostics for the area auto-match. It reports the normalized
+     * reverse-geocode input, how many of the bounded queries ran, how many official
+     * candidates Biteship returned, the winning score with the fields that matched /
+     * conflicted, and whether a destinationAreaId was resolved. No customer identity,
+     * no credentials, no checkout payload — and nothing at all in production.
+     */
+    const publishAreaDiagnostics = (
+        input: AreaAddressInput,
+        info: { queries: number; completed: number; candidates: number; best: Area | null },
+    ) => {
+        if (process.env.NODE_ENV === "production") return;
+        const score = info.best ? scoreAreaCandidate(info.best, input) : null;
+        const snapshot: AreaDiagnostics = {
+            input: {
+                village: input.village ?? "",
+                district: input.district ?? "",
+                city: input.city ?? "",
+                province: input.province ?? "",
+                postcode: input.postcode ?? "",
+            },
+            queries: info.queries,
+            completed: info.completed,
+            candidates: info.candidates,
+            score: score ? score.total : null,
+            reasons: score ? score.reasons : [],
+            conflicts: score ? score.conflicts : [],
+            resolved: Boolean(info.best),
+        };
+        console.info("[checkout] area-match", snapshot);
+        setAreaDiagnostics(snapshot);
+    };
+
+    /**
+     * Auto-match the reverse-geocoded address to an OFFICIAL Biteship area result.
+     *
+     * Bounded + de-duplicated by design: at most MAX_AREA_SEARCH_QUERIES specific
+     * lookups, no repeated query, and the loop stops as soon as a high-confidence
+     * official candidate exists. A newer pin aborts the in-flight requests, and a
+     * response that is no longer the newest may never replace the current area.
+     */
     const matchArea = async (address: AreaAddressInput) => {
         if (!Object.values(address).some(Boolean)) { setAreaState("not_found"); return; }
+        // Latest-request-wins: stop the previous lookups before starting new ones.
+        areaAbortRef.current?.abort();
+        const controller = new AbortController();
+        areaAbortRef.current = controller;
         const requestId = ++areaMatchRef.current;
         setAreaState("matching");
         const queries = buildAreaSearchQueries(address);
         const candidates: Area[] = [];
         const seenIds = new Set<string>();
+        let best: Area | null = null;
+        let completed = 0;
         for (const q of queries) {
-            if (isStaleResponse(areaMatchRef.current, requestId)) return;
+            if (controller.signal.aborted || isStaleResponse(areaMatchRef.current, requestId)) return;
             try {
-                const r = await fetch(`/api/shipping/areas?input=${encodeURIComponent(q)}`);
+                const r = await fetch(`/api/shipping/areas?input=${encodeURIComponent(q)}`, { signal: controller.signal });
                 const d = await r.json().catch(() => ({}));
-                if (!r.ok) continue;
-                const areas: Area[] = d.areas || [];
-                if (!areas.length) continue;
-                for (const area of areas) {
-                    if (area?.id && !seenIds.has(area.id)) {
-                        seenIds.add(area.id);
-                        candidates.push(area);
-                    }
-                }
+                // Official Biteship candidates only, de-duplicated by area id so the same
+                // area returned by several queries is scored once.
+                if (r.ok) addAreaCandidates(candidates, seenIds, d.areas || []);
             } catch {
-                // try next query
+                // Aborted because a newer location won: leave everything to that match.
+                if (controller.signal.aborted) return;
+                // Otherwise just try the next query.
             }
-            // A HTTP 200 response does NOT mean the area matched: keep the best
-            // STRONG candidate across every query before ever selecting one.
-            const best = pickBestAreaMatch(candidates, address);
-            if (best) {
-                // Never apply a match that a newer location already superseded.
-                if (isStaleResponse(areaMatchRef.current, requestId)) return;
-                setDestinationArea(best);
-                setAreaQuery(best.name);
-                setAreaState("matched");
-                // The matched Biteship area is authoritative for the administrative
-                // components (province/city/district/village/postalCode) that the quote is
-                // based on. The geocoded street line and the customer's own detail survive.
-                patchDestinationAddress(areaAddressPatch(best));
-                return;
-            }
+            completed += 1;
+            // A HTTP 200 response does NOT mean the area matched: rank the best STRONG
+            // candidate across every query collected so far, and stop early only once the
+            // evidence is strong enough that no later query can change the outcome.
+            best = pickBestAreaMatch(candidates, address);
+            if (best && isHighConfidenceAreaMatch(best, address)) break;
         }
-        if (isStaleResponse(areaMatchRef.current, requestId)) return;
+        // Never apply a match that a newer location already superseded.
+        if (controller.signal.aborted || isStaleResponse(areaMatchRef.current, requestId)) return;
+        publishAreaDiagnostics(address, { queries: queries.length, completed, candidates: candidates.length, best });
+        if (best) {
+            setDestinationArea(best);
+            setAreaQuery(best.name);
+            setAreaState("matched");
+            // The matched Biteship area is authoritative for the administrative
+            // components (province/city/district/village/postalCode) that the quote is
+            // based on. The geocoded street line and the customer's own detail survive.
+            patchDestinationAddress(areaAddressPatch(best));
+            return;
+        }
+        // Genuinely no official candidate: reveal the manual search as the fallback.
         setDestinationArea(null);
         setSelected(null);
         setAreaState("not_found");
@@ -537,6 +609,12 @@ export default function CheckoutPage() {
         setAreaOptions([]);
         setAreaState("matched");
         setSelected(null);
+        // A manual pick replaces the destination, so no previous quote may survive: the
+        // rates effect below immediately re-quotes the newly selected OFFICIAL area.
+        setRates([]);
+        setRateState("idle");
+        setRateError("");
+        setQuoteSignature("");
         // Manual area pick: sync ONLY the official Biteship area components into the
         // destination address. The geocoded street line and any component the area does
         // not carry are left untouched — nothing is blanked and nothing is invented.
@@ -776,10 +854,12 @@ export default function CheckoutPage() {
                                     <p className="flex items-center gap-2 rounded-xl bg-[#EAF1ED] p-3 text-sm font-bold text-[#184D47]"><Check size={16} /> Area pengiriman ditemukan: {[destinationArea.name, destinationArea.district, destinationArea.city, destinationArea.province, destinationArea.postalCode].filter(Boolean).join(", ")}</p>
                                 )}
                                 {areaState === "matching" && <p className="text-sm text-[#6D6558]"><Loader2 size={14} className="mr-1 inline animate-spin" />Mencocokkan area pengiriman...</p>}
+                                {/* The manual area search is a FALLBACK: it only ever appears when the
+                                    automatic match genuinely could not resolve an official area. */}
                                 {areaState === "not_found" && (
                                     <div className="rounded-xl bg-[#FFF2D6] p-3">
-                                        <p className="text-sm font-bold text-[#123524]">Kami belum dapat mencocokkan area pengiriman secara otomatis.</p>
-                                        <p className="mt-1 text-xs text-[#6D6558]">Cari kecamatan / kelurahan tujuan di bawah ini.</p>
+                                        <p className="text-sm font-bold text-[#123524]">{AREA_FALLBACK_TITLE}</p>
+                                        <p className="mt-1 text-xs text-[#6D6558]">{AREA_FALLBACK_HINT}</p>
                                         <div className="mt-3">
                                             <AreaAutocomplete
                                                 query={areaQuery}
@@ -791,6 +871,16 @@ export default function CheckoutPage() {
                                             />
                                         </div>
                                     </div>
+                                )}
+                                {/* Development diagnostics only — never rendered for customers. */}
+                                {process.env.NODE_ENV !== "production" && areaDiagnostics && (
+                                    <details className="rounded-xl border border-dashed border-[#C9A45B]/40 bg-white/60 p-3 text-xs text-[#6D6558]">
+                                        <summary className="cursor-pointer font-bold">Diagnostik area (dev)</summary>
+                                        <p className="mt-2">Kueri: {areaDiagnostics.completed}/{areaDiagnostics.queries} · Kandidat: {areaDiagnostics.candidates} · Skor: {areaDiagnostics.score ?? "-"} · Resolved: {areaDiagnostics.resolved ? "ya" : "tidak"}</p>
+                                        <p>Input: {[areaDiagnostics.input.village, areaDiagnostics.input.district, areaDiagnostics.input.city, areaDiagnostics.input.province, areaDiagnostics.input.postcode].filter(Boolean).join(", ") || "-"}</p>
+                                        <p>Alasan: {areaDiagnostics.reasons.join(", ") || "-"}</p>
+                                        <p>Konflik: {areaDiagnostics.conflicts.join(", ") || "-"}</p>
+                                    </details>
                                 )}
                             </div>
 

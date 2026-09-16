@@ -7,7 +7,7 @@ import {
     normalizeReverseResult,
     normalizeNominatimPlace,
 } from "../src/lib/geocoding-normalize.ts";
-import { buildAreaSearchQueries, pickBestAreaMatch, normalizeAreaName } from "../src/lib/area-match.ts";
+import { buildAreaSearchQueries, MAX_AREA_SEARCH_QUERIES, pickBestAreaMatch, normalizeAreaName } from "../src/lib/area-match.ts";
 import { normalizeLatitude, normalizeLongitude } from "../src/lib/coordinates.ts";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
@@ -78,8 +78,13 @@ test("coordinates are metadata only — never affect shipping price", () => {
 test("auto-match builds query fallbacks and ranks official Biteship results", () => {
     const queries = buildAreaSearchQueries({ village: "Kalitimbang", district: "Cibeber", city: "Kota Cilegon", postcode: "42426" });
     assert.equal(queries[0], "Kalitimbang Cibeber Kota Cilegon 42426");
-    assert.ok(queries.includes("Cibeber Kota Cilegon"));
-    assert.ok(queries.includes("Kota Cilegon"));
+    // Bounded, specific ladder: the most precise combinations plus the two single tokens
+    // (postcode and kelurahan name) that an official Biteship area label always contains.
+    assert.ok(queries.includes("Cibeber Kota Cilegon 42426"));
+    assert.ok(queries.includes("Kalitimbang Kota Cilegon 42426"));
+    assert.ok(queries.includes("42426"));
+    assert.ok(queries.includes("Kalitimbang"));
+    assert.ok(queries.length <= MAX_AREA_SEARCH_QUERIES);
 
     const best = pickBestAreaMatch(
         [
@@ -100,7 +105,10 @@ test("pickBestAreaMatch returns null when no strong match", () => {
 test("checkout keeps fallback area search inside Data Penerima when auto-match fails", () => {
     assert.match(checkoutPage, /api\/shipping\/areas/);
     assert.match(checkoutPage, /AreaAutocomplete/);
-    assert.match(checkoutPage, /Kami belum dapat mencocokkan area pengiriman secara otomatis\./);
+    // The manual search is a FALLBACK with simpler wording, shown only when the
+    // automatic map → reverse geocode → Biteship area resolution genuinely failed.
+    assert.match(checkoutPage, /Area pengiriman belum ditemukan otomatis\./);
+    assert.match(checkoutPage, /Cari kelurahan atau kecamatan\./);
     // The fallback search must be rendered within the Data Penerima panel, not a separate card.
     assert.doesNotMatch(checkoutPage, /Cari Kecamatan \/ Kelurahan \(Fallback\)/);
     assert.doesNotMatch(checkoutPage, /Pilih Tujuan \(Kecamatan \/ Kelurahan\)/);
@@ -340,13 +348,12 @@ test("area match: no strong match returns null (manual fallback path)", () => {
 test("area match: search queries are most-specific-first and never rely on province", () => {
     const queries = buildAreaSearchQueries({ province: "Jawa Barat", city: "Cianjur", district: "Karang Tengah", village: "Bojong", postcode: "43125" });
     assert.equal(queries[0], "Bojong Karang Tengah Cianjur 43125");
-    assert.ok(queries.includes("Bojong Karang Tengah Cianjur"));
     assert.ok(queries.includes("Karang Tengah Cianjur 43125"));
-    assert.ok(queries.includes("Karang Tengah Cianjur"));
     assert.ok(queries.includes("Bojong Cianjur 43125"));
-    assert.ok(queries.includes("Bojong Cianjur"));
-    assert.ok(queries.includes("Cianjur 43125"));
-    assert.ok(queries.includes("Cianjur"));
+    assert.ok(queries.includes("43125"));
+    assert.ok(queries.includes("Bojong"));
+    // Bounded: a precise pin never turns into a request storm against Biteship.
+    assert.ok(queries.length <= MAX_AREA_SEARCH_QUERIES);
     // No query should contain the province (keeps Biteship search broad enough).
     assert.ok(queries.every((q) => !q.toLowerCase().includes("jawa barat")));
 });

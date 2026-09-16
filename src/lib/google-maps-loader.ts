@@ -2,8 +2,12 @@
  * Google Maps JavaScript API loader for the checkout location picker.
  *
  * One authoritative loader for the whole app:
- *   - the key comes ONLY from NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (never hardcoded,
- *     never logged, never read from another variable),
+ *   - the key comes ONLY from NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (never hardcoded, never
+ *     logged, never read from another variable) and is read through the LITERAL member
+ *     expression `process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`: that literal form is the
+ *     only one Next.js/Turbopack substitutes when compiling the client bundle, so a
+ *     computed lookup (`process.env[name]`) silently yields `undefined` in Production,
+ *     which surfaced as a wrongly rendered "Peta belum dikonfigurasi" screen,
  *   - the official bootstrap script is injected at most ONCE per page session
  *     (module-level single-flight promise + a stable script id),
  *   - a failed load rejects with a typed error AND clears the in-flight state, so
@@ -13,6 +17,10 @@
  *     access at module scope, no Next.js runtime).
  */
 
+/**
+ * Name of the public env var. Kept for documentation and for the test-only injection path;
+ * the runtime value is read through the literal member expression in `publicEnvApiKey`.
+ */
 export const GOOGLE_MAPS_API_KEY_ENV = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY";
 
 /** Stable id so a leftover/failed script tag can be detected and replaced. */
@@ -45,13 +53,34 @@ export class GoogleMapsLoadError extends Error {
 
 type EnvLike = Record<string, string | undefined>;
 
-function defaultEnv(): EnvLike | undefined {
-    return typeof process === "undefined" ? undefined : (process.env as EnvLike);
+/**
+ * The public key as it exists in the built client bundle.
+ *
+ * The member expression below is written out LITERALLY and must stay that way: Next.js
+ * (webpack and Turbopack) only substitutes `process.env.NEXT_PUBLIC_*` member expressions
+ * while compiling client code. A computed lookup such as `process.env[name]` or
+ * `env[name]` is never substituted, and the browser's `process.env` shim does not carry
+ * the value, so a dynamically read key is `undefined` at runtime in Production even
+ * though the variable is configured on Vercel.
+ *
+ * Returns undefined when the variable is absent, blank or not a string.
+ */
+function publicEnvApiKey(): string | undefined {
+    if (typeof process === "undefined") return undefined;
+    const raw = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    return typeof raw === "string" ? raw : undefined;
 }
 
-/** Read + trim the public key. Returns null when missing/blank. Never logs it. */
-export function readGoogleMapsApiKey(env: EnvLike | undefined = defaultEnv()): string | null {
-    const raw = env ? env[GOOGLE_MAPS_API_KEY_ENV] : undefined;
+/**
+ * Read + trim the public key. Returns null when missing/blank. Never logs it.
+ *
+ * The default path — the only one application code ever takes — reads the statically
+ * inlined public env var. An explicit `env` object may be injected by tests; that
+ * injection path is the sole place a computed lookup is allowed, and it is unreachable
+ * from production code.
+ */
+export function readGoogleMapsApiKey(env?: EnvLike): string | null {
+    const raw = env ? env[GOOGLE_MAPS_API_KEY_ENV] : publicEnvApiKey();
     if (typeof raw !== "string") return null;
     const key = raw.trim();
     return key.length > 0 ? key : null;

@@ -24,6 +24,7 @@ import {
     GOOGLE_MAPS_API_KEY_ENV,
     GOOGLE_MAPS_CALLBACK,
     GOOGLE_MAPS_LIBRARIES,
+    GOOGLE_MAPS_MISSING_KEY_MESSAGE,
     GOOGLE_MAPS_SCRIPT_ID,
     GoogleMapsLoadError,
     buildGoogleMapsScriptUrl,
@@ -43,6 +44,23 @@ const code = (source) =>
         .split("\n")
         .filter((line) => !/^\s*\/\//.test(line))
         .join("\n");
+
+/**
+ * Runs `fn` with NEXT_PUBLIC_GOOGLE_MAPS_API_KEY forced to `value` (`undefined` = absent),
+ * then restores whatever the machine had, so the suite never depends on — nor pollutes —
+ * the ambient environment.
+ */
+function withEnvKey(value, fn) {
+    const previous = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (value === undefined) delete process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    else process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = value;
+    try {
+        return fn();
+    } finally {
+        if (previous === undefined) delete process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+        else process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = previous;
+    }
+}
 
 const checkoutPage = read("../src/app/checkout/page.tsx");
 const locationMap = read("../src/components/checkout/location-map.tsx");
@@ -94,10 +112,43 @@ test("the browser key is read only from NEXT_PUBLIC_GOOGLE_MAPS_API_KEY", () => 
     assert.equal(readGoogleMapsApiKey({}), null);
     assert.equal(readGoogleMapsApiKey({ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "   " }), null);
     assert.equal(readGoogleMapsApiKey({ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: 42 }), null);
-    assert.equal(readGoogleMapsApiKey(undefined), null);
+    // The default path (no argument) is the runtime path: it reads the literal env var,
+    // so this equivalence must hold no matter what the machine has exported.
+    assert.equal(readGoogleMapsApiKey(undefined), readGoogleMapsApiKey());
     assert.equal(readGoogleMapsApiKey({ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "  KEY-123  " }), "KEY-123");
     // A differently named (e.g. server-side) key is never picked up by accident.
     assert.equal(readGoogleMapsApiKey({ GOOGLE_MAPS_API_KEY: "server-key" }), null);
+});
+
+test("the runtime key read is a literal member expression so Next.js can inline it", () => {
+    const loaderCode = code(loaderLib);
+    // This exact form is what Next.js/Turbopack substitutes into the client bundle.
+    assert.match(loaderCode, /process\.env\.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY/);
+    // No computed `process.env[...]` lookup may exist anywhere in the loader: it is never
+    // substituted, which is what made Production render "Peta belum dikonfigurasi" even
+    // though NEXT_PUBLIC_GOOGLE_MAPS_API_KEY was configured on Vercel.
+    assert.doesNotMatch(loaderCode, /process\.env\s*\[/);
+    assert.doesNotMatch(loaderCode, /defaultEnv/);
+    // The computed lookup survives ONLY in the explicit test-injection branch.
+    assert.match(loaderCode, /env \? env\[GOOGLE_MAPS_API_KEY_ENV\] : publicEnvApiKey\(\)/);
+    // Injection can never be reached from application code.
+    assert.doesNotMatch(code(checkoutPage), /readGoogleMapsApiKey\(/);
+    assert.doesNotMatch(code(locationMap), /readGoogleMapsApiKey\(/);
+    assert.doesNotMatch(code(locationSearch), /readGoogleMapsApiKey\(/);
+    // Still never hardcoded.
+    assert.doesNotMatch(loaderCode, /AIza/);
+    assert.doesNotMatch(code(locationMap) + code(locationSearch) + code(checkoutPage), /AIza/);
+});
+
+test("the default path really reads the ambient public env var (trimmed, blank = missing)", () => {
+    assert.equal(withEnvKey("  RUNTIME-KEY  ", () => readGoogleMapsApiKey()), "RUNTIME-KEY");
+    assert.equal(withEnvKey("   ", () => readGoogleMapsApiKey()), null);
+    assert.equal(withEnvKey(undefined, () => readGoogleMapsApiKey()), null);
+    // Injection still wins, so unit tests never depend on the ambient value.
+    assert.equal(
+        withEnvKey("AMBIENT-KEY", () => readGoogleMapsApiKey({ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "  FIXTURE-KEY  " })),
+        "FIXTURE-KEY",
+    );
 });
 
 test("the bootstrap URL is the official Maps JS API URL with the required options", () => {
@@ -131,6 +182,32 @@ test("loadGoogleMaps fails safely outside the browser and never caches a failure
         (error) => error,
     );
     assert.equal(second?.code, first.code);
+});
+
+test("a missing literal key still raises MISSING_KEY while a present key yields the Google script URL", async () => {
+    const missing = await withEnvKey(undefined, () => loadGoogleMaps().then(() => null, (error) => error));
+    assert.ok(missing instanceof GoogleMapsLoadError);
+    assert.equal(missing.code, "MISSING_KEY");
+    assert.equal(missing.message, GOOGLE_MAPS_MISSING_KEY_MESSAGE);
+    assert.doesNotMatch(missing.message, /NEXT_PUBLIC_GOOGLE_MAPS_API_KEY|AIza|key=/i);
+
+    // With the public env var present, the loader resolves exactly that key...
+    const key = withEnvKey("TEST-KEY-123", () => readGoogleMapsApiKey());
+    assert.equal(key, "TEST-KEY-123");
+    // ...and it produces the official Google Maps bootstrap URL.
+    const url = new URL(buildGoogleMapsScriptUrl(key));
+    assert.equal(url.origin, "https://maps.googleapis.com");
+    assert.equal(url.pathname, "/maps/api/js");
+    assert.equal(url.searchParams.get("key"), "TEST-KEY-123");
+    assert.equal(url.searchParams.get("libraries"), "places");
+
+    // Outside the browser it still refuses instead of touching `document`.
+    const unsupported = await withEnvKey("TEST-KEY-123", () => loadGoogleMaps().then(() => null, (error) => error));
+    assert.equal(unsupported?.code, "UNSUPPORTED");
+
+    // Neither failure is cached, so dropping the key again behaves identically.
+    const again = await withEnvKey(undefined, () => loadGoogleMaps().then(() => null, (error) => error));
+    assert.equal(again?.code, "MISSING_KEY");
 });
 
 // ===== Places API (New) normalization =====

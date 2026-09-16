@@ -135,6 +135,8 @@ export type KasirDeliveryDetail = {
     hasShipment: boolean;
     trackingId: string | null;
     labelUrl: string | null;
+    /** Persisted timestamp of the last stored shipment/order state (ISO string). */
+    lastUpdatedAt: string | null;
     shipmentAction: { canCreate: boolean; canRefresh: boolean; label: string; hint: string };
     destination: {
         province: string | null;

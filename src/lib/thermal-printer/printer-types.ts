@@ -52,6 +52,11 @@ export interface ReceiptDeliveryData {
     eta?: string | null;
     /** Nomor resi / tracking id — printed only when the integration really has one. */
     trackingId?: string | null;
+    /**
+     * Normalized delivery status label ("Kurir Dicari", "Dalam Pengiriman", ...) built
+     * from the latest PERSISTED provider status, so a reprint never shows a stale state.
+     */
+    status?: string | null;
     shippingLabel: string;
 }
 

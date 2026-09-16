@@ -371,6 +371,43 @@ export function normalizeKasirDeliveryStatus(input: {
     return { key: "TIDAK_DIKENAL", label: raw || KASIR_DELIVERY_STATUS_LABELS.TIDAK_DIKENAL, raw, known: false };
 }
 
+/**
+ * Provider states that will NOT change again. The cashier may refresh an ACTIVE
+ * shipment automatically, but a finished shipment must never keep asking the
+ * provider. Only statuses the existing integration really returns are listed here
+ * (a return/hold can still move, so it is deliberately NOT terminal).
+ */
+export const KASIR_TERMINAL_DELIVERY_STATUS_KEYS: readonly KasirDeliveryStatusKey[] = ["TERKIRIM", "GAGAL"];
+
+export function isKasirDeliveryStatusTerminal(key: unknown): boolean {
+    return (KASIR_TERMINAL_DELIVERY_STATUS_KEYS as readonly string[]).includes(nonEmptyText(key).toUpperCase());
+}
+
+/**
+ * Conservative automatic refresh cadence for an OPEN detail page. It is deliberately
+ * slow (never aggressive polling) and the manual refresh stays available at all times.
+ */
+export const KASIR_DELIVERY_AUTO_REFRESH_MS = 60_000;
+
+/**
+ * Automatic refresh applies ONLY to a real, still-active shipment: without a provider
+ * order there is nothing to sync, and a terminal shipment is final.
+ *
+ * Accepts either the normalized key (preferred) or the RAW provider status, so an
+ * unmapped/finished provider state can never keep the page polling.
+ */
+export function shouldAutoRefreshKasirDeliveryStatus(input: {
+    hasShipment?: boolean | null;
+    statusKey?: string | null;
+    biteshipStatus?: string | null;
+}): boolean {
+    if (!input.hasShipment) return false;
+    const key =
+        nonEmptyText(input.statusKey) ||
+        normalizeKasirDeliveryStatus({ biteshipStatus: input.biteshipStatus, hasShipment: true }).key;
+    return !isKasirDeliveryStatusTerminal(key);
+}
+
 /* ==========================================================================
  * Shipment action availability — mirrors the server rules in
  * POST/GET /api/admin/orders/[id]/biteship (never invents a provider transition)

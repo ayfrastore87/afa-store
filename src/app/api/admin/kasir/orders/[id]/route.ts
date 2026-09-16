@@ -30,5 +30,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         return NextResponse.json({ message: "Pesanan tidak ditemukan." }, { status: 404 });
     }
 
-    return NextResponse.json({ order: formatKasirOrder(order) });
+    // `cashier` is the ACTIVE ADMIN identity resolved server-side (getCurrentAdmin). It is
+    // returned so the cashier receipt/printer UI can label the operator WITHOUT asking the
+    // customer-only /api/auth/me endpoint, which always answers {user:null} for an admin.
+    return NextResponse.json({ order: formatKasirOrder(order), cashier: { name: admin.name } });
 }

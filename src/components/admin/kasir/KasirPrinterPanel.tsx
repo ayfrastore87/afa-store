@@ -37,25 +37,23 @@ import {
 // keeps one clean button. Change this to 80 to switch the ESC/POS profile.
 const DEFAULT_PAPER_WIDTH: ThermalPaperWidth = 58;
 
-export default function KasirPrinterPanel({ order }: { order: KasirOrderDetail }) {
+export default function KasirPrinterPanel({
+    order,
+    cashierName: cashierNameProp,
+}: {
+    order: KasirOrderDetail;
+    /** Nama petugas aktif dari respons server kasir (admin-authorized). */
+    cashierName?: string | null;
+}) {
     const [connection, setConnection] = useState<BluetoothConnection | null>(null);
     const [printing, setPrinting] = useState(false);
     const [message, setMessage] = useState("");
-    const [cashierName, setCashierName] = useState("");
 
-    // Kasir (petugas) dibaca read-only dari sesi aktif untuk baris "Kasir" pada struk.
-    useEffect(() => {
-        let cancelled = false;
-        void fetch("/api/auth/me", { cache: "no-store" })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data: { user?: { name?: string } | null } | null) => {
-                if (!cancelled && data?.user?.name) setCashierName(data.user.name);
-            })
-            .catch(() => undefined);
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    // Kasir (petugas) untuk baris "Kasir" pada struk. Identitasnya datang bersama payload
+    // order dari GET /api/admin/kasir/orders/[id]. Endpoint /api/auth/me TIDAK dipakai lagi:
+    // ia customer-only dan selalu menjawab { user: null } untuk sesi admin, sehingga halaman
+    // kasir memicu request gagal berulang tanpa manfaat.
+    const cashierName = cashierNameProp ?? "";
 
     const receiptData: ReceiptData = useMemo(() => toReceiptData(order, cashierName), [order, cashierName]);
 
@@ -160,6 +158,9 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
                   // Printed only when the integration really returned a resi / tracking id.
                   trackingId: delivery.trackingId,
                   shippingLabel: formatRupiah(delivery.shipping),
+                  // Latest PERSISTED normalized status, so a reprint after a tracking
+                  // update carries the current state and never a stale one.
+                  status: delivery.status.label,
               }
             : null,
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],

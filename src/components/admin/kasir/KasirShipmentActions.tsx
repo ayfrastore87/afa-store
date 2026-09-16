@@ -6,8 +6,10 @@
 // Both buttons call the EXISTING admin route `/api/admin/orders/[id]/biteship`:
 //   POST -> creates the shipment (idempotent compare-and-set claim + server re-quote
 //           already implemented there; the browser never sees the API key), and
-//   GET  -> refreshes the provider status of an EXISTING shipment only.
-// No provider call, no polling and no tracking URL is ever invented here.
+//   GET  -> refreshes the provider tracking status of an EXISTING shipment only.
+// The refresh path can NEVER create a second shipment (it never reaches
+// POST /v1/orders), so pressing it repeatedly stays idempotent. No provider call, no
+// polling and no tracking URL is ever invented here.
 // ---------------------------------------------------------------------------
 
 import { useState } from "react";
@@ -76,10 +78,11 @@ export default function KasirShipmentActions({
                         type="button"
                         onClick={() => void run("refresh")}
                         disabled={busy !== ""}
+                        aria-busy={busy === "refresh"}
                         className={`inline-flex items-center gap-1.5 rounded-xl border border-[#184D47]/25 bg-white font-black text-[#184D47] transition hover:bg-[#EAF1ED] active:scale-95 disabled:opacity-60 ${sizeClass}`}
                     >
                         {busy === "refresh" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                        LACAK PENGIRIMAN
+                        PERBARUI STATUS
                     </button>
                 ) : null}
             </div>

@@ -91,6 +91,11 @@ type KasirOrderRecord = {
     biteshipTrackingId: string | null;
     biteshipLabelUrl: string | null;
     trackingNumber: string | null;
+    /**
+     * Persisted order-row timestamp. The tracking sync writes THIS row in place, so
+     * the card can show when the shipment state was last stored. No new column.
+     */
+    updatedAt: Date;
     payment: { status: string; method: string } | null;
     items: KasirOrderItem[];
 };
@@ -125,6 +130,9 @@ export function formatKasirOrder(order: KasirOrderRecord) {
                   hasShipment,
                   trackingId: order.biteshipTrackingId || order.trackingNumber || null,
                   labelUrl: order.biteshipLabelUrl,
+                  // "Terakhir Diperbarui": the persisted order-row timestamp, which the
+                  // existing tracking sync updates in place when the provider state changes.
+                  lastUpdatedAt: order.updatedAt,
                   shipmentAction,
                   destination: {
                       province: order.destinationProvince,

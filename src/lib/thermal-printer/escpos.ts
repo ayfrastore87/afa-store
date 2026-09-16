@@ -266,11 +266,15 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
 
         const deliveryRows: Array<[string, string]> = [
             ["Nama Penerima", delivery.recipientName || "-"],
-            ["No. Telepon", delivery.recipientPhone || "-"],
+            ["No. WhatsApp", delivery.recipientPhone || "-"],
         ];
         if (delivery.courier) deliveryRows.push(["Kurir", delivery.courier]);
         if (delivery.service) deliveryRows.push(["Layanan", delivery.service]);
         if (delivery.eta) deliveryRows.push(["Estimasi", delivery.eta]);
+        // Ongkir + the latest PERSISTED provider status. A reprint printed after a
+        // tracking update therefore shows the current state instead of a stale one.
+        if (delivery.shippingLabel) deliveryRows.push(["Ongkir", delivery.shippingLabel]);
+        if (delivery.status) deliveryRows.push(["Status Pengiriman", delivery.status]);
         for (const [label, value] of deliveryRows) {
             for (const line of formatColumns(label, value, width)) {
                 chunks.push(cmdLine(line));
@@ -284,7 +288,7 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
 
         // Only ever printed when the integration really returned a resi / tracking id.
         if (delivery.trackingId) {
-            for (const line of formatColumns("No. Resi", delivery.trackingId, width)) {
+            for (const line of formatColumns("No. Resi / Tracking", delivery.trackingId, width)) {
                 chunks.push(cmdLine(line));
             }
         }

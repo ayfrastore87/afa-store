@@ -586,8 +586,8 @@ test("19. a resi / tracking id appears only when the integration really has one"
     assert.equal(withFallbackTracking.trackingId, "MANUAL-1", "the persisted manual resi is used when Biteship has none yet");
 
     assert.match(escpos, /if \(delivery\.trackingId\) \{/);
-    assert.match(escpos, /formatColumns\("No\. Resi", delivery\.trackingId, width\)/);
-    assert.match(receipt, /\{delivery\.trackingId \? <Row label="No\. Resi" value=\{delivery\.trackingId\} \/> : null\}/);
+    assert.match(escpos, /formatColumns\("No\. Resi \/ Tracking", delivery\.trackingId, width\)/);
+    assert.match(receipt, /\{delivery\.trackingId \? <Row label="No\. Resi \/ Tracking" value=\{delivery\.trackingId\} \/> : null\}/);
     assert.match(detail, /value=\{delivery\.trackingId \|\| "Belum tersedia"\}/);
     assert.match(history, /\{order\.delivery\?\.trackingId \?/);
     // No tracking URL is ever fabricated.

@@ -9,6 +9,13 @@ import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 
+/** Comment-free view of a source file, so "must NOT contain" rules apply to real code. */
+const code = (source) =>
+    source
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+
 const printerTypes = read("../src/lib/thermal-printer/printer-types.ts");
 const printerConfig = read("../src/lib/thermal-printer/printer-config.ts");
 const escpos = read("../src/lib/thermal-printer/escpos.ts");
@@ -114,10 +121,15 @@ test("single print entry point orchestrates BLE then browser fallback", () => {
     assert.match(service, /Struk berhasil dicetak\./);
 });
 
-test("receipt maps the cashier name from the active session", () => {
+test("receipt maps the cashier name from the admin kasir payload, not a customer endpoint", () => {
     assert.match(panel, /toReceiptData\(order, cashierName\)/);
     assert.match(panel, /cashier: cashierName \|\| null/);
-    assert.match(panel, /\/api\/auth\/me/);
+    // Identitas petugas ikut payload order kasir (sudah admin-authorized)...
+    assert.match(panel, /cashierName: cashierNameProp,/);
+    assert.match(panel, /const cashierName = cashierNameProp \?\? "";/);
+    // ...sehingga halaman admin tidak lagi memanggil endpoint customer-only yang selalu
+    // menjawab { user: null } untuk sesi admin (penyebab request "me" gagal berulang).
+    assert.doesNotMatch(code(panel), /\/api\/auth\/me/);
 });
 
 test("classic/SPP and non-BLE errors are surfaced as fallbacks, not faked", () => {

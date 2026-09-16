@@ -19,31 +19,27 @@ import {
     type KasirOrderDetail,
 } from "./kasir-shared";
 
-export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
+export default function KasirReceipt({
+    order,
+    cashierName,
+}: {
+    order: KasirOrderDetail;
+    /** Nama petugas aktif dari respons server kasir (admin-authorized). */
+    cashierName?: string | null;
+}) {
     // Portal to <body> so the receipt can be the only visible element in print,
     // independent of the admin page tree. Guarded for SSR to avoid hydration mismatch.
     const [mounted, setMounted] = useState(false);
-    const [cashierName, setCashierName] = useState("");
 
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    // Kasir (petugas) dibaca read-only dari sesi aktif. Tanpa perubahan auth/db;
-    // jika gagal, baris "Kasir" cukup tidak ditampilkan (struk tetap valid).
-    useEffect(() => {
-        if (!mounted) return;
-        let cancelled = false;
-        void fetch("/api/auth/me", { cache: "no-store" })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data: { user?: { name?: string } | null } | null) => {
-                if (!cancelled && data?.user?.name) setCashierName(data.user.name);
-            })
-            .catch(() => undefined);
-        return () => {
-            cancelled = true;
-        };
-    }, [mounted]);
+    // Kasir (petugas) TIDAK dibaca dari /api/auth/me: endpoint itu customer-only dan
+    // selalu menjawab { user: null } untuk sesi admin, sehingga halaman kasir memicu
+    // request gagal berulang. Identitas petugas kini ikut payload order dari
+    // GET /api/admin/kasir/orders/[id] (sudah diverifikasi server-side).
+    // Bila nama tidak tersedia, baris "Kasir" cukup tidak ditampilkan.
 
     const isTunai = order.paymentMethod === "TUNAI";
     // PENGIRIMAN block: present for a delivery order only (null for pickup).
@@ -131,11 +127,14 @@ export default function KasirReceipt({ order }: { order: KasirOrderDetail }) {
                         <dl className="receipt-meta">
                             <Row label="Jenis" value={kasirOrderTypeLabel(order.orderType)} />
                             <Row label="Nama Penerima" value={delivery.recipientName || "-"} />
-                            <Row label="No. Telepon" value={delivery.recipientPhone || "-"} />
+                            <Row label="No. WhatsApp" value={delivery.recipientPhone || "-"} />
                             {delivery.courier ? <Row label="Kurir" value={delivery.courier} /> : null}
                             {delivery.service ? <Row label="Layanan" value={delivery.service} /> : null}
-                            {delivery.status?.raw ? <Row label="Status" value={delivery.status.label} /> : null}
-                            {delivery.trackingId ? <Row label="No. Resi" value={delivery.trackingId} /> : null}
+                            <Row label="Ongkir" value={formatRupiah(delivery.shipping)} />
+                            {/* Status dari data PERSISTED terbaru: cetak ulang setelah
+                                pembaruan status pengiriman selalu menampilkan status terkini. */}
+                            <Row label="Status Pengiriman" value={delivery.status.label} />
+                            {delivery.trackingId ? <Row label="No. Resi / Tracking" value={delivery.trackingId} /> : null}
                         </dl>
                         <p className="receipt-address-label">Alamat Pengiriman</p>
                         <p className="receipt-address">{delivery.address || "-"}</p>

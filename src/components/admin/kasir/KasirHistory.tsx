@@ -211,7 +211,7 @@ function OrderTable({ orders, total, page, totalPages, onPrev, onNext, onReload 
                                     {order.delivery?.courier ? (
                                         <p className="mt-1 text-[10px] font-semibold text-[#184D47]/60">
                                             {order.delivery.courier}
-                                            {order.delivery.service ? ` — ${order.delivery.service}` : ""}
+                                            {order.delivery.service ? ` • ${order.delivery.service}` : ""}
                                         </p>
                                     ) : null}
                                     {order.delivery?.trackingId ? (
@@ -260,7 +260,10 @@ function OrderTable({ orders, total, page, totalPages, onPrev, onNext, onReload 
                                     {order.delivery.status.label}
                                 </span>
                                 {order.delivery.courier ? (
-                                    <span className="text-[10px] font-semibold text-[#184D47]/60">{order.delivery.courier}</span>
+                                    <span className="text-[10px] font-semibold text-[#184D47]/60">
+                                        {order.delivery.courier}
+                                        {order.delivery.service ? ` • ${order.delivery.service}` : ""}
+                                    </span>
                                 ) : null}
                                 {order.delivery.trackingId ? (
                                     <span className="text-[10px] font-semibold text-[#184D47]/60">Resi {order.delivery.trackingId}</span>

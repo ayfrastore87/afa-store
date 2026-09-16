@@ -8,6 +8,7 @@ import {
     ArrowLeft,
     Banknote,
     Loader2,
+    Printer,
     QrCode,
     Receipt,
     Smartphone,
@@ -22,7 +23,11 @@ import {
     statusLabel,
     type KasirOrderDetail,
 } from "./kasir-shared";
-import { kasirOrderTypeLabel } from "@/lib/kasir-delivery";
+import {
+    KASIR_DELIVERY_AUTO_REFRESH_MS,
+    kasirOrderTypeLabel,
+    shouldAutoRefreshKasirDeliveryStatus,
+} from "@/lib/kasir-delivery";
 import KasirReceipt from "./KasirReceipt";
 import KasirPrinterPanel from "./KasirPrinterPanel";
 import KasirShipmentActions from "./KasirShipmentActions";
@@ -31,27 +36,53 @@ import KasirShipmentActions from "./KasirShipmentActions";
 // TAHAP E: satu tombol "Print" menjalankan alur cetak terpadu (BLE via
 // printReceipt, atau window.print() sebagai fallback). Struk dicetak dari data
 // transaksi yang sama (read-only), tanpa mutasi database.
+//
+// TAHAP F (tracking): halaman ini juga menampilkan status pengiriman terbaru yang
+// TERSIMPAN (status provider mentah + label normalisasi + resi + "Terakhir
+// Diperbarui") dan menyinkronkannya lewat route admin yang sudah ada
+// (GET /api/admin/orders/[id]/biteship). Sinkronisasi itu hanya MEMBACA pengiriman
+// yang sudah ada — tidak pernah membuat pengiriman baru, tidak menyentuh
+// pembayaran/stok/total, dan tidak pernah memanggil Biteship dari browser.
 
-type KasirOrderDetailResponse = { order: KasirOrderDetail } & { message?: string };
+type KasirOrderDetailResponse = {
+    order: KasirOrderDetail;
+    /** Identitas petugas aktif, dihitung server-side oleh route kasir (admin). */
+    cashier?: { name?: string | null } | null;
+    message?: string;
+};
 
 export default function KasirTransactionDetail({ id }: { id: string }) {
     const [order, setOrder] = useState<KasirOrderDetail | null>(null);
+    const [cashierName, setCashierName] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [notFound, setNotFound] = useState(false);
+
+    // Identitas petugas ikut payload order, jadi halaman kasir TIDAK memanggil
+    // /api/auth/me (customer-only, selalu menjawab { user: null } untuk admin).
+    const applyDetail = useCallback((payload: KasirOrderDetailResponse) => {
+        if (!payload.order) return;
+        setOrder(payload.order);
+        setCashierName(payload.cashier?.name ?? "");
+    }, []);
+
+    const readDetail = useCallback(async () => {
+        const response = await fetch(`/api/admin/kasir/orders/${id}`, {
+            headers: { Accept: "application/json" },
+            // Today's transaction (and its latest persisted shipment/tracking data) is
+            // always read fresh, so a reprint never uses stale client state.
+            cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as KasirOrderDetailResponse | null;
+        return { response, payload };
+    }, [id]);
 
     const loadDetail = useCallback(async () => {
         setLoading(true);
         setError("");
         setNotFound(false);
         try {
-            const response = await fetch(`/api/admin/kasir/orders/${id}`, {
-                headers: { Accept: "application/json" },
-                // Today's transaction (and its latest persisted shipment/tracking data) is
-                // always read fresh, so a reprint never uses stale client state.
-                cache: "no-store",
-            });
-            const payload = (await response.json().catch(() => null)) as KasirOrderDetailResponse | null;
+            const { response, payload } = await readDetail();
             if (response.status === 404) {
                 setNotFound(true);
                 return;
@@ -59,17 +90,51 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
             if (!response.ok || !payload?.order) {
                 throw new Error(payload?.message || "Detail transaksi gagal dimuat.");
             }
-            setOrder(payload.order);
+            applyDetail(payload);
         } catch (err) {
             setError(getUserFacingMessage(err, "Detail transaksi gagal dimuat."));
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [applyDetail, readDetail]);
 
     useEffect(() => {
         void loadDetail();
     }, [loadDetail]);
+
+    // Auto-refresh KONSERVATIF: hanya selagi halaman detail ini terbuka DAN pengiriman
+    // masih aktif. Ia memakai GET (baca pengiriman yang sudah ada) sehingga tidak pernah
+    // membuat pengiriman kedua, dan berhenti sendiri untuk status terminal
+    // (Terkirim / Dibatalkan-Gagal) maupun saat tab tidak terlihat.
+    const syncShipmentStatus = useCallback(async () => {
+        try {
+            const response = await fetch(`/api/admin/orders/${id}/biteship`, {
+                method: "GET",
+                headers: { Accept: "application/json" },
+            });
+            if (!response.ok) return;
+            const { response: detailResponse, payload } = await readDetail();
+            if (detailResponse.ok && payload?.order) applyDetail(payload);
+        } catch {
+            // Senyap: kegagalan pembaruan otomatis tidak mengganggu kasir.
+        }
+    }, [applyDetail, id, readDetail]);
+
+    const hasActiveShipment =
+        Boolean(order?.delivery) &&
+        shouldAutoRefreshKasirDeliveryStatus({
+            hasShipment: order?.delivery?.hasShipment,
+            statusKey: order?.delivery?.status.key,
+        });
+
+    useEffect(() => {
+        if (!hasActiveShipment) return;
+        const timer = window.setInterval(() => {
+            if (document.visibilityState !== "visible") return;
+            void syncShipmentStatus();
+        }, KASIR_DELIVERY_AUTO_REFRESH_MS);
+        return () => window.clearInterval(timer);
+    }, [hasActiveShipment, syncShipmentStatus]);
 
     if (loading) {
         return (
@@ -123,7 +188,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
 
     return (
         <>
-            <KasirReceipt order={order} />
+            <KasirReceipt order={order} cashierName={cashierName} />
             <Shell id={id}>
             <div className="flex items-center justify-between border-b border-[#184D47]/10 p-5">
                 <div>
@@ -131,7 +196,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                     <h2 className="text-2xl font-black">{order.invoice}</h2>
                     <p className="text-xs text-[#184D47]/60">{formatDate(order.createdAt)}</p>
                 </div>
-                <KasirPrinterPanel order={order} />
+                <KasirPrinterPanel order={order} cashierName={cashierName} />
             </div>
 
             <div className="space-y-5 p-5">
@@ -217,6 +282,13 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             <Row label="Layanan" value={delivery.service || "-"} />
                             <Row label="Ongkir" value={formatRupiah(delivery.shipping)} />
                             <Row label="No. Resi / Tracking" value={delivery.trackingId || "Belum tersedia"} />
+                            {/* Status provider mentah apa adanya (tidak pernah diterjemahkan ulang),
+                                ditambah kapan keadaan pengiriman terakhir tersimpan. */}
+                            <Row label="Status Provider" value={delivery.status.raw || "-"} />
+                            <Row
+                                label="Terakhir Diperbarui"
+                                value={delivery.lastUpdatedAt ? formatDate(delivery.lastUpdatedAt) : "-"}
+                            />
                         </div>
                         <div className="rounded-2xl bg-[#f8f6f0] p-3">
                             <p className="text-xs font-bold text-[#184D47]/50">Alamat Pengiriman</p>
@@ -242,12 +314,30 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             hint={delivery.shipmentAction.hint}
                             onUpdated={loadDetail}
                         />
+                        {hasActiveShipment ? (
+                            <p className="text-[11px] font-semibold text-[#184D47]/50">
+                                Status pengiriman juga diperbarui otomatis tiap 60 detik selama halaman ini terbuka dan
+                                pengiriman masih aktif.
+                            </p>
+                        ) : null}
                     </section>
                 ) : null}
 
-                <p className="text-xs font-semibold text-[#184D47]/50">
-                    Cetak ulang struk selalu memakai data transaksi dan pengiriman terbaru yang tersimpan.
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold text-[#184D47]/50">
+                        Cetak ulang struk selalu memakai data transaksi dan pengiriman terbaru yang tersimpan.
+                    </p>
+                    {/* Cetak ulang memakai jalur browser 58mm yang sama (#kasir-receipt, portal
+                        dari KasirReceipt) sehingga struk berisi status & resi tersimpan terbaru. */}
+                    <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-[#184D47]/20 bg-white px-3 text-xs font-black text-[#184D47] transition hover:bg-[#EAF1ED] active:scale-95"
+                    >
+                        <Printer size={14} />
+                        CETAK ULANG STRUK
+                    </button>
+                </div>
             </div>
             </Shell>
         </>

@@ -56,6 +56,15 @@ export const BITESHIP_ORIGIN_INCOMPLETE_MESSAGE = "Konfigurasi pengirim AFA STOR
 
 export const BITESHIP_LEGACY_COURIER_MESSAGE = "Kode kurir Biteship belum tersedia untuk pesanan lama ini. Gunakan pengiriman manual.";
 
+export const BITESHIP_LEGACY_PHONE_MESSAGE = "Nomor penerima pesanan ini belum valid untuk pengiriman. Perbarui nomor penerima lalu coba lagi.";
+
+/**
+ * Admin-safe, actionable message for a shipment the provider deliberately
+ * REJECTED (our payload/selection, not an outage). It never repeats raw upstream
+ * text, ids, keys or customer data.
+ */
+export const BITESHIP_ORDER_REJECTED_MESSAGE = "Biteship menolak pembuatan pengiriman ini. Periksa kurir, layanan, dan area tujuan pesanan.";
+
 /**
  * The physical origin is 100% server-controlled and must be complete before any
  * POST /v1/orders. There is NO fake fallback for name/phone/address/area — if any
@@ -81,6 +90,11 @@ export function hasCourierCode(value: string | null | undefined): value is strin
  * identity and never overwrite the physical origin. `hidePrice` NEVER zeroes an
  * item value (Biteship rejects value 0); it is intentionally NOT applied to items
  * here — price hiding is handled at the label/invoice level elsewhere.
+ *
+ * Phone contract: the `*_contact_phone` values must already be canonical
+ * (62-prefixed digits). Both server callers canonicalize with the EXISTING
+ * checkout helper (`normalizeRecipientPhone`) before calling this builder, and
+ * this module stays dependency-free so the raw-node test runner can load it.
  */
 export function buildBiteshipOrderPayload(input: BiteshipOrderInput): Record<string, unknown> {
     const payload: Record<string, unknown> = {
@@ -105,7 +119,8 @@ export function buildBiteshipOrderPayload(input: BiteshipOrderInput): Record<str
 
     if (input.destination.note) payload.destination_note = input.destination.note;
 
-    // Label-only shipper identity (dropship). Optional and non-authoritative.
+    // Label-only shipper identity (dropship). Optional, non-authoritative and
+    // therefore dropped by the caller when the phone is not canonical.
     if (input.senderName) payload.shipper_contact_name = input.senderName;
     if (input.senderPhone) payload.shipper_contact_phone = input.senderPhone;
 

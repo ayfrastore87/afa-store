@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 import {
+    BITESHIP_LEGACY_PHONE_MESSAGE,
+    BITESHIP_ORDER_REJECTED_MESSAGE,
     isOriginIdentityComplete,
     hasCourierCode,
     buildBiteshipOrderPayload,
     normalizeBiteshipOrderResponse,
     isBiteshipReferenceIdConflict,
 } from "../src/lib/biteship-order.ts";
+import { resolveProductWeight } from "../src/lib/shipping-weight.ts";
+import { normalizeRecipientPhone } from "../src/lib/checkout-address.ts";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -194,4 +198,145 @@ test("admin dashboard still offers manual tracking alongside Biteship", () => {
 test("Biteship key remains server-only", () => {
     assert.match(biteshipLib, /import "server-only"/);
     assert.doesNotMatch(biteshipLib, /NEXT_PUBLIC/);
+});
+
+// ---------------------------------------------------------------------------
+// Shipment creation failure handling (cashier/admin POST /biteship)
+// ---------------------------------------------------------------------------
+
+test("order creation normalizes the REAL provider status/body instead of a blanket retry", () => {
+    // The raw transport logs ONLY the sanitized allowlisted fields.
+    assert.match(
+        biteshipLib,
+        /console\.error\("biteship_request_failed", \{ path, status: response\.status, \.\.\.pickBiteshipErrorFields\(data\) \}\);/,
+    );
+    // The response status AND body decide the outcome.
+    assert.match(biteshipLib, /const fields = pickBiteshipErrorFields\(data\);/);
+    assert.match(biteshipLib, /isBiteshipProviderFailure\(status, fields\)/);
+    assert.match(
+        biteshipLib,
+        /throw new BiteshipUnavailableError\(BITESHIP_FAILURE_MESSAGES\.provider, "UPSTREAM", "provider"\)/,
+    );
+    assert.match(biteshipLib, /if \(status >= 500\) throw new BiteshipUnavailableError\(\);/);
+    assert.match(biteshipLib, /throw new BiteshipError\(BITESHIP_ORDER_REJECTED_MESSAGE\);/);
+    // The misleading blanket message is gone.
+    assert.doesNotMatch(biteshipLib, /Biteship order gagal dibuat/);
+    // The idempotency conflict still wins over the new mapping.
+    assert.ok(
+        biteshipLib.indexOf("isBiteshipReferenceIdConflict(data)") < biteshipLib.indexOf("isBiteshipProviderFailure(status, fields)"),
+        "reference_id conflict recovery must be evaluated first",
+    );
+});
+
+test("shipment failure messages are admin-safe, actionable and carry no provider text", () => {
+    assert.match(BITESHIP_ORDER_REJECTED_MESSAGE, /Biteship menolak/i);
+    assert.match(BITESHIP_ORDER_REJECTED_MESSAGE, /periksa kurir, layanan, dan area tujuan/i);
+    for (const message of [BITESHIP_ORDER_REJECTED_MESSAGE, BITESHIP_LEGACY_PHONE_MESSAGE]) {
+        assert.ok(message.length <= 200, "a user-visible message stays short");
+        assert.doesNotMatch(message, /insufficient|balance|quota|api\s?key|unauthoriz|rate limit|\b(?:401|402|403|429)\b/i);
+        assert.doesNotMatch(message, /https?:|prisma|\bsql\b|\{|\}|<|>/);
+        assert.doesNotMatch(message, /0812|62812|\+62/);
+    }
+    assert.match(BITESHIP_LEGACY_PHONE_MESSAGE, /nomor penerima/i);
+});
+
+test("no API key, header, raw body, PII or env name is ever logged", () => {
+    const logLines = biteshipLib.split("\n").filter((line) => /console\.(?:error|warn|log)\(/.test(line));
+    assert.ok(logLines.length > 0, "failures are still diagnosed");
+    for (const line of logLines) {
+        assert.doesNotMatch(line, /Authorization|apiKey|JSON\.stringify\(|\bheaders\b/);
+        assert.doesNotMatch(line, /contactPhone|order\.phone|customerName|destination_contact_/);
+        assert.doesNotMatch(line, /BITESHIP_API_KEY|process\.env\.\w+\s*[,}]/);
+    }
+    const routeLogLines = biteshipRoute.split("\n").filter((line) => /console\.(?:error|warn|log)\(/.test(line));
+    for (const line of routeLogLines) {
+        assert.doesNotMatch(line, /Authorization|apiKey|JSON\.stringify\(|\bheaders\b|order\.phone/);
+    }
+});
+
+
+
+test("phones sent to Biteship reuse the existing checkout normalizer", () => {
+    // Exactly ONE phone implementation may exist (the shared checkout helper).
+    const phoneImplementations = ["checkout-address", "biteship-order", "biteship", "kasir-delivery", "shipping-weight"]
+        .map((name) => read(`../src/lib/${name}.ts`))
+        .filter((source) => /export function normalizeRecipientPhone\(/.test(source));
+    assert.equal(phoneImplementations.length, 1, "phone canonicalization must not be duplicated");
+    assert.match(read("../src/lib/checkout-address.ts"), /export function normalizeRecipientPhone\(value: unknown\): string \{/);
+
+    // The cashier/admin route canonicalizes the stored order phone BEFORE posting.
+    assert.match(biteshipRoute, /const recipientPhone = normalizeRecipientPhone\(order\.phone\);/);
+    assert.match(biteshipRoute, /contactPhone: recipientPhone,/);
+    assert.match(
+        biteshipRoute,
+        /if \(!recipientPhone\) \{\s*return NextResponse\.json\(\{ message: BITESHIP_LEGACY_PHONE_MESSAGE \}, \{ status: 409 \}\);/,
+    );
+    assert.match(biteshipRoute, /import \{ normalizeRecipientPhone \} from "@\/lib\/checkout-address";/);
+    // The optional label-only shipper phone is never posted raw.
+    assert.match(
+        biteshipRoute,
+        /senderPhone: order\.senderPhone \? normalizeRecipientPhone\(order\.senderPhone\) \|\| undefined : undefined,/,
+    );
+    // The server-owned env origin phone is canonicalized too.
+    assert.match(biteshipLib, /const canonicalOriginPhone = normalizeRecipientPhone\(contactPhone\);/);
+    assert.match(biteshipLib, /return \{ contactName, contactPhone: canonicalOriginPhone, address, areaId: originAreaId \};/);
+
+    // End to end: the shared normalizer + the payload builder compose to the exact
+    // canonical value Biteship receives for the env origin and the stored order phone.
+    assert.equal(normalizeRecipientPhone(ORIGIN.contactPhone), "6281234567890");
+    assert.equal(normalizeRecipientPhone("0812 3456 7890"), "6281234567890");
+    assert.equal(normalizeRecipientPhone("+62 812-3456-7890"), "6281234567890");
+    assert.equal(normalizeRecipientPhone("n/a"), "", "an unusable phone stays unusable (never invented)");
+
+    const payload = buildBiteshipOrderPayload({
+        origin: { ...ORIGIN, contactPhone: normalizeRecipientPhone(ORIGIN.contactPhone) },
+        destination: {
+            contactName: "Buyer",
+            contactPhone: normalizeRecipientPhone("+62 812-3456-7890"),
+            address: "Addr",
+            areaId: "IDBGR01",
+        },
+        courierCode: "jne",
+        serviceCode: "reg",
+        referenceId: "order_phone",
+        items: [{ name: "Rendang", value: 50000, quantity: 1, weight: 1000 }],
+    });
+    assert.equal(payload.origin_contact_phone, "6281234567890");
+    assert.equal(payload.destination_contact_phone, "6281234567890");
+    assert.equal(payload.origin_area_id, "IDJK01", "the server origin area is still authoritative");
+    assert.equal(payload.shipper_contact_phone, undefined, "no shipper phone is invented when none is stored");
+
+    // No second phone regex/ladder anywhere in the shipment path.
+    assert.doesNotMatch(read("../src/lib/biteship-order.ts"), /replace\(\/\\D\/g/);
+    // The payload builder stays dependency-free (no "@/" aliases) so the raw-node
+    // test runner can load it: canonicalization belongs to the server callers.
+    assert.doesNotMatch(read("../src/lib/biteship-order.ts"), /from "@\//);
+    assert.doesNotMatch(biteshipRoute, /replace\(\/\\D\/g/);
+});
+
+test("the shipment weight is the authoritative product weight, never a zero/browser value", () => {
+    assert.equal(resolveProductWeight(0), 1000, "legacy weight 0 is backfilled by the existing rule");
+    assert.equal(resolveProductWeight(null), 1000);
+    assert.equal(resolveProductWeight(750), 750);
+    assert.match(biteshipRoute, /weight: resolveProductWeight\(item\.weight\)/);
+    // The route reads the frozen OrderItem snapshot only (never a client body).
+    assert.doesNotMatch(biteshipRoute, /request\.json\(\)/);
+});
+
+test("safe retry stays intact: claim first, release on failure, no duplicate shipment", () => {
+    const postHandler = biteshipRoute.slice(
+        biteshipRoute.indexOf("export async function POST("),
+        biteshipRoute.indexOf("export async function GET("),
+    );
+    const claimAt = postHandler.indexOf("const claimed = await prisma.order.updateMany({");
+    const providerCallAt = postHandler.indexOf("await createBiteshipOrder(");
+    const conflictAt = postHandler.indexOf("conflict?.orderId");
+    const releaseAt = postHandler.indexOf("await releaseClaim()");
+    assert.ok(claimAt > -1 && providerCallAt > claimAt, "the durable claim is taken before the provider call");
+    assert.ok(conflictAt > -1 && conflictAt < releaseAt, "an existing shipment is recovered before the claim is released");
+    assert.match(postHandler, /await releaseClaim\(\)\.catch\(\(\) => undefined\);/);
+    assert.match(postHandler, /if \(error instanceof BiteshipUnavailableError\) \{\s*return NextResponse\.json\(\{ message: error\.message \}, \{ status: 503 \}\);/);
+    assert.match(postHandler, /if \(error instanceof BiteshipError\) \{\s*return NextResponse\.json\(\{ message: error\.message \}, \{ status: 400 \}\);/);
+    // Nothing in the failure path touches the paid transaction, payment or stock.
+    assert.doesNotMatch(postHandler, /prisma\.(?:payment|product)\b|decrement/);
 });

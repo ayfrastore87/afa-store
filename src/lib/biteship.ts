@@ -1,10 +1,12 @@
 import "server-only";
 
+import { normalizeRecipientPhone } from "@/lib/checkout-address";
 import { normalizeBiteshipRatesResponse } from "@/lib/biteship-normalize";
 import type { BiteshipRate } from "@/lib/biteship-normalize";
 import { classifyShippingService, type CategorizedRate } from "@/lib/shipping-category";
 import { BITESHIP_FAILURE_MESSAGES, isBiteshipProviderFailure, type BiteshipFailureKind } from "@/lib/biteship-failure";
 import {
+    BITESHIP_ORDER_REJECTED_MESSAGE,
     buildBiteshipOrderPayload,
     isBiteshipReferenceIdConflict,
     normalizeBiteshipOrderResponse,
@@ -201,6 +203,12 @@ async function biteshipFetchRaw(path: string, init: RequestInit): Promise<{ stat
             console.error("biteship_invalid_response", { path, status: response.status });
             throw new BiteshipUnavailableError();
         }
+        if (!response.ok) {
+            // Same sanitized, non-secret diagnostics as biteshipFetch: ONLY the
+            // allowlisted code/error/message strings are logged — never the raw body,
+            // headers, API key, env names or any order/customer data.
+            console.error("biteship_request_failed", { path, status: response.status, ...pickBiteshipErrorFields(data) });
+        }
         return { status: response.status, data };
     } catch (error) {
         if (error instanceof BiteshipError) throw error;
@@ -325,7 +333,13 @@ export function getBiteshipOriginIdentity(): BiteshipOriginIdentity | null {
     const contactPhone = process.env.BITESHIP_ORIGIN_CONTACT_PHONE?.trim() ?? "";
     const address = process.env.BITESHIP_ORIGIN_ADDRESS?.trim() ?? "";
     if (!originAreaId || !contactName || !contactPhone || !address) return null;
-    return { contactName, contactPhone, address, areaId: originAreaId };
+    // Biteship validates `origin_contact_phone`, so the EXISTING checkout normalizer
+    // is applied here (never a second phone implementation): a formatted env value
+    // such as "+62 812-3456-7890" becomes canonical 62-digits. An env value with no
+    // digits at all leaves the origin genuinely incomplete -> null (no fake origin).
+    const canonicalOriginPhone = normalizeRecipientPhone(contactPhone);
+    if (!canonicalOriginPhone) return null;
+    return { contactName, contactPhone: canonicalOriginPhone, address, areaId: originAreaId };
 }
 
 /**
@@ -355,9 +369,18 @@ export async function createBiteshipOrder(input: BiteshipOrderInput): Promise<Bi
         throw error;
     }
 
-    const retryable = status >= 500;
-    if (retryable) throw new BiteshipUnavailableError();
-    throw new BiteshipError("Biteship order gagal dibuat. Silakan coba lagi.");
+    // The REAL provider status/body decides the outcome — never a blanket "try again".
+    // Account/provider failures (auth, quota, balance, rate limit) belong to OUR
+    // Biteship account, so they are reported as a RETRYABLE provider failure and the
+    // admin is told to retry; a transient 5xx is retryable as well. Any other 4xx is a
+    // deliberate rejection of the shipment data (courier/service/area/weight) and gets
+    // an actionable admin-safe message. Only sanitized fields are ever logged.
+    const fields = pickBiteshipErrorFields(data);
+    if (isBiteshipProviderFailure(status, fields)) {
+        throw new BiteshipUnavailableError(BITESHIP_FAILURE_MESSAGES.provider, "UPSTREAM", "provider");
+    }
+    if (status >= 500) throw new BiteshipUnavailableError();
+    throw new BiteshipError(BITESHIP_ORDER_REJECTED_MESSAGE);
 }
 
 /**

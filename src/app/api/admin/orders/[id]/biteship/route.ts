@@ -3,9 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
 import {
     BITESHIP_LEGACY_COURIER_MESSAGE,
+    BITESHIP_LEGACY_PHONE_MESSAGE,
     BITESHIP_ORIGIN_INCOMPLETE_MESSAGE,
     hasCourierCode,
 } from "@/lib/biteship-order";
+import { normalizeRecipientPhone } from "@/lib/checkout-address";
+import { resolveProductWeight } from "@/lib/shipping-weight";
 import {
     BiteshipError,
     BiteshipUnavailableError,
@@ -79,6 +82,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!order.destinationAreaId?.trim()) {
         return NextResponse.json({ message: "Alamat tujuan pengiriman belum tersedia untuk pesanan ini." }, { status: 409 });
     }
+    // Biteship validates the recipient phone, and a stored value may still be
+    // formatted ("0812-3456 7890"). The EXISTING checkout normalizer is reused here
+    // — never a second phone implementation — and a phone without any usable digits
+    // is refused instead of being posted as an invalid payload.
+    const recipientPhone = normalizeRecipientPhone(order.phone);
+    if (!recipientPhone) {
+        return NextResponse.json({ message: BITESHIP_LEGACY_PHONE_MESSAGE }, { status: 409 });
+    }
 
     // Physical origin is 100% server-controlled and must be complete.
     const origin = getBiteshipOriginIdentity();
@@ -108,7 +119,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             origin,
             destination: {
                 contactName: order.customer,
-                contactPhone: order.phone,
+                contactPhone: recipientPhone,
                 address: order.address,
                 areaId: order.destinationAreaId!,
                 note: order.note,
@@ -120,10 +131,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
                 name: item.name,
                 value: item.price,
                 quantity: item.quantity,
-                weight: item.weight,
+                // Authoritative weight snapshot: legacy rows (and rows created before
+                // the weight column was persisted) still hold weight 0, which Biteship
+                // rejects. The EXISTING shipping-weight rule backfills those, so the
+                // payload never carries a browser value and never a zero weight.
+                weight: resolveProductWeight(item.weight),
             })),
             senderName: order.senderName,
-            senderPhone: order.senderPhone,
+            // Label-only shipper phone: optional, so an unusable value is dropped
+            // rather than posted as an invalid `shipper_contact_phone`.
+            senderPhone: order.senderPhone ? normalizeRecipientPhone(order.senderPhone) || undefined : undefined,
             hidePrice: order.hidePrice,
         });
 

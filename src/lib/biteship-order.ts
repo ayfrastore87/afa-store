@@ -66,6 +66,17 @@ export const BITESHIP_LEGACY_PHONE_MESSAGE = "Nomor penerima pesanan ini belum v
 export const BITESHIP_ORDER_REJECTED_MESSAGE = "Biteship menolak pembuatan pengiriman ini. Periksa kurir, layanan, dan area tujuan pesanan.";
 
 /**
+ * `delivery_type` is REQUIRED by POST /v1/orders ("now" | "scheduled"), while
+ * POST /v1/rates/couriers does NOT need it at all. That asymmetry is why a
+ * cashier could obtain a valid courier/service quote and still get a NON-provider
+ * 4xx when the shipment was created: every other required field was already
+ * present. AFA STORE never books a scheduled pickup (no date/time is ever
+ * collected), so every shipment is created immediately and no new request input
+ * is introduced.
+ */
+export const BITESHIP_DELIVERY_TYPE_NOW = "now";
+
+/**
  * The physical origin is 100% server-controlled and must be complete before any
  * POST /v1/orders. There is NO fake fallback for name/phone/address/area — if any
  * required field is missing, the caller must refuse the request and return a
@@ -108,6 +119,11 @@ export function buildBiteshipOrderPayload(input: BiteshipOrderInput): Record<str
         destination_area_id: input.destination.areaId,
         courier_company: input.courierCode,
         courier_type: input.serviceCode,
+        // REQUIRED by the create-order contract (the rates endpoint does not need
+        // it), so it must be present on EVERY shipment request. Always "now":
+        // selecting "scheduled" would additionally require delivery_date and
+        // delivery_time, which the checkout/kasir flow never collects.
+        delivery_type: BITESHIP_DELIVERY_TYPE_NOW,
         reference_id: input.referenceId,
         items: input.items.map((item) => ({
             name: item.name,

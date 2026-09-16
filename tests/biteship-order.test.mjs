@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 import {
+    BITESHIP_DELIVERY_TYPE_NOW,
     BITESHIP_LEGACY_PHONE_MESSAGE,
     BITESHIP_ORDER_REJECTED_MESSAGE,
     isOriginIdentityComplete,
@@ -11,6 +12,7 @@ import {
     normalizeBiteshipOrderResponse,
     isBiteshipReferenceIdConflict,
 } from "../src/lib/biteship-order.ts";
+import { normalizeBiteshipRatesResponse } from "../src/lib/biteship-normalize.ts";
 import { resolveProductWeight } from "../src/lib/shipping-weight.ts";
 import { normalizeRecipientPhone } from "../src/lib/checkout-address.ts";
 
@@ -339,4 +341,109 @@ test("safe retry stays intact: claim first, release on failure, no duplicate shi
     assert.match(postHandler, /if \(error instanceof BiteshipError\) \{\s*return NextResponse\.json\(\{ message: error\.message \}, \{ status: 400 \}\);/);
     // Nothing in the failure path touches the paid transaction, payment or stock.
     assert.doesNotMatch(postHandler, /prisma\.(?:payment|product)\b|decrement/);
+});
+
+// ---------------------------------------------------------------------------
+// Production 4xx root cause: POST /v1/orders REQUIRES `delivery_type`
+// ---------------------------------------------------------------------------
+// Production evidence: a paid AFA delivery order quoted JNE / Reguler / Rp16.000
+// successfully, but POST /v1/orders was rejected with a NON-provider 4xx. The
+// official create-order contract marks `delivery_type` ("now" | "scheduled") as
+// REQUIRED, while POST /v1/rates/couriers does not need it at all — so the quote
+// succeeded and only the shipment request was rejected. Every other REQUIRED
+// field was already sent. These tests pin the whole required-field contract so
+// the same 4xx can never come back silently.
+test("the provider-REQUIRED delivery_type is always sent on shipment creation", () => {
+    const payload = buildBiteshipOrderPayload({
+        origin: ORIGIN,
+        destination: { contactName: "Buyer", contactPhone: "0899", address: "Addr", areaId: "IDBGR01" },
+        courierCode: "jne",
+        serviceCode: "reg",
+        referenceId: "order_delivery_type",
+        items: [{ name: "Rendang", value: 50000, quantity: 1, weight: 1000 }],
+    });
+    assert.equal(BITESHIP_DELIVERY_TYPE_NOW, "now");
+    assert.equal(payload.delivery_type, "now", "delivery_type is required by POST /v1/orders");
+    // Only immediate pickup is ever booked: no schedule input exists in the shipment
+    // path, and a browser-supplied date/time must never be introduced.
+    assert.doesNotMatch(read("../src/lib/biteship-order.ts"), /input\.deliveryDate|input\.deliveryTime/);
+    assert.doesNotMatch(biteshipRoute, /delivery_date|delivery_time|deliveryDate|deliveryTime/);
+});
+
+test("the payload carries every field POST /v1/orders marks REQUIRED", () => {
+    const payload = buildBiteshipOrderPayload({
+        origin: ORIGIN,
+        destination: { contactName: "Buyer", contactPhone: "0899", address: "Addr", areaId: "IDBGR01" },
+        courierCode: "jne",
+        serviceCode: "reg",
+        referenceId: "order_required_fields",
+        items: [{ name: "Rendang", value: 50000, quantity: 2, weight: 1000 }],
+    });
+
+    // Fields the provider's create-order contract marks REQUIRED.
+    const requiredFields = [
+        "origin_contact_name",
+        "origin_contact_phone",
+        "origin_address",
+        "destination_contact_name",
+        "destination_contact_phone",
+        "destination_address",
+        "courier_company",
+        "courier_type",
+        "delivery_type",
+    ];
+    for (const field of requiredFields) {
+        assert.ok(String(payload[field] ?? "").trim().length > 0, `${field} must be present and non-empty`);
+    }
+
+    // Both endpoints satisfy "at least postal code, coordinates or area id".
+    assert.ok(String(payload.origin_area_id).trim().length > 0);
+    assert.ok(String(payload.destination_area_id).trim().length > 0);
+
+    // items[] and its REQUIRED children (name/value/quantity/weight).
+    assert.ok(Array.isArray(payload.items) && payload.items.length > 0, "item count must be > 0");
+    for (const item of payload.items) {
+        assert.ok(String(item.name).trim().length > 0, "items[].name is required");
+        assert.ok(item.value > 0, "items[].value is required");
+        assert.ok(item.quantity > 0, "items[].quantity is required");
+        assert.ok(item.weight > 0, "items[].weight is required");
+    }
+});
+
+test("the shipment reuses the EXACT provider identifiers that produced the quote", () => {
+    // The Rp16.000 production quote row: display "JNE" / "Reguler", but the CODES
+    // Biteship must receive are courier_code "jne" and courier_service_code "reg".
+    const [rate] = normalizeBiteshipRatesResponse({
+        pricing: [
+            {
+                courier_code: "jne",
+                courier_name: "JNE",
+                courier_service_code: "reg",
+                courier_service_name: "Reguler",
+                price: 16000,
+                duration: "2-3",
+            },
+        ],
+    });
+    assert.equal(rate.courierCode, "jne");
+    assert.equal(rate.serviceCode, "reg", "the display name 'Reguler' is never persisted as the code");
+    assert.equal(rate.serviceName, "Reguler");
+    assert.equal(rate.quoteRef, "jne|reg");
+
+    // The persisted Order columns and the shipment payload therefore match the rate
+    // row field-for-field: no display label is ever translated into a code.
+    const payload = buildBiteshipOrderPayload({
+        origin: ORIGIN,
+        destination: { contactName: "Buyer", contactPhone: "0899", address: "Cianjur, Jawa Barat, 43211, Indonesia", areaId: "IDCJR01" },
+        courierCode: rate.courierCode,
+        serviceCode: rate.serviceCode,
+        referenceId: "order_parity",
+        items: [{ name: "Rendang", value: 50000, quantity: 1, weight: 1000 }],
+    });
+    assert.equal(payload.courier_company, "jne");
+    assert.equal(payload.courier_type, "reg");
+    assert.equal(payload.origin_area_id, ORIGIN.areaId, "origin area id matches the one used for rates");
+    assert.equal(payload.destination_area_id, "IDCJR01", "destination area id matches the one used for rates");
+    assert.equal(payload.delivery_type, "now");
+    assert.match(read("../src/lib/shipping-weight.ts"), /rate\.courierCode === courier && rate\.serviceCode === service/);
 });

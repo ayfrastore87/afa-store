@@ -138,11 +138,14 @@ test("6. provider status sync updates shipment fields only", () => {
 // 7. Payment, stock and monetary totals are outside the refresh path.
 test("7. payment, stock and totals are untouched by a refresh", () => {
     assert.doesNotMatch(code(getHandler), /paymentStatus:|amount:|subtotal:|total:|shipping:/);
-    // A refresh returns the sanitized shipment view, never the whole order body.
+    // A refresh returns the sanitized shipment view, never the whole order body. The
+    // sanitized `delivery` block added for performance is built from the same persisted
+    // shipment columns, so it still carries no order body, no money and no PII.
     assert.match(
         getHandler,
-        /NextResponse\.json\(\{ order: biteshipOrderView\(updated\), refreshedAt: new Date\(\)\.toISOString\(\) \}\)/,
+        /NextResponse\.json\(\{ order: biteshipOrderView\(updated\), delivery: kasirShipmentSyncView\(updated\), refreshedAt: new Date\(\)\.toISOString\(\) \}\)/,
     );
+    assert.doesNotMatch(code(getHandler), /formatKasirOrder|items:|customer:/, "the refresh never serializes the transaction");
     const viewBuilder = biteshipRoute.slice(
         biteshipRoute.indexOf("function biteshipOrderView("),
         biteshipRoute.indexOf("export async function POST("),
@@ -336,5 +339,11 @@ test("tracking reuses existing persisted shipment fields (no schema change)", ()
     for (const field of ["biteshipOrderId", "biteshipStatus", "biteshipTrackingId", "biteshipLabelUrl", "trackingNumber", "updatedAt"]) {
         assert.match(schema, new RegExp(`^\\s+${field}\\s`, "m"), `Order.${field} must already exist`);
     }
-    assert.match(getHandler, /prisma\.order\.findUnique\(\{ where: \{ id \} \}\)/);
+    // The refresh reads/writes those SAME columns only — now through an explicit narrow
+    // select, so it never pulls the rest of the order row. Still no migration, no new column.
+    assert.match(getHandler, /prisma\.order\.findUnique\(\{\s*where: \{ id \},\s*select: SHIPMENT_SYNC_SELECT,\s*\}\)/);
+    const select = biteshipRoute.slice(biteshipRoute.indexOf("const SHIPMENT_SYNC_SELECT"), biteshipRoute.indexOf("} as const;"));
+    for (const field of select.matchAll(/^\s+(\w+): true,$/gm)) {
+        assert.match(schema, new RegExp(`^\\s+${field[1]}\\s`, "m"), `Order.${field[1]} must already exist`);
+    }
 });

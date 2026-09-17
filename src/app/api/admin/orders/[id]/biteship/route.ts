@@ -9,6 +9,7 @@ import {
 } from "@/lib/biteship-order";
 import { normalizeRecipientPhone } from "@/lib/checkout-address";
 import { resolveKasirDeliveryStatusUpdate } from "@/lib/kasir-delivery";
+import { kasirShipmentSyncView } from "@/lib/kasir";
 import { resolveProductWeight } from "@/lib/shipping-weight";
 import {
     BiteshipError,
@@ -27,6 +28,20 @@ export const runtime = "nodejs";
 const CLAIM_PREFIX = "claim:";
 
 const BLOCKED_ORDER_STATUS = new Set(["CANCELLED", "CANCELED", "COMPLETED", "DIBATALKAN", "BATAL", "SELESAI"]);
+
+// Columns the tracking refresh really needs. Everything else on the order row (customer
+// body, address, money, coordinates, quote refs) is deliberately NOT selected: the refresh
+// neither reads nor writes it.
+const SHIPMENT_SYNC_SELECT = {
+    id: true,
+    biteshipOrderId: true,
+    biteshipStatus: true,
+    biteshipTrackingId: true,
+    biteshipLabelUrl: true,
+    biteshipCreatedAt: true,
+    trackingNumber: true,
+    updatedAt: true,
+} as const;
 
 function biteshipOrderView(order: {
     id: string;
@@ -205,6 +220,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 // Provider values are applied through `resolveKasirDeliveryStatusUpdate`, so a
 // duplicated, out-of-order or unrecognized provider state can never move a shipment
 // backwards and can never replace a finished one.
+//
+// PERFORMANCE: the response also carries a SANITIZED `delivery` block (normalized status,
+// server-derived timeline, resi, label, "Terakhir Diperbarui") built by the same helpers
+// the cashier detail route uses. The open detail page can therefore apply a successful
+// sync directly, instead of re-reading the whole transaction after every refresh. The raw
+// provider payload never leaves this route and no internal identifier is added.
 // ---------------------------------------------------------------------------
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const admin = await getCurrentAdmin();
@@ -212,7 +233,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const { id } = await params;
 
-    const order = await prisma.order.findUnique({ where: { id } });
+    // Only the shipment/tracking columns are read here: the refresh never needs the order
+    // body, its items, its payment or its money, so it never pulls them from the database.
+    const order = await prisma.order.findUnique({
+        where: { id },
+        select: SHIPMENT_SYNC_SELECT,
+    });
     if (!order) return NextResponse.json({ message: "Pesanan tidak ditemukan." }, { status: 404 });
 
     // No real provider order yet (missing, or our own in-flight claim placeholder).
@@ -237,8 +263,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
                 biteshipTrackingId: remote.trackingId ?? order.biteshipTrackingId,
                 biteshipLabelUrl: remote.labelUrl ?? order.biteshipLabelUrl,
             },
+            select: SHIPMENT_SYNC_SELECT,
         });
-        return NextResponse.json({ order: biteshipOrderView(updated), refreshedAt: new Date().toISOString() });
+        return NextResponse.json({ order: biteshipOrderView(updated), delivery: kasirShipmentSyncView(updated), refreshedAt: new Date().toISOString() });
     } catch (error) {
         if (error instanceof BiteshipUnavailableError) {
             return NextResponse.json({ message: error.message }, { status: 503 });

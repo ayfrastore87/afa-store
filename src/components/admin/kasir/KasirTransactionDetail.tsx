@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
@@ -22,6 +22,7 @@ import {
     sourceLabel,
     statusLabel,
     type KasirOrderDetail,
+    type KasirShipmentSyncResponse,
 } from "./kasir-shared";
 import {
     KASIR_DELIVERY_AUTO_REFRESH_MS,
@@ -44,6 +45,13 @@ import KasirDeliveryTimeline from "./KasirDeliveryTimeline";
 // (GET /api/admin/orders/[id]/biteship). Sinkronisasi itu hanya MEMBACA pengiriman
 // yang sudah ada — tidak pernah membuat pengiriman baru, tidak menyentuh
 // pembayaran/stok/total, dan tidak pernah memanggil Biteship dari browser.
+//
+// PERFORMA: data pengiriman TERSIMPAN langsung tampil dari satu pembacaan transaksi.
+// Sinkronisasi provider berjalan di latar belakang dan HANYA memperbarui kartu
+// PENGIRIMAN dari respons tersanitasi (status, timeline, resi, label, waktu perbarui) —
+// tidak ada pembacaan ulang seluruh transaksi dan tidak ada router.refresh() setiap
+// polling. Satu permintaan sinkronisasi saja yang boleh berjalan (single-flight), jadi
+// auto-refresh dan tombol PERBARUI STATUS tidak pernah bertumpuk.
 
 type KasirOrderDetailResponse = {
     order: KasirOrderDetail;
@@ -78,8 +86,11 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
         return { response, payload };
     }, [id]);
 
+    /** True once the transaction has been read, so a later reload never blanks the page. */
+    const loadedRef = useRef(false);
+
     const loadDetail = useCallback(async () => {
-        setLoading(true);
+        if (!loadedRef.current) setLoading(true);
         setError("");
         setNotFound(false);
         try {
@@ -95,6 +106,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
         } catch (err) {
             setError(getUserFacingMessage(err, "Detail transaksi gagal dimuat."));
         } finally {
+            loadedRef.current = true;
             setLoading(false);
         }
     }, [applyDetail, readDetail]);
@@ -107,19 +119,44 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     // masih aktif. Ia memakai GET (baca pengiriman yang sudah ada) sehingga tidak pernah
     // membuat pengiriman kedua, dan berhenti sendiri untuk status terminal
     // (Terkirim / Dibatalkan-Gagal) maupun saat tab tidak terlihat.
+    //
+    // Satu permintaan saja per siklus: respons tersinkron sudah berisi keadaan pengiriman
+    // tersanitasi, jadi transaksi TIDAK dibaca ulang dan halaman tidak dimuat ulang.
+
+    /** Kunci single-flight bersama: dipakai auto-refresh DAN tombol PERBARUI STATUS. */
+    const syncLockRef = useRef(false);
+
+    /**
+     * Menerapkan keadaan pengiriman hasil sinkronisasi ke kartu PENGIRIMAN yang sudah
+     * tampil. Hanya field pengiriman yang diganti — item, pembayaran, dan total transaksi
+     * tidak pernah disentuh dari sini.
+     */
+    const applyShipmentSync = useCallback((payload: KasirShipmentSyncResponse) => {
+        const synced = payload?.delivery;
+        if (!synced) return;
+        setOrder((current) => (current?.delivery ? { ...current, delivery: { ...current.delivery, ...synced } } : current));
+    }, []);
+
     const syncShipmentStatus = useCallback(async () => {
+        // Sudah ada sinkronisasi berjalan (otomatis atau manual): lewati siklus ini,
+        // jangan pernah mengantrekan permintaan Biteship kedua.
+        if (syncLockRef.current) return;
+        syncLockRef.current = true;
         try {
             const response = await fetch(`/api/admin/orders/${id}/biteship`, {
                 method: "GET",
                 headers: { Accept: "application/json" },
             });
+            // Gagal/timeout: status tersimpan terakhir tetap tampil apa adanya.
             if (!response.ok) return;
-            const { response: detailResponse, payload } = await readDetail();
-            if (detailResponse.ok && payload?.order) applyDetail(payload);
+            const payload = (await response.json().catch(() => null)) as KasirShipmentSyncResponse | null;
+            if (payload) applyShipmentSync(payload);
         } catch {
             // Senyap: kegagalan pembaruan otomatis tidak mengganggu kasir.
+        } finally {
+            syncLockRef.current = false;
         }
-    }, [applyDetail, id, readDetail]);
+    }, [applyShipmentSync, id]);
 
     const hasActiveShipment =
         Boolean(order?.delivery) &&
@@ -316,6 +353,8 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             canCreate={delivery.shipmentAction.canCreate}
                             canRefresh={delivery.shipmentAction.canRefresh}
                             hint={delivery.shipmentAction.hint}
+                            syncLock={syncLockRef}
+                            onShipmentSynced={applyShipmentSync}
                             onUpdated={loadDetail}
                         />
                         {hasActiveShipment ? (

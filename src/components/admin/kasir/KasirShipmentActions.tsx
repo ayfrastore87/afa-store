@@ -16,6 +16,7 @@ import { useState } from "react";
 import { Loader2, PackageCheck, RefreshCw } from "lucide-react";
 
 import { getUserFacingMessage } from "@/lib/user-facing-error";
+import type { KasirShipmentSyncResponse } from "./kasir-shared";
 
 type Props = {
     orderId: string;
@@ -23,6 +24,17 @@ type Props = {
     canRefresh: boolean;
     hint?: string;
     compact?: boolean;
+    /**
+     * Shared SINGLE-FLIGHT lock. The open detail page also refreshes the shipment
+     * automatically, so manual and automatic tracking reads share one lock and can never
+     * overlap: whichever starts first wins, the other one is skipped (never queued).
+     */
+    syncLock?: { current: boolean };
+    /**
+     * Applies the sanitized shipment state of a SUCCESSFUL refresh. When provided, a manual
+     * refresh updates the delivery card in place instead of re-reading the transaction.
+     */
+    onShipmentSynced?: (payload: KasirShipmentSyncResponse) => void;
     onUpdated?: () => void | Promise<void>;
 };
 
@@ -32,13 +44,20 @@ export default function KasirShipmentActions({
     canRefresh,
     hint,
     compact = false,
+    syncLock,
+    onShipmentSynced,
     onUpdated,
 }: Props) {
     const [busy, setBusy] = useState<"" | "create" | "refresh">("");
     const [message, setMessage] = useState("");
 
     async function run(kind: "create" | "refresh") {
+        // Double-click guard (this component) + shared lock (automatic refresh on the open
+        // detail page). A tracking read is never queued: an overlapping attempt is skipped.
         if (busy) return;
+        const lock = kind === "refresh" ? syncLock : undefined;
+        if (lock?.current) return;
+        if (lock) lock.current = true;
         setBusy(kind);
         setMessage("");
         try {
@@ -46,13 +65,22 @@ export default function KasirShipmentActions({
                 method: kind === "create" ? "POST" : "GET",
                 headers: { Accept: "application/json" },
             });
-            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as KasirShipmentSyncResponse | null;
             if (!response.ok) throw new Error(payload?.message || "Pengiriman gagal diproses.");
             setMessage(kind === "create" ? "Pengiriman dibuat." : "Status pengiriman diperbarui.");
+            // A refresh only changes shipment state, so the sanitized sync response updates the
+            // delivery card in place. Creating a shipment does change broader order state and
+            // still re-reads the transaction.
+            if (kind === "refresh" && onShipmentSynced && payload?.delivery) {
+                onShipmentSynced(payload);
+                return;
+            }
             await onUpdated?.();
         } catch (error) {
+            // A failed provider read keeps the LAST PERSISTED status on screen: nothing is cleared.
             setMessage(getUserFacingMessage(error, "Pengiriman gagal diproses."));
         } finally {
+            if (lock) lock.current = false;
             setBusy("");
         }
     }

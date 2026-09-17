@@ -101,6 +101,39 @@ type KasirOrderRecord = {
     items: KasirOrderItem[];
 };
 
+/**
+ * Persisted shipment state a tracking refresh may return, derived with the SAME pure
+ * helpers as `formatKasirOrder` so the cashier UI can apply a successful sync WITHOUT
+ * re-reading the whole transaction.
+ *
+ * It is a strict SUBSET of the delivery block the detail route already returns: no
+ * internal identifier (provider order id, area id, quote ref, coordinates) and no raw
+ * provider payload is ever part of it.
+ */
+export type KasirShipmentSyncRecord = {
+    biteshipOrderId: string | null;
+    biteshipStatus: string | null;
+    biteshipTrackingId: string | null;
+    biteshipLabelUrl: string | null;
+    trackingNumber: string | null;
+    updatedAt: Date;
+};
+
+export function kasirShipmentSyncView(order: KasirShipmentSyncRecord) {
+    const hasShipment = hasRealShipment(order.biteshipOrderId);
+    return {
+        status: normalizeKasirDeliveryStatus({ biteshipStatus: order.biteshipStatus, hasShipment }),
+        // Timeline tetap diturunkan server-side dari status provider TERSIMPAN, jadi
+        // hasil sinkronisasi tidak pernah mendahului provider dan tidak pernah mundur.
+        timeline: kasirDeliveryTimeline({ biteshipStatus: order.biteshipStatus, hasShipment }),
+        hasShipment,
+        trackingId: order.biteshipTrackingId || order.trackingNumber || null,
+        labelUrl: order.biteshipLabelUrl,
+        lastUpdatedAt: order.updatedAt,
+        shipmentAction: kasirShipmentAction({ biteshipOrderId: order.biteshipOrderId }),
+    };
+}
+
 export function formatKasirOrder(order: KasirOrderRecord) {
     const orderType = resolveKasirOrderType(order);
     const paymentStatus = order.payment?.status ?? order.paymentStatus;

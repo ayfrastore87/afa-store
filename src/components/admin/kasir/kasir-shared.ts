@@ -155,6 +155,24 @@ export type KasirDeliveryDetail = {
     };
 };
 
+/**
+ * Shipment state returned by a successful tracking refresh
+ * (GET /api/admin/orders/[id]/biteship). It is a strict SUBSET of `KasirDeliveryDetail`:
+ * only the fields a provider sync can actually change. The cashier detail page merges it
+ * into the delivery card it already renders, so a background sync never has to re-read the
+ * whole transaction and never blanks the PENGIRIMAN card.
+ */
+export type KasirShipmentSyncDelivery = Pick<
+    KasirDeliveryDetail,
+    "status" | "timeline" | "hasShipment" | "trackingId" | "labelUrl" | "lastUpdatedAt" | "shipmentAction"
+>;
+
+export type KasirShipmentSyncResponse = {
+    delivery?: KasirShipmentSyncDelivery | null;
+    refreshedAt?: string;
+    message?: string;
+};
+
 /** Delivery status badge colors, keyed by the normalized status key. */
 export const DELIVERY_STATUS_BADGE: Record<string, string> = {
     MENUNGGU_PENGIRIMAN: "bg-amber-100 text-amber-800",

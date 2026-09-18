@@ -200,7 +200,7 @@ export default function KasirPOS() {
                     // exact previous payload. The client price/weight is never sent — the
                     // server re-quotes Biteship with authoritative product data.
                     delivery: orderType === "DELIVERY" ? kasirDeliveryRequest(deliveryDraft) : undefined,
-                    cashReceived: paymentMethod === "TUNAI" ? Number(cashReceived) || 0 : undefined,
+                    ...(paymentMethod === "TUNAI" && orderType !== "DELIVERY" ? { cashReceived: Number(cashReceived) || 0 } : {}),
                     items: cart.map((line) => ({ productId: line.productId, quantity: line.quantity })),
                 }),
             });

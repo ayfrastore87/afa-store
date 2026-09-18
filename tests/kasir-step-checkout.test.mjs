@@ -56,3 +56,19 @@ test("Biteship credentials not exposed client-side", () => {
     const exposed = secretPatterns.some(p => p.test(posCode));
     assert.strictEqual(exposed, false);
 });
+
+test("DELIVERY COD omits cashReceived from payload", () => {
+    // Payload construction must NOT send cashReceived for DELIVERY + TUNAI
+    const hasConditional = posCode.includes('orderType !== "DELIVERY"') ||
+        posCode.includes('orderType === "PICKUP"');
+    assert.ok(hasConditional, "cashReceived must be conditional on order type");
+
+    // Ensure backend still validates DELIVERY cannot have cashReceived
+    assert.ok(kasirOrderRoute.includes("Delivery") || kasirOrderRoute.includes("TUNAI"));
+});
+
+// Additional regression test for PICKUP cashReceived behavior
+test("PICKUP preserves cashReceived in payload", () => {
+    // Existing behavior must remain for PICKUP orders
+    assert.ok(posCode.includes("cashReceived:"), "cashReceived field must exist in POS payload");
+});

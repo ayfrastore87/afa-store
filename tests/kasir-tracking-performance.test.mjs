@@ -55,7 +55,7 @@ const getHandler = biteshipRoute.slice(biteshipRoute.indexOf("export async funct
 /** The automatic sync function of the open detail page. */
 const syncFn = detail.slice(
     detail.indexOf("const syncShipmentStatus = useCallback"),
-    detail.indexOf("const hasActiveShipment ="),
+    detail.indexOf("const confirmCodPayment ="),
 );
 
 // ---------------------------------------------------------------------------

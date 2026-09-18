@@ -398,10 +398,14 @@ test("12. a pickup total never includes shipping", () => {
 // 13. Shipment creation preserves idempotency.
 test("13. shipping creation keeps the existing idempotent, admin-only workflow", () => {
     // A delivery order is persisted PAID + PROCESSING so the existing route may ship it.
-    assert.match(kasirRoute, /status: orderType === "DELIVERY" \? "PROCESSING" : "COMPLETED",/);
-    assert.match(kasirRoute, /completedAt: orderType === "DELIVERY" \? null : now,/);
-    assert.match(kasirRoute, /paymentStatus: "PAID",/);
-    assert.match(kasirRoute, /processedAt: now,/);
+    assert.match(kasirRoute, /status:\s*orderType\s*===\s*"DELIVERY"\s*\?\s*"PROCESSING"\s*:\s*"COMPLETED",/);
+    assert.match(kasirRoute, /completedAt:\s*orderType\s*===\s*"DELIVERY"\s*\?\s*null\s*:\s*now,/);
+    // DELIVERY TUNAI starts as WAITING_PAYMENT, other DELIVERY orders are PAID
+    assert.match(
+        kasirRoute,
+        /paymentStatus:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"WAITING_PAYMENT"\s*:\s*"PAID"/
+    );
+    assert.match(kasirRoute, /processedAt:\s*now,/);
 
     // The pre-existing claim/compare-and-set is untouched, in both handlers.
     assert.match(biteshipRoute, /const CLAIM_PREFIX = "claim:";/);
@@ -641,9 +645,16 @@ test("22. the existing pickup cashier flow is preserved", () => {
     assert.match(kasirRoute, /pg_advisory_xact_lock\(hashtext\(\$\{todayPrefix\}\)\)/);
     assert.match(kasirRoute, /stock: \{ decrement: item\.qty \}/);
     assert.match(kasirRoute, /formatOrderInvoice\(now, todayCount \+ 1\)/);
-    // A pickup order is still recorded as PAID with no shipping at all.
-    assert.match(kasirRoute, /paymentStatus: "PAID",/);
-    assert.match(kasirRoute, /method: canonicalMethod,\s*amount: total,\s*status: "PAID",/);
+    // A pickup order is still recorded as PAID with no shipping at all,
+    // while DELIVERY TUNAI starts with WAITING_PAYMENT/PENDING status.
+    assert.match(
+        kasirRoute,
+        /paymentStatus:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"WAITING_PAYMENT"\s*:\s*"PAID"/
+    );
+    assert.match(
+        kasirRoute,
+        /status:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"PENDING"\s*:\s*"PAID"/
+    );
     // The POS keeps its existing pickup UI, payment and source selectors.
     assert.match(posPanel, /PAYMENT_METHODS\.map\(\(method\) => \{/);
     assert.match(posPanel, /\[\"TATAP_MUKA", "WHATSAPP"\] as const/);

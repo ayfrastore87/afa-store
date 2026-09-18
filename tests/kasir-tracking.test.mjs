@@ -117,8 +117,14 @@ test("4. tracking refresh requires a persisted biteshipOrderId", () => {
 // 5. A refresh can never create a shipment.
 test("5. tracking refresh never calls shipment creation", () => {
     assert.doesNotMatch(code(getHandler), /createBiteshipOrder|reference_id|\/v1\/orders/);
-    assert.doesNotMatch(code(detail), /method: "POST"/);
-    assert.match(code(detail), /method: "GET",/);
+    // syncShipmentStatus does GET only, but COD confirmation uses POST separately
+    const syncFnMatch = code(detail).match(/const syncShipmentStatus\s*=\s*useCallback[\s\S]*?},\s*\[applyShipmentSync,\s*id\]\);/m);
+    if (syncFnMatch) {
+        assert.doesNotMatch(syncFnMatch[0], /method:\s*"POST"/, "syncShipmentStatus must use GET only");
+        assert.match(syncFnMatch[0], /method:\s*"GET"/, "syncShipmentStatus must call Biteship GET");
+    }
+    // Payment confirmation for COD exists separately and uses POST
+    assert.match(code(detail), /payment\/confirm/, "COD payment confirm endpoint exists");
     assert.match(shipmentActions, /method: kind === "create" \? "POST" : "GET"/);
 });
 
@@ -307,7 +313,11 @@ test("19. the existing cashier delivery contract is preserved", () => {
     assert.match(detail, /<KasirShipmentActions/);
     assert.match(shipmentActions, /BUAT PENGIRIMAN/);
     assert.match(shipmentActions, /PERBARUI STATUS/);
-    assert.match(read("../src/app/api/admin/kasir/order/route.ts"), /paymentStatus: "PAID",/);
+    // Pickup orders still go PAID, DELIVERY TUNAI gets WAITING_PAYMENT
+    assert.match(
+        read("../src/app/api/admin/kasir/order/route.ts"),
+        /paymentStatus:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"WAITING_PAYMENT"\s*:\s*"PAID"/
+    );
 });
 
 // 20. The customer checkout flow keeps using the same Biteship architecture.

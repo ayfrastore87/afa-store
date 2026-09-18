@@ -143,24 +143,28 @@ export async function POST(request: Request) {
     }
     const orderType: KasirOrderType = rawOrderType;
 
-    // --- cash type/sign validation (amount check happens inside transaction) -
+    // --- cash type/sign validation (amount check happens inside transaction) ----
+    // PERSISTED AS NULL WHEN orderType is DELIVERY: payment confirmation will set it later.
     let cashValue: number | null = null;
     if (method === "TUNAI") {
-        const cash = body.cashReceived;
-        if (typeof cash !== "number" || !Number.isInteger(cash) || cash < 0) {
-            return NextResponse.json({ message: "cashReceived wajib diisi berupa bilangan bulat untuk pembayaran Tunai." }, { status: 400 });
+        if (orderType !== "DELIVERY") {
+            const cash = body.cashReceived;
+            if (typeof cash !== "number" || !Number.isInteger(cash) || cash < 0) {
+                return NextResponse.json({ message: "cashReceived wajib diisi berupa bilangan bulat untuk pembayaran Tunai." }, { status: 400 });
+            }
+            cashValue = cash;
+        } else if (body.cashReceived !== undefined && body.cashReceived !== null) {
+            return NextResponse.json({ message: "cashReceived tidak boleh diisi untuk pesanan Delivery COD." }, { status: 400 });
         }
-        cashValue = cash;
     } else if (body.cashReceived !== undefined && body.cashReceived !== null) {
         return NextResponse.json({ message: "cashReceived hanya boleh diisi untuk pembayaran Tunai." }, { status: 400 });
     }
 
-    // --- delivery (KIRIM) ----------------------------------------------------
-    // Pickup keeps the historical kasir contract: no address, no area, no courier.
-    // Kirim requires the recipient identity + a CONFIRMED map location, and the
-    // Biteship area id is accepted ONLY as an opaque server-validated token.
+    // --- address sanitization helpers --------------------------------------
     const cleanMeta = (value: unknown, max: number): string | null =>
         typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
+
+    // --- delivery (KIRIM) ----------------------------------------------------
 
     let deliveryRequest: {
         destinationAreaId: string;
@@ -297,11 +301,14 @@ export async function POST(request: Request) {
             let cashReceived: number | null = null;
             let change: number | null = null;
             if (method === "TUNAI") {
-                if (cashValue === null || cashValue < total) {
-                    throw new ProductAuthorityError(400, "Uang yang diterima kurang dari total belanja.");
+                if (orderType !== "DELIVERY") {
+                    if (cashValue === null || cashValue < total) {
+                        throw new ProductAuthorityError(400, "Uang yang diterima kurang dari total belanja.");
+                    }
+                    cashReceived = cashValue;
+                    change = cashValue - total;
                 }
-                cashReceived = cashValue;
-                change = cashValue - total;
+                // For DELIVERY TUNAI, cashReceived stays NULL until admin confirms receipt
             }
 
             // A/B. now + invoice prefix.
@@ -364,7 +371,8 @@ export async function POST(request: Request) {
                     // existing POST /api/admin/orders/[id]/biteship route may ship it.
                     status: orderType === "DELIVERY" ? "PROCESSING" : "COMPLETED",
                     paymentMethod: canonicalMethod,
-                    paymentStatus: "PAID",
+                    // DELIVERY TUNAI starts as WAITING_PAYMENT until admin confirms COD receipt
+                    paymentStatus: (orderType === "DELIVERY" && method === "TUNAI") ? "WAITING_PAYMENT" : "PAID",
                     source,
                     cashReceived,
                     change,
@@ -385,13 +393,14 @@ export async function POST(request: Request) {
             });
 
             // J. create Payment (lunas, no transactionRef/paymentType).
+            // DELIVERY TUNAI starts as PENDING until admin confirms COD receipt
             await tx.payment.create({
                 data: {
                     orderId: order.id,
                     method: canonicalMethod,
                     amount: total,
-                    status: "PAID",
-                    paidAt: now,
+                    status: (orderType === "DELIVERY" && method === "TUNAI") ? "PENDING" : "PAID",
+                    paidAt: (orderType === "DELIVERY" && method === "TUNAI") ? null : now,
                 },
             });
 

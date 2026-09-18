@@ -705,6 +705,10 @@ export type KasirShipmentActionInput = {
     destinationAreaId?: string | null;
     paymentStatus?: string | null;
     orderStatus?: string | null;
+    // Additional fields for COD detection
+    paymentMethod?: string | null;
+    source?: string | null;
+    orderType?: string | null;
 };
 
 export type KasirShipmentAction = {
@@ -720,7 +724,7 @@ const SHIPMENT_BLOCKED_ORDER_STATUSES = new Set(["CANCELLED", "CANCELED", "COMPL
 /**
  * "BUAT PENGIRIMAN" is offered only when the existing route would really accept the
  * request: no shipment yet, a courier/service code frozen from the server-side quote,
- * a destination area, a PAID payment and a non-final order status. "LACAK PENGIRIMAN"
+ * a destination area, a PAID payment or PENDING COD (Kasir DELIVERY + TUNAI), and "LACAK PENGIRIMAN"
  * is offered once a real shipment exists (refresh reads the provider through the server).
  */
 export function kasirShipmentAction(input: KasirShipmentActionInput): KasirShipmentAction {
@@ -730,11 +734,23 @@ export function kasirShipmentAction(input: KasirShipmentActionInput): KasirShipm
     }
     const orderStatus = nonEmptyText(input.orderStatus).toUpperCase();
     const paymentStatus = nonEmptyText(input.paymentStatus).toUpperCase();
+
+    // Check for pending COD (Kasir DELIVERY + TUNAI)
+    const paymentMethod = (input.paymentMethod ?? "").toUpperCase();
+    const source = (input.source || "").toUpperCase();
+    const orderType = (input.orderType ?? "").toUpperCase();
+    const isKasirOrder = source === "TATAP_MUKA" || source === "WHATSAPP";
+    const isDeliveryOrder = orderType === "DELIVERY";
+    const isPendingCOD =
+        isKasirOrder &&
+        isDeliveryOrder &&
+        paymentMethod === "TUNAI" &&
+        ["PENDING", "WAITING_PAYMENT"].includes(paymentStatus);
     const ready =
         Boolean(nonEmptyText(input.courierCode)) &&
         Boolean(nonEmptyText(input.serviceCode)) &&
         Boolean(nonEmptyText(input.destinationAreaId)) &&
-        paymentStatus === "PAID" &&
+        (paymentStatus === "PAID" || isPendingCOD) &&
         !SHIPMENT_BLOCKED_ORDER_STATUSES.has(orderStatus);
     if (!ready) {
         return { canCreate: false, canRefresh: false, label: "Buat Pengiriman", hint: "Pengiriman belum dapat dibuat untuk pesanan ini." };

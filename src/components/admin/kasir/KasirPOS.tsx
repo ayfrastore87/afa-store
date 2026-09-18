@@ -9,6 +9,7 @@ import {
     AlertCircle,
     ArrowLeft,
     Banknote,
+    Check,
     History,
     Loader2,
     Minus,
@@ -115,6 +116,30 @@ export default function KasirPOS() {
     const patchDelivery = useCallback((patch: Partial<KasirDeliveryDraft>) => {
         setDeliveryDraft((current) => ({ ...current, ...patch }));
     }, []);
+
+    // STEP-BY-STEP CHECKOUT STATE MANAGEMENT
+    const [currentStep, setCurrentStep] = useState(1);
+
+    useEffect(() => {
+        if (orderType === "PICKUP") {
+            setCurrentStep(1);
+            setDeliveryDraft(emptyKasirDeliveryDraft());
+        } else {
+            setCurrentStep((prev) => Math.min(prev, 1));
+        }
+    }, [orderType]);
+
+    // Validates that user can proceed to next step based on current state
+    function canNextStep(step: number, ot: KasirOrderType, dr: { ready: boolean; reason: string | null }, dd: KasirDeliveryDraft): boolean {
+        if (cart.length === 0) return false;
+        switch (step) {
+            case 1: return true;                                    // Order -> Address/ Payment
+            case 2: return Boolean(ot === "PICKUP" || dr.ready);    // Address -> Ongkir (or Payment for PICKUP)
+            case 3: return Boolean(ot === "PICKUP" || (ot === "DELIVERY" && dd.courierCode && dd.serviceCode)); // Ongkir -> Payment
+            case 4: return true;                                    // Payment -> Shipping (but actually creates order)
+            default: return false;
+        }
+    }
 
     const loadCatalog = useCallback(async () => {
         setLoading(true);
@@ -558,6 +583,40 @@ export default function KasirPOS() {
                         </div>
 
                         <div className="space-y-4 border-t border-[#184D47]/10 p-5">
+                            {/* STEP-BY-STEP PROGRESS INDICATOR */}
+                            <div className="border-b border-[#184D47]/10 pb-3">
+                                <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/60">Langkah Transaksi</p>
+                                <div className="flex items-center gap-2">
+                                    {[1, 2, 3, 4, 5].filter((s) => s <= (orderType === "PICKUP" ? 2 : 5)).map((step, idx, arr) => {
+                                        const isActive = currentStep === step;
+                                        const isCompleted = currentStep > step;
+                                        return (
+                                            <>
+                                                <div
+                                                    className={`grid h-8 w-8 place-items-center rounded-full text-xs font-black ${
+                                                        isActive
+                                                            ? "bg-[#184D47] text-white"
+                                                            : isCompleted
+                                                                ? "bg-emerald-600 text-white"
+                                                                : "bg-[#184D47]/15 text-[#184D47]/40"
+                                                    }`}
+                                                >
+                                                    {isCompleted ? <Check size={14} /> : step}
+                                                </div>
+                                                {idx < arr.length - 1 && <div className="h-0.5 w-6 flex-1 bg-[#184D47]/15" />}
+                                            </>
+                                        );
+                                    })}
+                                </div>
+                                <p className="mt-1 text-xs font-semibold text-[#184D47]">
+                                    {currentStep === 1 && "Tambahkan produk ke keranjang"}
+                                    {currentStep === 2 && (orderType === "PICKUP" ? "Pilih metode pembayaran" : "Lengkapi alamat penerima")}
+                                    {currentStep === 3 && "Pilih layanan ongkir"}
+                                    {currentStep === 4 && "Konfirmasi pembayaran"}
+                                    {currentStep === 5 && "Siapkan untuk pengiriman"}
+                                </p>
+                            </div>
+
                             {/* JENIS PESANAN — Ambil Sendiri (default) or Kirim */}
                             <div>
                                 <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Jenis Pesanan</p>
@@ -693,30 +752,58 @@ export default function KasirPOS() {
 
                             {/* Penerima/pelanggan inputs live in the PENERIMA section above. */}
 
-                            <button
-                                type="button"
-                                onClick={() => void submitOrder()}
-                                disabled={submitting || totalItems === 0 || (orderType === "DELIVERY" && !deliveryReadiness.ready)}
-                                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-                                title={
-                                    totalItems === 0
-                                        ? "Tambahkan produk terlebih dahulu"
-                                        : orderType === "DELIVERY" && !deliveryReadiness.ready
-                                            ? deliveryReadiness.reason ?? "Lengkapi data pengiriman"
-                                            : "Proses transaksi"
-                                }
-                            >
-                                {submitting ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
-                                {submitting ? "Memproses..." : "Proses Transaksi"}
-                            </button>
-
-                            {cart.length > 0 && (
+                            {/* STEP NAVIGATION BUTTONS */}
+                            {currentStep < (orderType === "PICKUP" ? 2 : 5) ? (
+                                // NEXT BUTTON for intermediate steps
                                 <button
                                     type="button"
-                                    onClick={clearCart}
-                                    className="min-h-11 w-full rounded-2xl border border-[#184D47]/15 text-sm font-bold text-[#184D47]/60 transition hover:bg-[#184D47]/5"
+                                    onClick={() => setCurrentStep(prev => Math.min(prev + 1, orderType === "PICKUP" ? 2 : 5))}
+                                    disabled={!canNextStep(currentStep, orderType, deliveryReadiness, deliveryDraft) || submitting}
+                                    className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                                    title={
+                                        cart.length === 0
+                                            ? "Tambahkan produk terlebih dahulu"
+                                            : currentStep === 1
+                                                ? "Lanjutkan ke alamat penerima"
+                                                : currentStep === 2 && orderType === "DELIVERY"
+                                                    ? deliveryReadiness.reason ?? "Alamat belum valid"
+                                                    : currentStep === 3 && orderType === "DELIVERY"
+                                                        ? "Pilih ongkir terlebih dahulu"
+                                                        : "Lanjutkan ke pembayaran"
+                                    }
                                 >
-                                    Kosongkan Keranjang
+                                    Lanjutkan
+                                </button>
+                            ) : (
+                                // FINAL SUBMIT BUTTON after payment (step 5)
+                                <button
+                                    type="button"
+                                    onClick={() => void submitOrder()}
+                                    disabled={submitting || totalItems === 0 || (orderType === "DELIVERY" && !deliveryReadiness.ready)}
+                                    className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                                    title={
+                                        totalItems === 0
+                                            ? "Tambahkan produk terlebih dahulu"
+                                            : orderType === "DELIVERY" && !deliveryReadiness.ready
+                                                ? deliveryReadiness.reason ?? "Lengkapi data pengiriman"
+                                                : "Selesaikan transaksi"
+                                    }
+                                >
+                                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
+                                    {submitting ? "Memproses..." : "Proses Transaksi"}
+                                </button>
+                            )}
+
+                            {cart.length > 0 && currentStep > 1 && (
+                                // BACK BUTTON appears for steps > 1
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentStep(prev => prev - 1)}
+                                    disabled={submitting}
+                                    className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white text-sm font-bold text-[#184D47] transition hover:bg-[#184D47]/5"
+                                >
+                                    <ArrowLeft size={16} />
+                                    Kembali
                                 </button>
                             )}
                         </div>

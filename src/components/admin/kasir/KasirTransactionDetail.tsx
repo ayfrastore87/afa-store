@@ -66,6 +66,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [notFound, setNotFound] = useState(false);
+    const [confirmingCodPayment, setConfirmingCodPayment] = useState(false);
 
     // Identitas petugas ikut payload order, jadi halaman kasir TIDAK memanggil
     // /api/auth/me (customer-only, selalu menjawab { user: null } untuk admin).
@@ -158,6 +159,33 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
         }
     }, [applyShipmentSync, id]);
 
+    /**
+     * COD payment confirmation (Kasir DELIVERY + TUNAI pending): the admin
+     * confirms receipt of cash, and the server atomically marks Payment and Order.paymentStatus as
+     * PAID. This client does not modify totals/inventory at all — it just
+     * calls the confirmation route and reloads the transaction afterward.
+     */
+    const confirmCodPayment = useCallback(async () => {
+        setConfirmingCodPayment(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/admin/orders/${id}/payment/confirm`, {
+                method: "POST",
+                headers: { Accept: "application/json" },
+            });
+            if (!response.ok) {
+                const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+                throw new Error(payload?.message || "Konfirmasi pembayaran COD gagal.");
+            }
+            // Reload the transaction to get the updated payment status.
+            await loadDetail();
+        } catch (caught) {
+            setError(getUserFacingMessage(caught, "Konfirmasi pembayaran COD gagal."));
+        } finally {
+            setConfirmingCodPayment(false);
+        }
+    }, [id, loadDetail]);
+
     const hasActiveShipment =
         Boolean(order?.delivery) &&
         shouldAutoRefreshKasirDeliveryStatus({
@@ -221,6 +249,8 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     }
 
     const isTunai = order.paymentMethod === "TUNAI";
+    const isDeliveryOrder = order.orderType === "DELIVERY";
+    const isPendingCOD = isTunai && isDeliveryOrder && ["PENDING", "WAITING_PAYMENT"].includes(order.paymentStatus);
     // PENGIRIMAN block: present for a delivery order only.
     const delivery = order.delivery;
 
@@ -295,8 +325,23 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                     </div>
                     <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-[#184D47]/60">Status Pembayaran</span>
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">{statusLabel(order.paymentStatus)}</span>
+                        {isPendingCOD ? (
+                            <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-black text-yellow-800">Menunggu Pembayaran COD</span>
+                        ) : (
+                            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-800">{statusLabel(order.paymentStatus)}</span>
+                        )}
                     </div>
+                    {isPendingCOD && (
+                        <button
+                            type="button"
+                            onClick={() => void confirmCodPayment()}
+                            disabled={confirmingCodPayment}
+                            className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#184D47] px-4 text-sm font-bold text-white transition hover:bg-[#123c37] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {confirmingCodPayment ? <Loader2 size={16} className="animate-spin" /> : <Banknote size={16} />}
+                            {confirmingCodPayment ? "Memproses…" : "Pembayaran COD Diterima"}
+                        </button>
+                    )}
                     {isTunai && (
                         <>
                             <Row label="Uang Diterima" value={order.cashReceived != null ? formatRupiah(order.cashReceived) : "-"} />

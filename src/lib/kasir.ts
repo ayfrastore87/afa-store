@@ -130,7 +130,17 @@ export function kasirShipmentSyncView(order: KasirShipmentSyncRecord) {
         trackingId: order.biteshipTrackingId || order.trackingNumber || null,
         labelUrl: order.biteshipLabelUrl,
         lastUpdatedAt: order.updatedAt,
-        shipmentAction: kasirShipmentAction({ biteshipOrderId: order.biteshipOrderId }),
+        shipmentAction: kasirShipmentAction({
+            biteshipOrderId: order.biteshipOrderId,
+            courierCode: "", // Not available in sync view
+            serviceCode: "", // Not available in sync view
+            destinationAreaId: "", // Not available in sync view
+            paymentStatus: "", // Not available in sync view
+            orderStatus: "", // Not available in sync view
+            paymentMethod: "", // Not available in sync view
+            source: "", // Not available in sync view
+            orderType: "DELIVERY", // Assume delivery for shipment sync
+        }),
     };
 }
 
@@ -145,6 +155,9 @@ export function formatKasirOrder(order: KasirOrderRecord) {
         destinationAreaId: order.destinationAreaId,
         paymentStatus,
         orderStatus: order.status,
+        paymentMethod: order.paymentMethod,
+        source: order.source,
+        orderType: resolveKasirOrderType(order),
     });
 
     // Internal identifiers (destinationAreaId, originAreaId, shippingQuoteRef, the Biteship

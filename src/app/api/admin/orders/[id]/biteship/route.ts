@@ -18,6 +18,8 @@ import {
     getBiteshipOriginIdentity,
     retrieveBiteshipOrder,
 } from "@/lib/biteship";
+import { resolveKasirOrderType } from "@/lib/kasir-delivery";
+import { isKasirSource } from "@/lib/kasir";
 
 export const runtime = "nodejs";
 
@@ -28,6 +30,14 @@ export const runtime = "nodejs";
 const CLAIM_PREFIX = "claim:";
 
 const BLOCKED_ORDER_STATUS = new Set(["CANCELLED", "CANCELED", "COMPLETED", "DIBATALKAN", "BATAL", "SELESAI"]);
+// The ONLY canonical cash-on-delivery method persisted by the kasir is "TUNAI"
+// (see KASIR_PAYMENT_METHOD_CANONICAL in src/lib/kasir.ts). No other alias is
+// ever written to Order.paymentMethod, so no other value may unlock shipping.
+const COD_PAYMENT_METHOD = "TUNAI";
+// Payment statuses that mean "cash has not been received yet". Both exist in
+// the vocabulary already: Payment.status defaults to "PENDING" (schema) and
+// Order.paymentStatus defaults to "WAITING_PAYMENT" (schema).
+const COD_PENDING_PAYMENT_STATUSES = new Set(["PENDING", "WAITING_PAYMENT"]);
 
 // Columns the tracking refresh really needs. Everything else on the order row (customer
 // body, address, money, coordinates, quote refs) is deliberately NOT selected: the refresh
@@ -83,8 +93,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ message: "Pesanan ini tidak dapat dikirim karena sudah selesai atau dibatalkan." }, { status: 409 });
     }
 
+    const paymentMethod = (order.paymentMethod || "").trim().toUpperCase();
     const paymentStatus = (order.payment?.status ?? order.paymentStatus ?? "").toUpperCase();
-    if (paymentStatus !== "PAID") {
+
+    // NARROW EXCEPTION FOR PENDING COD:
+    // DELIVERY Kasir orders with TUNAI and WAITING_PAYMENT can ship.
+    // Non-COD orders still require PAID status.
+    const isKasirOrder = isKasirSource(order.source) && resolveKasirOrderType(order) === "DELIVERY";
+    const isPendingCOD =
+        isKasirOrder &&
+        paymentMethod === COD_PAYMENT_METHOD &&
+        COD_PENDING_PAYMENT_STATUSES.has(paymentStatus);
+
+    if (!isPendingCOD && paymentStatus !== "PAID") {
         return NextResponse.json({ message: "Pesanan hanya bisa dibuatkan pengiriman Biteship setelah pembayarannya terbayar." }, { status: 409 });
     }
 

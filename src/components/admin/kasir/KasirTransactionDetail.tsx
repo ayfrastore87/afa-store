@@ -406,12 +406,34 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             ) : order.qrisProvider === "MANUAL" &&
                                ["PENDING", "WAITING_PAYMENT"].includes(order.paymentStatus) &&
                                !order.payment?.transactionId ? (
-                                // Show manual confirmation button for MANUAL QRIS without Midtrans transaction
-                                <QrisManualConfirmButton
-                                    orderId={order.id}
-                                    invoice={order.invoice}
-                                    onConfirm={() => loadDetail()}
-                                />
+                                // Show manual QRIS card with QR image and confirmation button
+                                <div className="space-y-4">
+                                    <div className="relative flex h-96 w-full max-w-[360px] items-center justify-center rounded-xl bg-white p-4 shadow-sm">
+                                        <Image
+                                            src="/payment/qris-afa-store.jpg"
+                                            alt="QRIS AFA STORE"
+                                            width={300}
+                                            height={300}
+                                            className="h-auto w-full rounded-lg object-contain"
+                                            unoptimized
+                                        />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-[#F59E0B]">Penting</p>
+                                        <p className="mt-1 text-sm text-[#92400E]">Total pembayaran tertulis di bawah ini. Pastikan nominal yang dibayarkan sesuai.</p>
+                                    </div>
+                                    <div className="rounded-xl bg-[#184D47] p-5 text-white shadow-lg">
+                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#184D47]/70">TOTAL PEMBAYARAN</p>
+                                        <p className="mt-2 text-3xl font-black">{formatRupiah(order.total)}</p>
+                                        <p className="mt-2 text-xs text-[#184D47]/70">Nominal otoritatif dari database</p>
+                                    </div>
+                                    {/* Manual confirmation button */}
+                                    <QrisManualConfirmButton
+                                        orderId={order.id}
+                                        invoice={order.invoice}
+                                        onConfirm={() => loadDetail()}
+                                    />
+                                </div>
                             ) : (
                                 // Midtrans QRIS - show QR code or retry button
                                 <div className="text-center">

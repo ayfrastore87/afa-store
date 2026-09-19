@@ -29,6 +29,7 @@ import {
     MAX_KASIR_ITEMS,
     MAX_KASIR_QUANTITY,
 } from "@/lib/kasir";
+import { getQrisProvider } from "@/lib/qris-config";
 
 export const runtime = "nodejs";
 
@@ -408,49 +409,57 @@ export async function POST(request: Request) {
             });
 
 
-            // K. For QRIS: Generate Midtrans QR code immediately after order/payment creation
-            // Reuse the persisted Kasir order/invoice - do NOT create duplicate records
+            // K. For QRIS: Generate Midtrans QR code only if provider is MIDTRANS
+            // If MANUAL QRIS, skip Midtrans call - payment remains PENDING until admin confirmation
             if (canonicalMethod === "QRIS") {
-                const midtrans = await createMidtransQrisCharge({
-                    invoice: order.invoice,
-                    amount: total,
-                    customer: {
-                        name: order.customer,
-                        email: order.user?.email,
-                        phone: order.phone,
-                    },
-                    items: [
-                        ...order.items.map((item) => ({
-                            id: item.id,
-                            name: item.name,
-                            price: item.price,
-                            quantity: item.quantity,
-                        })),
-                        ...(shipping > 0 ? [{
-                            id: "shipping",
-                            name: "Ongkir",
-                            price: shipping,
-                            quantity: 1,
-                        }] : []),
-                    ],
-                    expiryMinutes: 60,
-                });
+                const qrisProvider = getQrisProvider();
 
-                // Update payment with QRIS details from Midtrans
-                const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes default
-                await tx.payment.update({
-                    where: { orderId: order.id },
-                    data: {
-                        qrisUrl: getQrisActionUrl(midtrans),
-                        transactionId: midtrans.transaction_id ?? null,
-                        transactionRef: midtrans.order_id ?? order.invoice,
-                        paymentType: midtrans.payment_type ?? "qris",
-                        rawResponse: midtrans as Prisma.InputJsonValue,
-                        expiredAt: midtrans.expiry_time
-                            ? new Date(midtrans.expiry_time.replace(" ", "T"))
-                            : defaultExpiredAt,
-                    },
-                });
+                // Only call Midtrans if provider is set to MIDTRANS
+                if (qrisProvider !== 'MANUAL') {
+                    const midtrans = await createMidtransQrisCharge({
+                        invoice: order.invoice,
+                        amount: total,
+                        customer: {
+                            name: order.customer,
+                            email: order.user?.email,
+                            phone: order.phone,
+                        },
+                        items: [
+                            ...order.items.map((item) => ({
+                                id: item.id,
+                                name: item.name,
+                                price: item.price,
+                                quantity: item.quantity,
+                            })),
+                            ...(shipping > 0 ? [{
+                                id: "shipping",
+                                name: "Ongkir",
+                                price: shipping,
+                                quantity: 1,
+                            }] : []),
+                        ],
+                        expiryMinutes: 60,
+                    });
+
+                    // Update payment with QRIS details from Midtrans
+                    const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes default
+                    await tx.payment.update({
+                        where: { orderId: order.id },
+                        data: {
+                            qrisUrl: getQrisActionUrl(midtrans),
+                            transactionId: midtrans.transaction_id ?? null,
+                            transactionRef: midtrans.order_id ?? order.invoice,
+                            paymentType: midtrans.payment_type ?? "qris",
+                            rawResponse: midtrans as Prisma.InputJsonValue,
+                            expiredAt: midtrans.expiry_time
+                                ? new Date(midtrans.expiry_time.replace(" ", "T"))
+                                : defaultExpiredAt,
+                        },
+                    });
+                } else {
+                    console.log("[KASIR ORDER] MANUAL QRIS detected - skipping Midtrans charge creation");
+                    // Payment remains PENDING with no transactionId - requires admin confirmation
+                }
             }
             return { order, total };
         });

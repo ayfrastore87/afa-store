@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, CheckCircle2, Clock, QrCode, ShieldCheck, ShoppingBag } from "lucide-react";
 import { getPaymentStatusPresentation } from "@/lib/payment-status";
+import { ManualQrisPaymentDisplay } from "./manual-qris-display";
 
 type Props = {
     invoice: string;

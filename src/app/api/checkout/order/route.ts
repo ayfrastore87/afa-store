@@ -14,6 +14,7 @@ import { getBiteshipRates, getBiteshipOriginAreaId, BiteshipError, BiteshipUnava
 import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/shipping-weight";
 import { normalizeAreaId, denyArbitraryAreaId } from "@/lib/shipping-destination";
 import { parseDeliveryCoordinates } from "@/lib/coordinates";
+import { isManualQris } from "@/lib/qris-config";
 
 export const runtime = "nodejs";
 
@@ -272,9 +273,21 @@ export async function POST(request: Request) {
 
         let qrisUrl: string | null = null;
         if (normalizedMethod === "QRIS") {
-            const midtrans = await createMidtransQrisCharge({ invoice: order.invoice, amount: total, customer: { name: order.customer, email: order.user?.email, phone: order.phone }, items: [...order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })), { id: "shipping", name: "Ongkir", price: shipping, quantity: 1 }], expiryMinutes: 60 });
-            qrisUrl = getQrisActionUrl(midtrans);
-            await prisma.payment.update({ where: { orderId: order.id }, data: { qrisUrl, transactionId: midtrans.transaction_id ?? null, transactionRef: midtrans.order_id ?? order.invoice, paymentType: midtrans.payment_type ?? "qris", rawResponse: midtrans as Prisma.InputJsonValue, expiredAt: midtrans.expiry_time ? new Date(midtrans.expiry_time.replace(" ", "T")) : defaultExpiredAt } });
+            // Only call Midtrans if provider is not MANUAL
+            if (!isManualQris()) {
+                const midtrans = await createMidtransQrisCharge({
+                    invoice: order.invoice,
+                    amount: total,
+                    customer: { name: order.customer, email: order.user?.email, phone: order.phone },
+                    items: [...order.items.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity })), { id: "shipping", name: "Ongkir", price: shipping, quantity: 1 }],
+                    expiryMinutes: 60
+                });
+                qrisUrl = getQrisActionUrl(midtrans);
+                await prisma.payment.update({ where: { orderId: order.id }, data: { qrisUrl, transactionId: midtrans.transaction_id ?? null, transactionRef: midtrans.order_id ?? order.invoice, paymentType: midtrans.payment_type ?? "qris", rawResponse: midtrans as Prisma.InputJsonValue, expiredAt: midtrans.expiry_time ? new Date(midtrans.expiry_time.replace(" ", "T")) : defaultExpiredAt } });
+            } else {
+                console.log("[CHECKOUT] MANUAL QRIS detected - skipping Midtrans charge creation");
+                // Payment remains PENDING with no transactionId - requires admin confirmation
+            }
         }
 
         const cart = getSupabaseServerClient().from("cart_items");

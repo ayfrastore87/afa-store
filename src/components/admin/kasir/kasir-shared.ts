@@ -115,9 +115,12 @@ export type KasirOrderDetail = {
         method: string;
         status: string;
         paymentType?: string | null;
+        transactionId?: string | null;
         qrisUrl?: string | null;
         expiredAt?: Date | null;
     } | null;
+    /** QRIS provider setting - determined server-side to prevent client manipulation */
+    qrisProvider: 'MANUAL' | 'MIDTRANS';
     /** PENGIRIMAN data, or null for a pickup order. Public data only. */
     delivery: KasirDeliveryDetail | null;
     items: KasirOrderDetailItem[];

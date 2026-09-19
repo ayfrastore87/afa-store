@@ -36,6 +36,7 @@ import KasirReceipt from "./KasirReceipt";
 import KasirPrinterPanel from "./KasirPrinterPanel";
 import KasirShipmentActions from "./KasirShipmentActions";
 import KasirDeliveryTimeline from "./KasirDeliveryTimeline";
+import { QrisManualConfirmButton } from "./qris-manual-confirm-button";
 
 // TAHAP D: detail transaksi terhubung ke GET /api/admin/kasir/orders/[id].
 // TAHAP E: satu tombol "Print" menjalankan alur cetak terpadu (BLE via
@@ -394,11 +395,26 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                     )}
                     {/* QRIS Payment Card */}
                     {order.paymentMethod === "QRIS" && !isPendingCOD && (
-                        <div className="mt-4 rounded-xl border border-[#C9A45B]/20 bg-white p-4 text-center">
+                        <div className="mt-4 rounded-xl border border-[#C9A45B]/20 bg-white p-4">
                             {order.payment?.status === "PAID" ? (
-                                <p className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-black text-emerald-800">Lunas</p>
+                                <div className="text-center">
+                                    <p className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-black text-emerald-800">Lunas</p>
+                                    {order.payment.expiredAt && (
+                                        <p className="mt-2 text-xs text-[#6D6558]">Dikonfirmasi pada {formatDate(order.payment.expiredAt)}</p>
+                                    )}
+                                </div>
+                            ) : order.qrisProvider === "MANUAL" &&
+                               ["PENDING", "WAITING_PAYMENT"].includes(order.paymentStatus) &&
+                               !order.payment?.transactionId ? (
+                                // Show manual confirmation button for MANUAL QRIS without Midtrans transaction
+                                <QrisManualConfirmButton
+                                    orderId={order.id}
+                                    invoice={order.invoice}
+                                    onConfirm={() => loadDetail()}
+                                />
                             ) : (
-                                <>
+                                // Midtrans QRIS - show QR code or retry button
+                                <div className="text-center">
                                     <p className="mb-3 text-sm font-bold text-[#184D47]">Menunggu Pembayaran QRIS</p>
                                     {order.payment?.qrisUrl && isMidtransQrImageUrl(order.payment.qrisUrl) ? (
                                         <>
@@ -416,11 +432,11 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                                             disabled={retryingQris}
                                             className="mt-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#184D47] px-4 text-sm font-bold text-white transition hover:bg-[#123c37] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                                         >
-                                            {retryingQris ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} /> }
+                                            {retryingQris ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
                                             {retryingQris ? "Inisialisasi…" : "Inisialisasi QRIS"}
                                         </button>
                                     )}
-                                </>
+                                </div>
                             )}
                         </div>
                     )}

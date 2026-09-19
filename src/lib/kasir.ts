@@ -212,11 +212,14 @@ export function formatKasirOrder(order: KasirOrderRecord) {
         change: order.change,
         createdAt: order.createdAt,
         orderType,
+        // QRIS provider - determined server-side, prevents client manipulation
+        qrisProvider: process.env.QRIS_PROVIDER?.trim().toUpperCase() === 'MIDTRANS' ? 'MIDTRANS' : 'MANUAL',
         // QRIS display data — exposed only when Payment has QRIS fields
         ...order.payment && (order.payment.qrisUrl || order.payment.expiredAt) && {
             payment: {
                 method: order.payment.method,
                 status: order.payment.status,
+                transactionId: order.payment.transactionId || undefined,
                 paymentType: order.payment.paymentType || undefined,
                 qrisUrl: order.payment.qrisUrl || undefined,
                 expiredAt: order.payment.expiredAt || undefined,

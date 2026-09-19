@@ -30,6 +30,15 @@ export function sourceLabel(source: string | null | undefined) {
     return SOURCE_LABELS[key] ?? (source ? String(source) : "-");
 }
 
+/**
+ * Returns true if qrisUrl appears to be a renderable HTTPS URL
+ * (as opposed to legacy raw EMVCo QR payload string starting with "000201").
+ */
+export function isMidtransQrImageUrl(value: unknown): boolean {
+    const str = typeof value === 'string' ? value : '';
+    return str.startsWith('http://') || str.startsWith('https://');
+}
+
 export function paymentMethodLabel(method: string | null | undefined) {
     const key = String(method ?? "").toUpperCase();
     if (key === "TUNAI" || key === "CASH") return "Tunai";

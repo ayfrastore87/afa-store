@@ -70,6 +70,15 @@ export function getQrisString(response: MidtransChargeResponse) {
     return response.qr_string ?? response.qrString ?? null;
 }
 
+/**
+ * Returns true if qrisUrl appears to be a renderable HTTPS URL
+ * (as opposed to legacy raw EMVCo payload string starting with "000201").
+ */
+export function isMidtransQrImageUrl(value: unknown): boolean {
+    const str = typeof value === 'string' ? value : '';
+    return str.startsWith('http://') || str.startsWith('https://');
+}
+
 export async function createMidtransQrisCharge(payload: MidtransChargePayload) {
     const { baseUrl } = getMidtransConfig();
     const endpoint = `${baseUrl}/v2/charge`;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
 import { getCurrentAdmin } from "@/lib/server-auth";
 import { authorizeProductItems, ProductAuthorityError } from "@/lib/product-authority";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
@@ -28,7 +29,6 @@ import {
     MAX_KASIR_ITEMS,
     MAX_KASIR_QUANTITY,
 } from "@/lib/kasir";
-import { createMidtransQrisCharge } from "@/lib/midtrans";
 
 export const runtime = "nodejs";
 
@@ -441,7 +441,7 @@ export async function POST(request: Request) {
                 await tx.payment.update({
                     where: { orderId: order.id },
                     data: {
-                        qrisUrl: midtrans.qr_string ?? midtrans.qrString ?? null,
+                        qrisUrl: getQrisActionUrl(midtrans),
                         transactionId: midtrans.transaction_id ?? null,
                         transactionRef: midtrans.order_id ?? order.invoice,
                         paymentType: midtrans.payment_type ?? "qris",

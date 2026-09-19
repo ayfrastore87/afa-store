@@ -46,7 +46,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ message: "Gagal membuat QRIS.", retryable: true, orderId: order.id, invoice }, { status: 503 });
     }
 
-    const qrisUrl = getQrisActionUrl(charge);
+    const qrisUrl = getQrisActionUrl(charge) ?? null;
     if (!qrisUrl) return NextResponse.json({ message: "QR code not available from Midtrans.", retryable: true, orderId: order.id, invoice }, { status: 502 });
 
     const expiredAt = charge.expiry_time ? new Date(charge.expiry_time.replace(" ", "T")) : new Date(Date.now() + 60 * 60 * 1000);

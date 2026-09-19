@@ -25,6 +25,7 @@ import {
     statusLabel,
     type KasirOrderDetail,
     type KasirShipmentSyncResponse,
+    isMidtransQrImageUrl,
 } from "./kasir-shared";
 import {
     KASIR_DELIVERY_AUTO_REFRESH_MS,
@@ -227,13 +228,24 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     const qrisPending = order?.paymentMethod === "QRIS" && ["PENDING", "WAITING_PAYMENT"].includes(order?.paymentStatus ?? "");
     const shouldPollQris = qrisPending && !loading;
 
+    // Single-flight lock for QRIS polling (prevents overlapping fetch requests).
+    const qrisPollLockRef = useRef(false);
+
     useEffect(() => {
         if (!shouldPollQris || document.visibilityState !== "visible") return;
         const refresh = async () => {
-            const response = await fetch(`/api/admin/kasir/orders/${id}`, { cache: "no-store" });
-            if (!response.ok) return;
-            const payload = (await response.json()) as KasirOrderDetailResponse | null;
-            if (payload?.order) applyDetail(payload);
+            if (qrisPollLockRef.current) return;
+            qrisPollLockRef.current = true;
+            try {
+                const response = await fetch(`/api/admin/kasir/orders/${id}`, { cache: "no-store" });
+                if (!response.ok) return;
+                const payload = (await response.json()) as KasirOrderDetailResponse | null;
+                if (payload?.order) applyDetail(payload);
+            } catch {
+                // Fail silently: preserve current QR display and payment status.
+            } finally {
+                qrisPollLockRef.current = false;
+            }
         };
         void refresh();
         const timer = window.setInterval(refresh, 10000);
@@ -388,7 +400,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             ) : (
                                 <>
                                     <p className="mb-3 text-sm font-bold text-[#184D47]">Menunggu Pembayaran QRIS</p>
-                                    {order.payment?.qrisUrl ? (
+                                    {order.payment?.qrisUrl && isMidtransQrImageUrl(order.payment.qrisUrl) ? (
                                         <>
                                             <Image src={order.payment.qrisUrl} alt="QRIS pembayaran" width={256} height={256} unoptimized className="mx-auto max-w-[256px]" />
                                             {order.payment.expiredAt && (

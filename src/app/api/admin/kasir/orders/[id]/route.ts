@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         where: { id, source: { in: [...KASIR_SOURCES] } },
         include: {
             items: { include: { product: { select: { image: true, size: true } } } },
-            payment: { select: { status: true, method: true } },
+            payment: { select: { status: true, method: true, qrisUrl: true, paymentType: true, transactionRef: true, expiredAt: true } },
         },
     });
 

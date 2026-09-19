@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
     AlertCircle,
     ArrowLeft,
     Banknote,
+    Clock,
     Loader2,
     Printer,
     QrCode,
@@ -67,6 +69,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     const [error, setError] = useState("");
     const [notFound, setNotFound] = useState(false);
     const [confirmingCodPayment, setConfirmingCodPayment] = useState(false);
+    const [retryingQris, setRetryingQris] = useState(false);
 
     // Identitas petugas ikut payload order, jadi halaman kasir TIDAK memanggil
     // /api/auth/me (customer-only, selalu menjawab { user: null } untuk admin).
@@ -186,6 +189,26 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
         }
     }, [id, loadDetail]);
 
+    const retryQrisLockRef = useRef(false);
+
+    const retryQris = useCallback(async () => {
+        if (retryQrisLockRef.current) return;
+        setRetryingQris(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/admin/kasir/orders/${id}/qris/retry`, { method: "POST", headers: { Accept: "application/json" } });
+            if (!response.ok) {
+                const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+                throw new Error(payload?.message || "Inisialisasi QRIS gagal.");
+            }
+            await loadDetail();
+        } catch (caught) {
+            setError(getUserFacingMessage(caught, "Inisialisasi QRIS gagal."));
+        } finally {
+            retryQrisLockRef.current = false;
+            setRetryingQris(false);
+        }
+    }, [id, loadDetail]);
     const hasActiveShipment =
         Boolean(order?.delivery) &&
         shouldAutoRefreshKasirDeliveryStatus({
@@ -201,6 +224,21 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
         }, KASIR_DELIVERY_AUTO_REFRESH_MS);
         return () => window.clearInterval(timer);
     }, [hasActiveShipment, syncShipmentStatus]);
+    const qrisPending = order?.paymentMethod === "QRIS" && ["PENDING", "WAITING_PAYMENT"].includes(order?.paymentStatus ?? "");
+    const shouldPollQris = qrisPending && !loading;
+
+    useEffect(() => {
+        if (!shouldPollQris || document.visibilityState !== "visible") return;
+        const refresh = async () => {
+            const response = await fetch(`/api/admin/kasir/orders/${id}`, { cache: "no-store" });
+            if (!response.ok) return;
+            const payload = (await response.json()) as KasirOrderDetailResponse | null;
+            if (payload?.order) applyDetail(payload);
+        };
+        void refresh();
+        const timer = window.setInterval(refresh, 10000);
+        return () => window.clearInterval(timer);
+    }, [shouldPollQris, id, loading, applyDetail]);
 
     if (loading) {
         return (
@@ -341,6 +379,38 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             {confirmingCodPayment ? <Loader2 size={16} className="animate-spin" /> : <Banknote size={16} />}
                             {confirmingCodPayment ? "Memproses…" : "Pembayaran COD Diterima"}
                         </button>
+                    )}
+                    {/* QRIS Payment Card */}
+                    {order.paymentMethod === "QRIS" && !isPendingCOD && (
+                        <div className="mt-4 rounded-xl border border-[#C9A45B]/20 bg-white p-4 text-center">
+                            {order.payment?.status === "PAID" ? (
+                                <p className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-black text-emerald-800">Lunas</p>
+                            ) : (
+                                <>
+                                    <p className="mb-3 text-sm font-bold text-[#184D47]">Menunggu Pembayaran QRIS</p>
+                                    {order.payment?.qrisUrl ? (
+                                        <>
+                                            <Image src={order.payment.qrisUrl} alt="QRIS pembayaran" width={256} height={256} unoptimized className="mx-auto max-w-[256px]" />
+                                            {order.payment.expiredAt && (
+                                                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#8B6B3F]">
+                                                    <Clock size={14} /> Batas pembayaran: {formatDate(order.payment.expiredAt)}
+                                                </p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => void retryQris()}
+                                            disabled={retryingQris}
+                                            className="mt-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#184D47] px-4 text-sm font-bold text-white transition hover:bg-[#123c37] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {retryingQris ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} /> }
+                                            {retryingQris ? "Inisialisasi…" : "Inisialisasi QRIS"}
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     )}
                     {isTunai && (
                         <>

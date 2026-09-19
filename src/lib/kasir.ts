@@ -97,7 +97,7 @@ type KasirOrderRecord = {
      * the card can show when the shipment state was last stored. No new column.
      */
     updatedAt: Date;
-    payment: { status: string; method: string } | null;
+    payment: { status: string; method: string; paymentType?: string | null; qrisUrl?: string | null; expiredAt?: Date | null; transactionRef?: string | null; transactionId?: string | null } | null;
     items: KasirOrderItem[];
 };
 
@@ -212,6 +212,16 @@ export function formatKasirOrder(order: KasirOrderRecord) {
         change: order.change,
         createdAt: order.createdAt,
         orderType,
+        // QRIS display data — exposed only when Payment has QRIS fields
+        ...order.payment && (order.payment.qrisUrl || order.payment.expiredAt) && {
+            payment: {
+                method: order.payment.method,
+                status: order.payment.status,
+                paymentType: order.payment.paymentType || undefined,
+                qrisUrl: order.payment.qrisUrl || undefined,
+                expiredAt: order.payment.expiredAt || undefined,
+            }
+        },
         delivery,
         items: order.items.map((item) => ({
             id: item.id,

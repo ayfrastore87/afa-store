@@ -400,11 +400,17 @@ test("13. shipping creation keeps the existing idempotent, admin-only workflow",
     // A delivery order is persisted PAID + PROCESSING so the existing route may ship it.
     assert.match(kasirRoute, /status:\s*orderType\s*===\s*"DELIVERY"\s*\?\s*"PROCESSING"\s*:\s*"COMPLETED",/);
     assert.match(kasirRoute, /completedAt:\s*orderType\s*===\s*"DELIVERY"\s*\?\s*null\s*:\s*now,/);
-    // DELIVERY TUNAI starts as WAITING_PAYMENT, other DELIVERY orders are PAID
-    assert.match(
-        kasirRoute,
-        /paymentStatus:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"WAITING_PAYMENT"\s*:\s*"PAID"/
-    );
+    // DELIVERY TUNAI starts as WAITING_PAYMENT; other payment methods (QRIS, TRANSFER) follow different semantics
+    const paymentStatusMatch = kasirRoute.match(/paymentStatus:\s*(.*),/);
+    assert.ok(paymentStatusMatch, "paymentStatus must be assigned");
+    const paymentExpr = paymentStatusMatch[1].trim();
+    const psFn = new Function("orderType", "method", "return (" + paymentExpr + ");");
+    assert.equal(psFn("DELIVERY", "TUNAI"), "WAITING_PAYMENT", "DELIVERY+TUNAI starts WAITING_PAYMENT");
+    assert.equal(psFn("PICKUP", "TUNAI"), "PAID", "PICKUP+TUNAI starts PAID");
+    assert.equal(psFn("DELIVERY", "QRIS"), "WAITING_PAYMENT", "DELIVERY+QRIS starts WAITING_PAYMENT");
+    assert.equal(psFn("PICKUP", "QRIS"), "WAITING_PAYMENT", "PICKUP+QRIS starts WAITING_PAYMENT");
+    assert.equal(psFn("PICKUP", "TRANSFER"), "PAID", "PICKUP+TRANSFER starts PAID");
+    assert.equal(psFn("DELIVERY", "TRANSFER"), "PAID", "DELIVERY+TRANSFER follows pre-QRIS PAID behavior");
     assert.match(kasirRoute, /processedAt:\s*now,/);
 
     // The pre-existing claim/compare-and-set is untouched, in both handlers.
@@ -646,15 +652,34 @@ test("22. the existing pickup cashier flow is preserved", () => {
     assert.match(kasirRoute, /stock: \{ decrement: item\.qty \}/);
     assert.match(kasirRoute, /formatOrderInvoice\(now, todayCount \+ 1\)/);
     // A pickup order is still recorded as PAID with no shipping at all,
-    // while DELIVERY TUNAI starts with WAITING_PAYMENT/PENDING status.
-    assert.match(
-        kasirRoute,
-        /paymentStatus:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"WAITING_PAYMENT"\s*:\s*"PAID"/
-    );
-    assert.match(
-        kasirRoute,
-        /status:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"PENDING"\s*:\s*"PAID"/
-    );
+    // while DELIVERY TUNAI and QRIS start with WAITING_PAYMENT/PENDING status.
+    const paymentStatusMatch = kasirRoute.match(/paymentStatus:\s*(.*),/);
+    assert.ok(paymentStatusMatch, "paymentStatus must be assigned");
+    const paymentExpr = paymentStatusMatch[1].trim();
+    const psFn = new Function("orderType", "method", "return (" + paymentExpr + ");");
+    assert.equal(psFn("DELIVERY", "TUNAI"), "WAITING_PAYMENT", "DELIVERY+TUNAI starts WAITING_PAYMENT");
+    assert.equal(psFn("PICKUP", "TUNAI"), "PAID", "PICKUP+TUNAI starts PAID");
+    assert.equal(psFn("DELIVERY", "QRIS"), "WAITING_PAYMENT", "DELIVERY+QRIS starts WAITING_PAYMENT");
+    assert.equal(psFn("PICKUP", "QRIS"), "WAITING_PAYMENT", "PICKUP+QRIS starts WAITING_PAYMENT");
+
+    // Payment.status: extract the relevant status field that contains PENDING/PAID (not Order.status)
+    const statusLines = kasirRoute.split(/\r?\n/).filter(l => /^\s*status:/.test(l.trim()));
+    let payStatusFn = null;
+    for (const line of statusLines) {
+        const expr = line.trim().replace(/^status:/, "").replace(/,\s*$/, "");
+        try {
+            const fn = new Function("orderType", "method", "now", "return (" + expr + ");");
+            // Payment.status should return PENDING for QRIS
+            if (fn("PICKUP", "QRIS", "NOW") === "PENDING") {
+                payStatusFn = fn;
+                break;
+            }
+        } catch (e) {}
+    }
+    assert.ok(payStatusFn, "Payment.status evaluator must exist");
+    assert.equal(payStatusFn("DELIVERY", "TUNAI", "NOW"), "PENDING");
+    assert.equal(payStatusFn("PICKUP", "TUNAI", "NOW"), "PAID");
+    assert.equal(payStatusFn("PICKUP", "TRANSFER", "NOW"), "PAID");
     // The POS keeps its existing pickup UI, payment and source selectors.
     assert.match(posPanel, /PAYMENT_METHODS\.map\(\(method\) => \{/);
     assert.match(posPanel, /\[\"TATAP_MUKA", "WHATSAPP"\] as const/);

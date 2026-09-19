@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
 import { authorizeProductItems, ProductAuthorityError } from "@/lib/product-authority";
@@ -27,6 +28,7 @@ import {
     MAX_KASIR_ITEMS,
     MAX_KASIR_QUANTITY,
 } from "@/lib/kasir";
+import { createMidtransQrisCharge } from "@/lib/midtrans";
 
 export const runtime = "nodejs";
 
@@ -372,7 +374,7 @@ export async function POST(request: Request) {
                     status: orderType === "DELIVERY" ? "PROCESSING" : "COMPLETED",
                     paymentMethod: canonicalMethod,
                     // DELIVERY TUNAI starts as WAITING_PAYMENT until admin confirms COD receipt
-                    paymentStatus: (orderType === "DELIVERY" && method === "TUNAI") ? "WAITING_PAYMENT" : "PAID",
+                    paymentStatus: (orderType === "DELIVERY" && method === "TUNAI") ? "WAITING_PAYMENT" : method === "QRIS" ? "WAITING_PAYMENT" : "PAID",
                     source,
                     cashReceived,
                     change,
@@ -390,6 +392,7 @@ export async function POST(request: Request) {
                         })),
                     },
                 },
+                include: { items: true, user: true },
             });
 
             // J. create Payment (lunas, no transactionRef/paymentType).
@@ -399,11 +402,56 @@ export async function POST(request: Request) {
                     orderId: order.id,
                     method: canonicalMethod,
                     amount: total,
-                    status: (orderType === "DELIVERY" && method === "TUNAI") ? "PENDING" : "PAID",
-                    paidAt: (orderType === "DELIVERY" && method === "TUNAI") ? null : now,
+                    status: method === "QRIS" ? "PENDING" : (orderType === "DELIVERY" && method === "TUNAI") ? "PENDING" : "PAID",
+                    paidAt: method === "QRIS" ? null : (orderType === "DELIVERY" && method === "TUNAI") ? null : now,
                 },
             });
 
+
+            // K. For QRIS: Generate Midtrans QR code immediately after order/payment creation
+            // Reuse the persisted Kasir order/invoice - do NOT create duplicate records
+            if (canonicalMethod === "QRIS") {
+                const midtrans = await createMidtransQrisCharge({
+                    invoice: order.invoice,
+                    amount: total,
+                    customer: {
+                        name: order.customer,
+                        email: order.user?.email,
+                        phone: order.phone,
+                    },
+                    items: [
+                        ...order.items.map((item) => ({
+                            id: item.id,
+                            name: item.name,
+                            price: item.price,
+                            quantity: item.quantity,
+                        })),
+                        ...(shipping > 0 ? [{
+                            id: "shipping",
+                            name: "Ongkir",
+                            price: shipping,
+                            quantity: 1,
+                        }] : []),
+                    ],
+                    expiryMinutes: 60,
+                });
+
+                // Update payment with QRIS details from Midtrans
+                const defaultExpiredAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes default
+                await tx.payment.update({
+                    where: { orderId: order.id },
+                    data: {
+                        qrisUrl: midtrans.qr_string ?? midtrans.qrString ?? null,
+                        transactionId: midtrans.transaction_id ?? null,
+                        transactionRef: midtrans.order_id ?? order.invoice,
+                        paymentType: midtrans.payment_type ?? "qris",
+                        rawResponse: midtrans as Prisma.InputJsonValue,
+                        expiredAt: midtrans.expiry_time
+                            ? new Date(midtrans.expiry_time.replace(" ", "T"))
+                            : defaultExpiredAt,
+                    },
+                });
+            }
             return { order, total };
         });
 

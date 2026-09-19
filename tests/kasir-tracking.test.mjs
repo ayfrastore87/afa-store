@@ -313,11 +313,14 @@ test("19. the existing cashier delivery contract is preserved", () => {
     assert.match(detail, /<KasirShipmentActions/);
     assert.match(shipmentActions, /BUAT PENGIRIMAN/);
     assert.match(shipmentActions, /PERBARUI STATUS/);
-    // Pickup orders still go PAID, DELIVERY TUNAI gets WAITING_PAYMENT
-    assert.match(
-        read("../src/app/api/admin/kasir/order/route.ts"),
-        /paymentStatus:\s*\(\s*orderType\s*===\s*"DELIVERY"\s*&&\s*method\s*===\s*"TUNAI"\s*\)\s*\?\s*"WAITING_PAYMENT"\s*:\s*"PAID"/
-    );
+    // Pickup orders go PAID, DELIVERY TUNAI and QRIS get WAITING_PAYMENT/PENDING
+    const paymentStatusMatch = read("../src/app/api/admin/kasir/order/route.ts").match(/paymentStatus:\s*(.*),/);
+    assert.ok(paymentStatusMatch, "paymentStatus must be assigned");
+    const paymentExpr = paymentStatusMatch[1].trim();
+    const psFn = new Function("orderType", "method", "return (" + paymentExpr + ");");
+    assert.equal(psFn("DELIVERY", "TUNAI"), "WAITING_PAYMENT", "DELIVERY+TUNAI starts WAITING_PAYMENT");
+    assert.equal(psFn("PICKUP", "TUNAI"), "PAID", "PICKUP+TUNAI starts PAID");
+    assert.equal(psFn("DELIVERY", "QRIS"), "WAITING_PAYMENT", "DELIVERY+QRIS starts WAITING_PAYMENT");
 });
 
 // 20. The customer checkout flow keeps using the same Biteship architecture.

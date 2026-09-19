@@ -101,6 +101,14 @@ export type KasirOrderDetail = {
     createdAt: string;
     /** JENIS PESANAN, derived server-side from the persisted Order shipping fields. */
     orderType: KasirOrderType;
+    /** QRIS payment data for display and expiry; undefined for non-QRIS orders */
+    payment?: {
+        method: string;
+        status: string;
+        paymentType?: string | null;
+        qrisUrl?: string | null;
+        expiredAt?: Date | null;
+    } | null;
     /** PENGIRIMAN data, or null for a pickup order. Public data only. */
     delivery: KasirDeliveryDetail | null;
     items: KasirOrderDetailItem[];

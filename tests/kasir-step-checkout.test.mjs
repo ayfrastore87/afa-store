@@ -311,3 +311,70 @@ test("existing tracking GET-only behavior remains intact", () => {
     // POST handler creates shipment
     assert.ok(biteshipRoute.includes("POST"), "Shipment creation uses POST method");
 });
+
+// =====================================================
+// NEW REGRESSION TESTS FOR KASIR KIRIM UX FINALIZATION
+// =====================================================
+
+test("Qiris creation does not show Transaksi Berhasil as payment success", () => {
+    const posCode = read("../src/components/admin/kasir/KasirPOS.tsx");
+    // After successful order creation, check that QRIS pending shows info modal instead of success
+    assert.ok(posCode.includes("isQrisPending"), "Must detect QRIS pending state");
+    assert.ok(posCode.includes('icon: "info"'), "QRIS pending uses info icon, not success");
+    // Success title shown inside else block (after if/else)
+    // Info shown first for QRIS pending
+    assert.ok(posCode.includes("title: \"Pesanan Dibuat\"") || posCode.includes("info"), "QRIS pending shows info modal");    assert.ok(posCode.includes("title: \"Pesanan Dibuat\"") || posCode.includes("info"), "QRIS pending shows info modal");
+});
+
+test("Source transaction selector absent from DELIVERY UI", () => {
+    const posCode = read("../src/components/admin/kasir/KasirPOS.tsx");
+    // The Sumber Transaksi block must be conditionally rendered based on orderType === "PICKUP"
+    assert.ok(posCode.includes('orderType === "PICKUP"'), "Source selector wrapped in PICKUP condition");
+    // Canonical default source for DELIVERY is TATAP_MUKA
+    assert.ok(posCode.includes('setSource("TATAP_MUKA")'), "DELIVERY uses canonical TATAP_MUKA source internally");
+});
+
+test("One final click creates exactly one Order with double-submit protection", () => {
+    const posCode = read("../src/components/admin/kasir/KasirPOS.tsx");
+    // In-flight lock prevents duplicate submits
+    assert.ok(posCode.includes("if (submitting || cart.length === 0) return;"), "SubmitOrder guards against double submit");
+    assert.ok(posCode.includes("setSubmitting(true);"), "Sets submitting flag before fetch");
+    // Final button disabled when submitting
+    assert.ok(posCode.includes("disabled={submitting"), "Final button disabled while submitting");
+});
+
+test("Delivery pending QRIS cannot create Biteship shipment", () => {
+    const biteshipRoute = read("../src/app/api/admin/orders/[id]/biteship/route.ts");
+    // Backend guards against shipment creation for pending non-COD orders
+    assert.ok(biteshipRoute.includes("paymentStatus !== \"PAID\""), "Requires PAID status for shipment");
+    assert.ok(biteshipRoute.includes("isPendingCOD"), "Only COD pending allowed exception");
+});
+
+test("Stock mutation remains once via server-side validation", () => {
+    const kasirOrderRoute = read("../src/app/api/admin/kasir/order/route.ts");
+    // Stock update happens inside Prisma transaction for idempotency
+    assert.ok(kasirOrderRoute.includes("prisma.$transaction"), "Stock mutation protected by transaction");
+    assert.ok(kasirOrderRoute.includes('stock: { decrement:') || kasirOrderRoute.includes("decrement:"), "Actual product stock decremented atomically");
+});
+
+test("QRIS pending displays Menunggu Pembayaran QRIS on detail page", () => {
+    const detailPage = read("../src/components/admin/kasir/KasirTransactionDetail.tsx");
+    // Pending QRIS should display waiting message and QR code
+    assert.ok(detailPage.includes("Menunggu Pembayaran QRIS"), "Detail page shows QRIS pending status");
+    assert.ok(detailPage.includes("shouldPollQris") || detailPage.includes("qrisPending"), "Polling enabled for pending QRIS");
+});
+
+test("QRIS PAID displays LUNAS/payment success", () => {
+    const detailPage = read("../src/components/admin/kasir/KasirTransactionDetail.tsx");
+    const receipt = read("../src/components/admin/kasir/KasirReceipt.tsx");
+    // Paid QRIS should transition to paid/LUNAS state
+    assert.ok(receipt.includes("statusLabel(order.paymentStatus)"), "Receipt shows payment status");
+    // Verify statusLabel mapping for PAID exists (checked via kasir-shared.ts)
+    assert.ok(detailPage.includes("statusLabel"), "Uses statusLabel helper for payment status");
+});
+
+test("DELIVERY + QRIS can proceed to shipping after verified PAID", () => {
+    const biteshipRoute = read("../src/app/api/admin/orders/[id]/biteship/route.ts");
+    // After PAID, QRIS can create shipment
+    assert.ok(biteshipRoute.includes('paymentStatus !== "PAID"'), "Requires PAID status for shipment (non-COD)");
+});

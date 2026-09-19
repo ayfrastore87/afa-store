@@ -113,6 +113,15 @@ export default function KasirPOS() {
     const [orderType, setOrderType] = useState<KasirOrderType>(DEFAULT_KASIR_ORDER_TYPE);
     const [deliveryDraft, setDeliveryDraft] = useState<KasirDeliveryDraft>(() => emptyKasirDeliveryDraft());
 
+    // Canonical source for kasir kirim: always use TATAP_MUKA (COD) to avoid confusing COD
+    // with transaction source. This preserves existing backend behavior while hiding source
+    // selection from users for delivery orders.
+    useEffect(() => {
+        if (orderType === "DELIVERY") {
+            setSource("TATAP_MUKA");
+        }
+    }, [orderType]);
+
     const patchDelivery = useCallback((patch: Partial<KasirDeliveryDraft>) => {
         setDeliveryDraft((current) => ({ ...current, ...patch }));
     }, []);
@@ -139,6 +148,14 @@ export default function KasirPOS() {
             case 4: return true;                                    // Payment -> Shipping (but actually creates order)
             default: return false;
         }
+    }
+
+    // Validates that ALL requirements for final submission are met (cart + delivery readiness + TUNAI cash sufficiency)
+    function allRequirementsMet(): boolean {
+        if (cart.length === 0) return false;
+        if (orderType === "DELIVERY" && !deliveryReadiness.ready) return false;
+        if (paymentMethod === "TUNAI" && (Number(cashReceived) || 0) < orderTotal) return false;
+        return true;
     }
 
     const loadCatalog = useCallback(async () => {
@@ -221,12 +238,26 @@ export default function KasirPOS() {
                     ? `<div><b>Ongkir</b><br/>${formatRupiah(payload.shipping)}${payload.courier ? ` (${payload.courier}${payload.service ? ` — ${payload.service}` : ""})` : ""}</div>`
                     : "";
 
-            await Swal.fire({
-                title: "Transaksi Berhasil",
-                html: `<div style="text-align:left;display:grid;gap:8px"><div><b>Invoice</b><br/>${payload.invoice}</div><div><b>Jenis Pesanan</b><br/>${kasirOrderTypeLabel(payload.orderType)}</div><div><b>Total</b><br/>${formatRupiah(payload.total)}</div>${shippingLabel}${changeLabel}</div>`,
-                icon: "success",
-                confirmButtonColor: "#184D47",
-            });
+            // For QRIS, do NOT show "Transaksi Berhasil" since payment is not yet complete.
+            // Instead, redirect directly to the detail page which shows Menunggu Pembayaran QRIS.
+            const isQrisPending = payload.paymentMethod === "QRIS" && payload.paymentStatus !== "PAID";
+            if (isQrisPending) {
+                // Show minimal info message then redirect to detail page where QR code + status displays
+                await Swal.fire({
+                    title: "Pesanan Dibuat",
+                    text: "Menunggu Pembayaran QRIS",
+                    icon: "info",
+                    confirmButtonColor: "#184D47",
+                    confirmButtonText: "Selesaikan Pembayaran",
+                });
+            } else {
+                await Swal.fire({
+                    title: "Transaksi Berhasil",
+                    html: `<div style="text-align:left;display:grid;gap:8px"><div><b>Invoice</b><br/>${payload.invoice}</div><div><b>Jenis Pesanan</b><br/>${kasirOrderTypeLabel(payload.orderType)}</div><div><b>Total</b><br/>${formatRupiah(payload.total)}</div>${shippingLabel}${changeLabel}</div>`,
+                    icon: "success",
+                    confirmButtonColor: "#184D47",
+                });
+            }
 
             clearCart();
             router.push(`/admin/kasir/${payload.orderId}`);
@@ -734,21 +765,24 @@ export default function KasirPOS() {
                                 </div>
                             )}
 
-                            <div>
-                                <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Sumber Transaksi</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {(["TATAP_MUKA", "WHATSAPP"] as const).map((item) => (
-                                        <button
-                                            key={item}
-                                            type="button"
-                                            onClick={() => setSource(item)}
-                                            className={`min-h-12 rounded-2xl border px-3 text-xs font-bold transition ${source === item ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]/70 hover:border-[#184D47]/40"}`}
-                                        >
-                                            {item === "TATAP_MUKA" ? "COD" : "WhatsApp"}
-                                        </button>
-                                    ))}
+                            {/* Sumber Transaksi — only shown for PICKUP orders; DELIVERY uses canonical TATAP_MUKA internally */}
+                            {orderType === "PICKUP" && (
+                                <div>
+                                    <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Sumber Transaksi</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(["TATAP_MUKA", "WHATSAPP"] as const).map((item) => (
+                                            <button
+                                                key={item}
+                                                type="button"
+                                                onClick={() => setSource(item)}
+                                                className={`min-h-12 rounded-2xl border px-3 text-xs font-bold transition ${source === item ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]/70 hover:border-[#184D47]/40"}`}
+                                            >
+                                                {item === "TATAP_MUKA" ? "COD" : "WhatsApp"}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Penerima/pelanggan inputs live in the PENERIMA section above. */}
 
@@ -757,19 +791,26 @@ export default function KasirPOS() {
                                 // NEXT BUTTON for intermediate steps
                                 <button
                                     type="button"
-                                    onClick={() => setCurrentStep(prev => Math.min(prev + 1, orderType === "PICKUP" ? 2 : 5))}
+                                    onClick={() => {
+                                        // ONE-CLICK UX: If ALL data complete, submit immediately without requiring step-by-step clicks.
+                                        if (allRequirementsMet()) {
+                                            void submitOrder();
+                                        } else {
+                                            setCurrentStep(prev => Math.min(prev + 1, orderType === "PICKUP" ? 2 : 5));
+                                        }
+                                    }}
                                     disabled={!canNextStep(currentStep, orderType, deliveryReadiness, deliveryDraft) || submitting}
                                     className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
                                     title={
                                         cart.length === 0
                                             ? "Tambahkan produk terlebih dahulu"
-                                            : currentStep === 1
-                                                ? "Lanjutkan ke alamat penerima"
+                                            : currentStep === 1 && !allRequirementsMet()
+                                                ? "Lengkapi alamat, ongkir (jika kirim), dan uang diterima (jika TUNAI)"
                                                 : currentStep === 2 && orderType === "DELIVERY"
                                                     ? deliveryReadiness.reason ?? "Alamat belum valid"
                                                     : currentStep === 3 && orderType === "DELIVERY"
                                                         ? "Pilih ongkir terlebih dahulu"
-                                                        : "Lanjutkan ke pembayaran"
+                                                        : "Selesaikan transaksi sekali klik"
                                     }
                                 >
                                     Lanjutkan

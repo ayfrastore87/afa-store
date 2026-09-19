@@ -406,28 +406,47 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             ) : order.qrisProvider === "MANUAL" &&
                                ["PENDING", "WAITING_PAYMENT"].includes(order.paymentStatus) &&
                                !order.payment?.transactionId ? (
-                                // Show manual QRIS card with QR image and confirmation button
-                                <div className="space-y-4">
-                                    <div className="relative flex h-96 w-full max-w-[360px] items-center justify-center rounded-xl bg-white p-4 shadow-sm">
+                                // Manual QRIS card - simplified and clean layout
+                                <div className="rounded-xl bg-white p-4">
+                                    <div className="text-center text-xs font-bold uppercase tracking-wide text-[#F59E0B]">
+                                        QRIS AFA STORE
+                                    </div>
+
+                                    {/* QR Image */}
+                                    <div className="mx-auto my-3 flex h-80 w-full max-w-[320px] items-center justify-center rounded-lg bg-white p-4 shadow-sm ring-1 ring-[#184D47]/10">
                                         <Image
                                             src="/payment/qris-afa-store.jpg"
                                             alt="QRIS AFA STORE"
                                             width={300}
                                             height={300}
-                                            className="h-auto w-full rounded-lg object-contain"
+                                            className="h-auto w-full rounded object-contain"
                                             unoptimized
                                         />
                                     </div>
-                                    <div className="text-center">
-                                        <p className="text-xs font-bold uppercase tracking-wide text-[#F59E0B]">Penting</p>
-                                        <p className="mt-1 text-sm text-[#92400E]">Total pembayaran tertulis di bawah ini. Pastikan nominal yang dibayarkan sesuai.</p>
+
+                                    {/* Warning info */}
+                                    <p className="mb-3 text-center text-xs text-[#184D47]/70">
+                                        Scan QRIS menggunakan aplikasi bank atau e-wallet Anda.
+                                    </p>
+
+                                    {/* Total payment */}
+                                    <div className="mb-4 rounded-xl bg-[#FFF7ED] p-4 text-center">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-[#92400E]">Total Pembayaran</p>
+                                        <p className="mt-1 text-2xl font-black text-[#92400E]">{formatRupiah(order.total)}</p>
+                                        <p className="mt-1 text-xs text-[#92400E]/70">Pastikan nominal pembayaran sesuai.</p>
                                     </div>
-                                    <div className="rounded-xl bg-[#184D47] p-5 text-white shadow-lg">
-                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#184D47]/70">TOTAL PEMBAYARAN</p>
-                                        <p className="mt-2 text-3xl font-black">{formatRupiah(order.total)}</p>
-                                        <p className="mt-2 text-xs text-[#184D47]/70">Nominal otoritatif dari database</p>
+
+                                    {/* Verification status */}
+                                    <div className="mb-4 rounded-xl border border-[#F59E0B]/20 bg-[#FFFDF7] p-3">
+                                        <p className="text-xs font-bold text-[#92400E]">
+                                            ⚠ QRIS Manual — Menunggu Verifikasi
+                                        </p>
+                                        <p className="mt-1 text-xs text-[#92400E]/70">
+                                            Konfirmasi setelah pembayaran benar-benar diterima.
+                                        </p>
                                     </div>
-                                    {/* Manual confirmation button */}
+
+                                    {/* Confirmation button */}
                                     <QrisManualConfirmButton
                                         orderId={order.id}
                                         invoice={order.invoice}

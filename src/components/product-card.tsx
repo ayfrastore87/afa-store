@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, Check } from "lucide-react";
+import { Heart, Star, Check } from "lucide-react";
 import ProductImage from "./product-image";
 import type { Product } from "@/lib/products";
 import { formatRupiah } from "@/lib/products";
@@ -16,7 +16,6 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: ProductCardProps) {
-  const categoryClass = item.category === "Parcel" ? "bg-orange-100 text-orange-700" : item.category === "Bawang Goreng" ? "bg-emerald-100 text-emerald-700" : "bg-[#F8F5EE] text-[#8B6B3F]";
   const outOfStock = item.stock <= 0;
 
   return (
@@ -24,54 +23,117 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, scale: 1.01 }}
-      className="luxury-card product-card flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] text-[#2E2A26] transition-shadow duration-300 hover:shadow-lg"
+      className="luxury-card product-card flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] bg-white shadow-sm transition-all hover:shadow-xl border border-gray-100"
     >
-      <div className="relative aspect-[4/4.5] w-full overflow-hidden bg-gradient-to-br from-[#FFF8EA] via-white to-[#EFE6D5]">
-        <Link href={`/produk/${item.slug}`} aria-label={`Lihat detail ${item.name}`} className="group absolute inset-0 z-10 cursor-pointer p-4 md:p-5">
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.25, ease: "easeOut" }} className="flex h-full w-full items-center justify-center">
-            <ProductImage src={item.image} alt={item.name} sizes="(min-width: 1024px) 20vw, (min-width: 768px) 25vw, 45vw" />
-          </motion.div>
-        </Link>
-        
-        {item.badge && (
-          <b className="pointer-events-none absolute left-3 top-3 z-20 rounded-full bg-[#C8A45D] px-3 py-1.5 text-xs font-bold text-white shadow-sm">{item.badge}</b>
-        )}
-        
+      {/* IMAGE AREA */}
+      <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-[#FDF8F3] via-white to-[#FFF8F0]">
+        {/* Wishlist Button - Top Right */}
         <motion.button
-          whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.85 }}
+          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
           onClick={(e) => { e.preventDefault(); onWish?.(); }}
           aria-label={wish ? `Hapus ${item.name} dari wishlist` : `Tambah ${item.name} ke wishlist`}
-          className="absolute right-3 top-3 z-20 grid h-10 w-10 place-items-center rounded-full bg-white p-2.5 shadow-md transition-all hover:bg-[#FFF8EA]"
+          className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white p-2 shadow-md backdrop-blur-sm transition-all"
         >
-          <Heart fill={wish ? "#ef4444" : "none"} className={`h-5 w-5 ${wish ? "text-red-500" : "text-[#C8A45D]"}`} />
+          <Heart 
+            fill={wish ? "#ef4444" : "none"} 
+            className={`h-4.5 w-4.5 ${wish ? "text-red-500" : "text-[#C9A45B]"}`} 
+          />
         </motion.button>
+        
+        {/* Badges - Top Left */}
+        {item.badge && (
+          <span className="pointer-events-none absolute left-3 top-3 z-10 hidden rounded-lg bg-[#D4AF37] px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm sm:inline-block md:text-[10px]">
+            {item.badge}
+          </span>
+        )}
+        
+        {/* Product Image with Link */}
+        <Link href={`/produk/${item.slug}`} aria-label={`Lihat detail ${item.name}`} className="group relative flex h-full w-full items-center justify-center p-3 sm:p-4 md:p-5">
+          <ProductImage 
+            src={item.image} 
+            alt={item.name} 
+            sizes="(min-width: 1024px) 20vw, (min-width: 768px) 25vw, 45vw" 
+          />
+        </Link>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-4 pt-4">
-        <h3 className="product-card-title line-clamp-2 font-display text-base font-bold leading-tight md:text-lg lg:text-xl">
-          <Link href={`/produk/${item.slug}`} aria-label={`Lihat detail ${item.name}`} className="inline cursor-pointer rounded transition-colors duration-200 hover:text-[#8B6B3F] hover:underline">{item.name}</Link>
+      {/* PRODUCT INFO AREA */}
+      <div className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3">
+        {/* Product Name */}
+        <h3 className="font-display text-[11px] font-semibold leading-tight sm:text-xs md:text-sm lg:text-base xl:text-base">
+          <Link 
+            href={`/produk/${item.slug}`} 
+            aria-label={`Lihat detail ${item.name}`}
+            className="inline cursor-pointer rounded truncate transition-colors duration-200 hover:text-[#C9A45B] hover:underline line-clamp-2 min-h-[2.8rem]"
+          >
+            {item.name}
+          </Link>
         </h3>
 
+        {/* Variant/Size Badge */}
         {item.size && (
-          <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-[#F8F5EE] px-3 py-1 text-xs font-semibold text-[#8B6B3F]">{item.size}</span>
+          <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-[#F8F5EE] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[#8B6B3F] sm:text-[10px] md:text-xs">
+            {item.size}
+          </span>
         )}
 
-        <p className="text-sm text-[#C8A45D]">????? <span className="text-[#8B6B3F]">{item.rating > 0 ? item.rating.toFixed(1) : "Baru"}</span></p>
+        {/* Rating with Star Icon */}
+        {item.rating > 0 && (
+          <div className="flex items-center gap-1">
+            <Star size={12} className="shrink-0 text-[#C9A45B]" fill="#C9A45B" />
+            <span className="text-[10px] font-medium text-[#8B6B3F] sm:text-xs">{item.rating.toFixed(1)}</span>
+          </div>
+        )}
 
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-lg font-bold text-[#123524] sm:text-xl">{formatRupiah(item.price)}</p>
-          <span className={`rounded-full px-2.5 py-1.5 text-xs font-bold ${categoryClass}`}>{item.category}</span>
-        </div>
+        {/* Price - Clear and Bold */}
+        <p className="mt-auto whitespace-nowrap text-[13px] font-bold text-[#123524] sm:text-sm md:text-base lg:text-lg xl:text-base">
+          {formatRupiah(item.price)}
+        </p>
+      </div>
 
-        <div className="mt-auto flex flex-col gap-2.5 pt-3">
-          <button type="button" onClick={onAdd} disabled={outOfStock || addState === "adding" || addState === "added"} aria-busy={addState === "adding"} aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke keranjang`} className="inline-flex min-h-[42px] w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#C8A45D]/50 bg-white px-4 py-2.5 font-semibold text-[#8B6B3F] transition-all duration-200 hover:-translate-y-px hover:border-[#C8A45D]/80 hover:bg-[#FFF8EA] hover:shadow-sm active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:border-[#C8A45D]/50 disabled:hover:bg-transparent">
-            {addState === "adding" ? "Menambahkan..." : addState === "added" ? <> <Check size={16} aria-hidden="true" /> Ditambahkan</> : outOfStock ? "Stok Habis" : "+ Keranjang"}
+      {/* ACTION AREA */}
+      <div className="border-t border-gray-100 px-4 py-3">
+        <div className="flex flex-col gap-2">
+          {/* Add to Cart Button */}
+          <button 
+            type="button" 
+            onClick={onAdd} 
+            disabled={outOfStock || addState === "adding" || addState === "added"}
+            aria-busy={addState === "adding"}
+            aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke keranjang`}
+            className="group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#C9A45B]/30 bg-white px-4 py-2.5 text-[10px] font-semibold text-[#8B6B3F] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-sm active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/30 disabled:hover:bg-transparent sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
+          >
+            {addState === "adding" ? (
+              <>
+                <svg className="h-3.5 w-3.5 animate-spin text-[#C9A45B]" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Menambahkan...
+              </>
+            ) : addState === "added" ? (
+              <>
+                <Check size={14} className="text-green-600" />
+                Ditambahkan
+              </>
+            ) : outOfStock ? (
+              <span className="uppercase tracking-wide">Stok Habis</span>
+            ) : (
+              <>+ Keranjang</>
+            )}
           </button>
 
-          <button type="button" disabled={outOfStock} onClick={onBuy} className="min-h-[42px] w-full cursor-pointer rounded-full bg-[#123524] px-4 py-2.5 font-bold text-white transition-all duration-200 hover:-translate-y-px hover:bg-[#315d45] hover:shadow-lg active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9b9b91] disabled:hover:translate-y-0 disabled:hover:shadow-none">Beli Sekarang</button>
+          {/* Buy Now Button */}
+          <button 
+            type="button" 
+            disabled={outOfStock} 
+            onClick={onBuy}
+            className="group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#123524] px-4 py-2.5 text-[10px] font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-lg active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
+          >
+            Beli Sekarang
+          </button>
         </div>
       </div>
     </motion.article>
   );
 }
-

@@ -63,12 +63,12 @@ type Order = {
 type StockHistoryPayload = {
     product_id: string;
     product_name: string;
-    type: "IN" | "OUT" | "SALE" | "RETURN";
+    transaction_type: "IN" | "OUT" | "SALE" | "RETURN" | "ADJUSTMENT";
     quantity: number;
-    previous_stock: number;
-    new_stock: number;
+    stock_before: number;
+    stock_after: number;
     note: string;
-    admin: string;
+    created_by: string;
     order_id?: string;
 };
 
@@ -431,14 +431,43 @@ export default function AdminPage() {
     }
 
     async function updateStock(product: Product, delta: number) {
-        const nextStock = Math.max(0, Number(product.stock || 0) + delta);
+        const currentStock = Number(product.stock || 0);
+        const nextStock = Math.max(0, currentStock + delta);
+        
+        // Update local state immediately for responsive UI
         setProducts((items) => items.map((item) => (item.id === product.id ? { ...item, stock: nextStock } : item)));
-        const { error } = await supabase.from("products").update({ stock: nextStock }).eq("id", product.id);
-        if (error) {
-            console.error("updateStock", error);
-            toast(getUserFacingMessage(error, "Stok gagal diperbarui. Silakan coba lagi."), "error");
+        
+        // First: Update product stock
+        const { error: productError } = await supabase.from("products").update({ stock: nextStock }).eq("id", product.id);
+        
+        if (productError) {
+            console.error("updateStock", productError);
+            toast(getUserFacingMessage(productError, "Stok gagal diperbarui. Silakan coba lagi."), "error");
+            // Revert local state on failure
+            setProducts((items) => items.map((item) => (item.id === product.id ? { ...item, stock: currentStock } : item)));
+            return;
         }
-        else await saveStockHistory({ product_id: product.id, product_name: product.name, type: delta > 0 ? "IN" : "OUT", quantity: Math.abs(delta), previous_stock: Number(product.stock || 0), new_stock: nextStock, note: delta > 0 ? "Tambah stok admin" : "Kurangi stok admin", admin: adminEmail || "Admin AFA STORE" });
+        
+        // Second: Insert stock_history with correct column names
+        const historyPayload: StockHistoryPayload = {
+            product_id: product.id,
+            product_name: product.name,
+            transaction_type: delta > 0 ? "IN" : "OUT",
+            quantity: Math.abs(delta),
+            stock_before: currentStock,
+            stock_after: nextStock,
+            note: delta > 0 ? "Tambah stok admin" : "Kurangi stok admin",
+            created_by: adminEmail || "Admin AFA STORE",
+        };
+        
+        const { error: historyError } = await supabase.from("stock_history").insert(historyPayload);
+        
+        if (historyError) {
+            console.error("saveStockHistory", historyError);
+            toast("Riwayat stok gagal disimpan.", "info");
+            // Don't revert stock - the change was successful
+            // Just warn user about history insertion failure
+        }
     }
 
     async function updateOrderStatus(order: Order, status: string) {

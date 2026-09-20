@@ -166,7 +166,7 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],
         storeAddress: [
             "AFA STORE",
-            "Kota Cilegon",
+            "----------------------",
             "WA 087770000883",
             "afastore.online",
         ],

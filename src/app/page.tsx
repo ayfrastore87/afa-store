@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -202,8 +202,24 @@ export default function Home() {
   </main>;
 }
 function CategoryCluster({ groups, loading, onSelect }: { groups: { name: string; items: Product[] }[]; loading: boolean; onSelect: (category: string) => void }) {
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  
+  // Dynamic descriptions with fallback for new categories
+  const categoryDescriptions: Record<string, string> = {
+    "bawang goreng": "Gurih • Renyah",
+    "parcel": "Hadiah & bingkisan",
+  };
+
+  // Find representative product (first one with valid image or first available)
+  const getRepresentativeProduct = (items: Product[]) => {
+    return items.find(item => item.image && item.image.trim() !== "") ?? items[0];
+  };
+
   if (!loading && !groups.length) return null;
-  return <section aria-labelledby="category-cluster-title" className="category-cluster section-shell py-7 md:py-10"><div className="mb-7"><p className="text-xs font-extrabold uppercase tracking-[0.24em] text-[#A7833A]">Menu Belanja</p><h2 id="category-cluster-title" className="mt-2 font-display text-3xl font-bold sm:text-4xl">Pilih Kebutuhan Anda</h2><p className="mt-2 text-[var(--muted)]">Temukan produk AFA STORE sesuai kebutuhan Anda.</p></div><div className="flex gap-3 overflow-x-auto pb-2 sm:gap-4">{loading ? Array.from({ length: 2 }, (_, index) => <div key={index} className="skeleton min-h-52 rounded-[28px]" />) : groups.map((group) => { const normalized = group.name.toLowerCase(); const description = normalized === "bawang goreng" ? "Gurih • Renyah" : normalized === "parcel" ? "Hadiah & bingkisan" : "Pilihan produk AFA"; return <motion.button key={group.name} type="button" onClick={() => onSelect(group.name)} whileHover={{ y: -6 }} whileTap={{ scale: .98 }} className="category-menu-card group relative min-h-40 w-[220px] shrink-0 overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] p-4 text-left shadow-[0_16px_45px_rgba(18,53,36,0.10)] transition sm:min-h-44 sm:p-5"><div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[#C9A45B]/15 transition group-hover:scale-125" /><div className="relative mb-5 grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-[#F1E7D3] text-3xl sm:h-20 sm:w-20"><ProductImage src={group.items[0]?.image ?? null} alt="" sizes="80px" /></div><h3 className="relative break-words font-display text-lg font-black leading-tight sm:text-2xl">{group.name}</h3><p className="relative mt-2 text-sm text-[var(--muted)]">{description}</p><div className="relative mt-5 flex items-center justify-between gap-2 text-sm font-extrabold text-[#A7833A]"><span>Lihat Produk →</span><span className="rounded-full bg-[#123524] px-2.5 py-1 text-xs text-white">{group.items.length}</span></div></motion.button>; })}</div></section>;
+
+  const displayGroups = showAllCategories ? groups : groups.slice(0, 4);
+
+  return <section aria-labelledby="category-cluster-title" className="category-cluster section-shell py-7 md:py-10"><div className="mb-7"><p className="text-xs font-extrabold uppercase tracking-[0.24em] text-[#A7833A]">Menu Belanja</p><h2 id="category-cluster-title" className="mt-2 font-display text-3xl font-bold sm:text-4xl">Pilih Kebutuhan Anda</h2><p className="mt-2 text-[var(--muted)]">Temukan produk AFA STORE sesuai kebutuhan Anda.</p></div><div className="grid gap-5 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">{loading ? Array.from({ length: 4 }, (_, index) => <div key={index} className="skeleton min-h-72 lg:min-h-80 rounded-[28px]" />) : displayGroups.map((group) => { const normalized = group.name.toLowerCase(); const description = categoryDescriptions[normalized] ?? `${group.items.length} pilihan produk`; const representativeProduct = getRepresentativeProduct(group.items); const effectiveSrc = representativeProduct?.image || null; return <motion.button key={group.name} type="button" onClick={() => onSelect(group.name)} whileHover={{ y: -6 }} whileTap={{ scale: .98 }} className="category-menu-card group relative min-h-72 lg:min-h-80 w-full overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] p-4 text-left shadow-[0_16px_45px_rgba(18,53,36,0.10)] transition sm:min-h-44 lg:p-8"><div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[#C9A45B]/15 transition group-hover:scale-125" /><div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] items-start gap-4 pt-4"><div className="flex flex-col"><h3 className="text-lg sm:text-xl lg:text-2xl font-display font-black text-[#123524]"><span className="mr-2">✦</span>{group.name}</h3><p className="mt-1 text-sm text-[#8B6B3F]">{description}</p><div className="mt-4 flex items-center justify-between text-sm font-extrabold text-[#A7833A]"><span>Lihat Produk →</span><span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#123524] px-2.5 py-1 text-xs font-bold text-white">{group.items.length}</span></div></div><div className="relative min-h-[180px] sm:min-h-[200px] lg:min-h-[280px] w-full bg-gradient-to-br from-[#F8F5EE] to-[#EFE6D5] rounded-tl-[28px] rounded-br-[28px] rounded-tr-none rounded-bl-[28px] p-3"><ProductImage src={effectiveSrc} alt={`${group.name} category`} sizes="240px" /></div></div></motion.button>; })}</div>{groups.length > 4 && (<div className="mt-6 text-center"><button type="button" onClick={() => setShowAllCategories(!showAllCategories)} className="min-h-11 rounded-full bg-[#123524] px-8 py-3 font-bold text-white transition hover:bg-[#1a4d32]">{showAllCategories ? "Sembunyikan" : "Lihat Semua Kategori"}</button></div>)}</section>;
 }
 
 function ProductGrid({ loading, error, products, isWishlisted, toggleWishlist, addCart, addState, buyNow, onRetry, parcel = false }: { loading: boolean; error: string; products: Product[]; parcel?: boolean; isWishlisted: (id: string) => boolean; toggleWishlist: (item: Product) => void; addCart: (item: Product) => void; addState: Record<string, "adding" | "added">; buyNow: (item: Product) => void; onRetry: () => void }) {

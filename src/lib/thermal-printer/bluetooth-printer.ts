@@ -16,6 +16,27 @@ import type { ThermalPrinterProfile } from "./printer-types";
 // Marker so callers can distinguish direct-BLE from Classic/bridge paths.
 export type BluetoothConnectionKind = "BLE_DIRECT" | "CLASSIC_BRIDGE";
 
+// Known RPP02 printer UUIDs with priority order (all in lowercase short form)
+const RPP02_PRIORITY_SERVICES = [
+    { serviceUuid: "fee7", charUuid: "fec7" },  // Priority 1
+    { serviceUuid: "ff00", charUuid: "ff02" },  // Priority 2
+];
+
+// System services that should never be used for ESC/POS data (all in lowercase short form)
+const SYSTEM_SERVICE_UUIDS = new Set([
+    "1800",  // Generic Access Profile
+    "1801",  // Generic Attribute Profile
+    "180a",  // Device Information Service
+]);
+
+// Web Bluetooth service UUIDs requested explicitly so the browser
+// grants access to the RPP02 printer services after device selection.
+const KNOWN_PRINTER_SERVICES = [
+    0xfee7,   // RPP02 Priority 1 service
+    0xff00,   // RPP02 Priority 2 service
+    0x18f0,   // Compatibility fallback
+];
+
 export interface BluetoothConnection {
     kind: BluetoothConnectionKind;
     device: BluetoothDevice;
@@ -43,10 +64,55 @@ export async function requestBluetoothPrinter(): Promise<BluetoothDevice | null>
     if (!isBluetoothSupported()) {
         throw new Error("Browser tidak mendukung Bluetooth langsung.");
     }
-    // No filters: we accept any BLE device and discover its GATT services
-    // afterwards, because printer UUIDs differ widely between vendors.
-    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+    const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: KNOWN_PRINTER_SERVICES,
+    });
     return device ?? null;
+}
+
+// Private helper - used internally for UUID comparison
+// Exported for testing if needed
+export function normalizeUuid(uuid: string): string {
+    // Normalize to lowercase first
+    const normalized = uuid.toLowerCase();
+
+    // If already a clean 4-char hex string, return as-is
+    if (/^[0-9a-f]{4}$/.test(normalized)) {
+        return normalized;
+    }
+
+    // Try to extract 16-bit UUID from various canonical patterns
+    // Pattern 1: Canonical Bluetooth SIG base UUID: "0000XXXX-0000-1000-8000-00805F9B34FB"
+    // The 16-bit value (XXXX) appears at position 4-7 (chars after leading zeros)
+    const bluetoothSigBaseUuid = /^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/;
+    const sigMatch = normalized.match(bluetoothSigBaseUuid);
+    if (sigMatch && sigMatch[1]) {
+        return sigMatch[1];
+    }
+
+    // Pattern 2: Remove any leading zeros and "0x" prefix
+    const cleaned = normalized.replace(/^0x/, "").replace(/^0+/, "");
+
+    // Check if this looks like a canonical Bluetooth base UUID after cleanup
+    // e.g., "fee7-0000-1000-8000-00805f9b34fb" or just "fee7"
+    const simpleCanonicalPattern = /^([0-9a-f]{4})-[0-9a-f]{4}-1000-8000-00805f9b34fb$/;
+    const match = cleaned.match(simpleCanonicalPattern);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    // Fallback: try to find any 4-character hex sequence (should not normally happen for valid input)
+    const hexSequenceMatch = cleaned.match(/^[0-9a-f]{4}/);
+    if (hexSequenceMatch && hexSequenceMatch[0].length === 4) {
+        const fourChars = hexSequenceMatch[0];
+        if (/^[0-9a-f]{4}$/.test(fourChars)) {
+            return fourChars;
+        }
+    }
+
+    // If nothing matched, return original (will fail comparison, which is correct)
+    return normalized;
 }
 
 export async function connectBluetoothPrinter(device: BluetoothDevice): Promise<BluetoothConnection> {
@@ -56,7 +122,7 @@ export async function connectBluetoothPrinter(device: BluetoothDevice): Promise<
     const server = await device.gatt.connect();
 
     const services = await server.getPrimaryServices();
-    const characteristic = await findWritableCharacteristic(services);
+    const characteristic = await findWritableCharacteristic(services, device);
 
     if (!characteristic) {
         server.disconnect();
@@ -80,13 +146,17 @@ export async function connectBluetoothPrinter(device: BluetoothDevice): Promise<
  * tokens, or refresh tokens (this module never sees them).
  */
 export function logBluetoothDiagnostic(
-    device: BluetoothDevice,
+    serviceDevice: BluetoothDevice | undefined,
     characteristic: BluetoothRemoteGATTCharacteristic,
 ): void {
     if (typeof console === "undefined") return;
+
+    const printerName = serviceDevice?.name ?? null;
+    const printerId = serviceDevice?.id ?? null;
+
     console.debug("[thermal-printer] bluetooth diagnostic", {
-        printerName: device.name ?? null,
-        printerId: device.id,
+        printerName,
+        printerId,
         serviceUuid: characteristic.service.uuid,
         characteristicUuid: characteristic.uuid,
         write: characteristic.properties.write,
@@ -95,23 +165,85 @@ export function logBluetoothDiagnostic(
 }
 
 /**
+ * Normalize a Bluetooth UUID to its 16-bit short form.
+ *
+ * Web Bluetooth may return UUIDs in various formats:
+ * - Short hex: "fee7"
+ * - With prefix: "0xfee7", "0xFEE7"
+ * - Full canonical: "0000fee7-0000-1000-8000-00805f9b34fb"
+ * - Partial long: "ffe7-0000-1000-8000-00805f9b34fb"
+ *
+ * This helper extracts the 16-bit value for comparison against known printer UUIDs.
+ * For Bluetooth SIG base UUIDs (like fee7, ff00), the pattern is:
+ *   {16bit}-0000-1000-8000-00805f9b34fb (or similar)
+ */
+
+/**
+ * Check if a service UUID is a system service that should be excluded from ESC/POS data path.
+ */
+function isSystemService(uuid: string): boolean {
+    const normalized = normalizeUuid(uuid);
+    for (const sysUuid of SYSTEM_SERVICE_UUIDS) {
+        if (normalized === sysUuid.toLowerCase()) return true;
+    }
+    return false;
+}
+
+/**
  * Discover the first writable characteristic across all primary services.
+ *
+ * Priority order:
+ * 1. Known RPP02 services (FEE7/FEC7, FF00/FF02)
+ * 2. Generic writable characteristic from non-system services
+ *
  * Prefers `write` (reliable, acknowledged) over `writeWithoutResponse`, but
  * falls back to writeWithoutResponse when that is all the printer exposes.
- * UUIDs are discovered at runtime — none are hardcoded.
  */
 export async function findWritableCharacteristic(
     services: BluetoothRemoteGATTService[],
+    device?: BluetoothDevice,
 ): Promise<BluetoothRemoteGATTCharacteristic | null> {
-    for (const service of services) {
-        const characteristics = await service.getCharacteristics();
-        for (const characteristic of characteristics) {
-            const props = characteristic.properties;
-            if (props.write || props.writeWithoutResponse) {
-                return characteristic;
+
+    // Step 1: Try known RPP02 services in priority order
+    for (const known of RPP02_PRIORITY_SERVICES) {
+        try {
+            const service = services.find(s => normalizeUuid(s.uuid) === normalizeUuid(known.serviceUuid));
+            if (service) {
+                const characteristics = await service.getCharacteristics();
+                const targetChar = characteristics.find(c => normalizeUuid(c.uuid) === normalizeUuid(known.charUuid));
+                if (targetChar && (targetChar.properties.write || targetChar.properties.writeWithoutResponse)) {
+                    logBluetoothDiagnostic(device, targetChar);
+                    return targetChar;
+                }
             }
+        } catch (err) {
+            // Service exists but characteristic discovery failed - continue to next candidate
+            console.warn("[thermal-printer] Failed to discover characteristic on known service", known.serviceUuid, err);
         }
     }
+
+    // Step 2: Fall back to generic discovery (excluding system services)
+    for (const service of services) {
+        // Skip system services - never send ESC/POS to these
+        if (isSystemService(service.uuid)) {
+            continue;
+        }
+
+        try {
+            const characteristics = await service.getCharacteristics();
+            for (const characteristic of characteristics) {
+                const props = characteristic.properties;
+                if (props.write || props.writeWithoutResponse) {
+                    logBluetoothDiagnostic(device, characteristic);
+                    return characteristic;
+                }
+            }
+        } catch (err) {
+            // Characteristic discovery failed on this service - continue to next service
+            console.warn("[thermal-printer] Failed to get characteristics on service", service.uuid, err);
+        }
+    }
+
     return null;
 }
 

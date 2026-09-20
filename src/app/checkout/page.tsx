@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, X } from "lucide-react";
+import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, TriangleAlert, X } from "lucide-react";
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
@@ -70,6 +70,9 @@ type ProfileAddress = {
     latitude?: number | null;
     longitude?: number | null;
 };
+
+/** Track if Google Maps failed due to billing or other load errors */
+type MapsStatus = "loading" | "ready" | "unavailable";
 
 /**
  * Address derived from the CONFIRMED map point (reverse geocode) or from an
@@ -255,6 +258,9 @@ export default function CheckoutPage() {
     // detected even before React re-renders with the new state.
     const confirmedPinRef = useRef<DeliveryCoordinates | null>(null);
     const [mapOpen, setMapOpen] = useState(false);
+    
+    /** Track if Google Maps failed (billing error or other) */
+    const [mapsStatus, setMapsStatus] = useState<MapsStatus>("loading");
 
     // Biteship area auto-match + fallback search.
     const [areaState, setAreaState] = useState<AreaState>("idle");
@@ -332,6 +338,81 @@ export default function CheckoutPage() {
             if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
             areaAbortRef.current?.abort();
             reverseAbortRef.current?.abort();
+        };
+    }, []);
+
+    /** Detect when Google Maps fails due to billing or other errors */
+    useEffect(() => {
+        let unmounted = false;
+        
+        // Strategy 1: Listen for global errors including Google Maps API errors
+        const handleError = (event: ErrorEvent) => {
+            console.log('[Checkout] Detected error event:', {
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno
+            });
+            
+            // Check for BillingNotEnabledMapError or similar Google Maps billing errors
+            if (event.message && (
+                event.message.includes("BillingNotEnabled") || 
+                event.message.includes("google.maps") ||
+                event.message.includes("API key not valid")
+            )) {
+                console.log('[Checkout] Google Maps billing error detected');
+                if (!unmounted) setMapsStatus("unavailable");
+            }
+        };
+        
+        // Strategy 2: Check if google.maps exists but has billing issues
+        const checkGoogleMapsAvailability = () => {
+            if (typeof window !== "undefined" && !window.google?.maps) {
+                console.log('[Checkout] Google Maps API not available in window');
+                if (!unmounted) setMapsStatus("unavailable");
+            }
+        };
+        
+        // Strategy 3: Timeout-based detection
+        // Checkout requires both Maps core and Places library for full functionality
+        // If either is missing after timeout, assume unavailable
+        const checkTimer = setTimeout(() => {
+            if (!unmounted) {
+                const hasMaps = typeof window !== "undefined" && !!window.google?.maps;
+                const hasPlaces = typeof window !== "undefined" && !!window.google?.maps?.places;
+                const hasImportLibrary = typeof window.google?.maps?.importLibrary === 'function';
+                
+                console.log('[Checkout] Timeout check results:', {
+                    hasMaps,
+                    hasPlaces,
+                    hasImportLibrary
+                });
+                
+                // Fallback conditions:
+                // 1. No google.maps object at all → definitely unavailable
+                // 2. Has google.maps but no places and no importLibrary → Places won't load → unavailable
+                // 3. Billing error detected → unavailable
+                
+                const isMapsMissing = !hasMaps;
+                const isPlacesAndImportLibraryMissing = hasMaps && !hasPlaces && !hasImportLibrary;
+                const billingFailed = mapsStatus === "unavailable";
+                
+                if (isMapsMissing || isPlacesAndImportLibraryMissing || billingFailed) {
+                    console.log('[Checkout] Setting mapsStatus to unavailable based on timeout check');
+                    setMapsStatus("unavailable");
+                } else {
+                    console.log('[Checkout] Maps seems functional, continuing...');
+                }
+            }
+        }, 8000); // 8 second timeout
+        
+        window.addEventListener("error", handleError);
+        checkGoogleMapsAvailability();
+        
+        return () => {
+            unmounted = true;
+            clearTimeout(checkTimer);
+            window.removeEventListener("error", handleError);
         };
     }, []);
 
@@ -918,8 +999,21 @@ export default function CheckoutPage() {
                             )}
                         </Panel>
 
-                        <Panel title="1 · Pilih Lokasi di Peta">
-                            {confirmedLocation === null ? (
+                        <Panel title={mapsStatus === "unavailable" ? "1 · Isi Alamat Manual" : "1 · Pilih Lokasi di Peta"}>
+                            {mapsStatus === "unavailable" ? (
+                                <div className="rounded-2xl border border-[#8B6B3F]/30 bg-[#FFF2D6] p-5 text-center">
+                                    <TriangleAlert size={28} className="mx-auto text-[#8B6B3F]" />
+                                    <h3 className="mt-2 font-display text-lg font-bold text-[#123524]">Peta Google Tidak Tersedia</h3>
+                                    <p className="mt-1 text-sm text-[#6D6558]">Layanan peta sedang tidak aktif. Silakan isi alamat pengiriman secara manual.</p>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => switchMode("other")}
+                                        className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#184D47] px-5 text-sm font-bold text-white hover:bg-[#123524] sm:w-auto sm:px-8"
+                                    >
+                                        <MapPin size={16} /> Mulai Isi Alamat Manual
+                                    </button>
+                                </div>
+                            ) : confirmedLocation === null ? (
                                 <div className="rounded-2xl border border-[#C9A45B]/30 bg-white p-5 text-center">
                                     <MapPin size={28} className="mx-auto text-[#184D47]" />
                                     <h3 className="mt-2 font-display text-lg font-bold text-[#123524]">Pilih Lokasi Pengiriman</h3>
@@ -958,11 +1052,34 @@ export default function CheckoutPage() {
                         </Panel>
 
                         <Panel title="Data Penerima">
+                            {mapsStatus === "unavailable" && (
+                                <div className="mb-4 rounded-xl border border-[#C9A45B]/30 bg-[#FFF2D6] p-3">
+                                    <p className="text-xs font-bold text-[#8B6B3F]">⚠️ PETA GOOGLE TIDAK TERSEDIA</p>
+                                    <p className="mt-1 text-xs text-[#6D6558]">Karena API kunci Google Maps tidak aktif, silakan isi alamat manual secara lengkap.</p>
+                                </div>
+                            )}
+                            
                             <div className="grid gap-3">
                                 <div className="grid gap-3 sm:grid-cols-2">
                                     <Field label="Nama Penerima *" value={form.recipientName} onChange={(v) => update("recipientName", v)} placeholder={RECIPIENT_NAME_PLACEHOLDER} />
                                     <Field label="Nomor HP *" value={form.phone} onChange={(v) => update("phone", v)} placeholder={RECIPIENT_PHONE_PLACEHOLDER} />
                                 </div>
+                                
+                                {/* Manual address field for when map is unavailable */}
+                                {mapsStatus === "unavailable" && (
+                                    <>
+                                        <Field 
+                                            label="Alamat Lengkap (Jalan, No., Blok, Patokan) *" 
+                                            value={form.addressDetail} 
+                                            onChange={(v) => update("addressDetail", v)} 
+                                            placeholder="Contoh: Jl. Sudirman No. 123, Blok C2, de minimarket" 
+                                        />
+                                        <p className="text-xs text-[#6D6558] flex items-center gap-1">
+                                            <TriangleAlert size={12} />
+                                            Sistem akan mencari kecamatan dan kota berdasarkan alamat yang Anda isi menggunakan Biteship area matching.
+                                        </p>
+                                    </>
+                                )}
 
                                 {/* The street line and the administrative components come from the
                                     confirmed map pin / Biteship area. Only the customer's own

@@ -82,4 +82,6 @@ export interface ReceiptData {
     /** PENGIRIMAN block. Optional: only a delivery order sets it. */
     delivery?: ReceiptDeliveryData | null;
     footer: string[];
+    /** Store identity information (address, WA, website). Printed centered at top. */
+    storeAddress?: string[] | null;
 }

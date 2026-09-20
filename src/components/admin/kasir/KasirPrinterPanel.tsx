@@ -164,5 +164,13 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
               }
             : null,
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],
+        storeAddress: [
+            "AFA STORE",
+            "Komp. Griya Praja Mandiri",
+            "Blok C6 No. 6",
+            "Cibeber, Kota Cilegon",
+            "WA 087770000883",
+            "afastore.online",
+        ],
     };
 }

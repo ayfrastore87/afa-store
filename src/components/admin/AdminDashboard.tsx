@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { BarChart3, Boxes, Camera, CheckCircle2, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
+import { BarChart3, Boxes, CheckCircle2, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
@@ -60,7 +60,7 @@ type Order = {
     items?: OrderItemWithProduct[];
 };
 
-type StockHistoryPayload = {
+type _StockHistoryPayload = {
     product_id: string;
     product_name: string;
     transaction_type: "IN" | "OUT" | "SALE" | "RETURN" | "ADJUSTMENT";
@@ -244,19 +244,12 @@ function toast(title: string, icon: "success" | "error" | "info" = "success") {
     void Swal.fire({ toast: true, position: "top-end", timer: 2200, showConfirmButton: false, icon, title });
 }
 
-function storagePathFromPublicUrl(url: string | null | undefined, bucket: string) {
+// Helper function to convert public URL to storage path (not currently used)
+function _storagePathFromPublicUrl(url: string | null | undefined, bucket: string) {
     if (!url) return null;
     const marker = `/storage/v1/object/public/${bucket}/`;
     const index = url.indexOf(marker);
     return index >= 0 ? decodeURIComponent(url.slice(index + marker.length)) : null;
-}
-
-async function saveStockHistory(payload: StockHistoryPayload) {
-    const { error } = await supabase.from("stock_history").insert(payload);
-    if (error) {
-        console.error("saveStockHistory", error);
-        toast("Riwayat stok gagal disimpan.", "info");
-    }
 }
 
 export default function AdminPage() {
@@ -274,6 +267,8 @@ export default function AdminPage() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [detailOrder, setDetailOrder] = useState<Order | null>(null);
     const [couriers, setCouriers] = useState<string[]>(DEFAULT_COURIERS);
+    // New state for tracking pending stock adjustments per product
+    const [pendingProductIds, setPendingProductIds] = useState<Set<string>>(new Set());
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -431,42 +426,58 @@ export default function AdminPage() {
     }
 
     async function updateStock(product: Product, delta: number) {
-        const currentStock = Number(product.stock || 0);
-        const nextStock = Math.max(0, currentStock + delta);
-        
-        // Update local state immediately for responsive UI
-        setProducts((items) => items.map((item) => (item.id === product.id ? { ...item, stock: nextStock } : item)));
-        
-        // First: Update product stock
-        const { error: productError } = await supabase.from("products").update({ stock: nextStock }).eq("id", product.id);
-        
-        if (productError) {
-            console.error("updateStock", productError);
-            toast(getUserFacingMessage(productError, "Stok gagal diperbarui. Silakan coba lagi."), "error");
-            // Revert local state on failure
-            setProducts((items) => items.map((item) => (item.id === product.id ? { ...item, stock: currentStock } : item)));
-            return;
-        }
-        
-        // Second: Insert stock_history with correct column names
-        const historyPayload: StockHistoryPayload = {
-            product_id: product.id,
-            product_name: product.name,
-            transaction_type: delta > 0 ? "IN" : "OUT",
-            quantity: Math.abs(delta),
-            stock_before: currentStock,
-            stock_after: nextStock,
-            note: delta > 0 ? "Tambah stok admin" : "Kurangi stok admin",
-            created_by: adminEmail || "Admin AFA STORE",
-        };
-        
-        const { error: historyError } = await supabase.from("stock_history").insert(historyPayload);
-        
-        if (historyError) {
-            console.error("saveStockHistory", historyError);
-            toast("Riwayat stok gagal disimpan.", "info");
-            // Don't revert stock - the change was successful
-            // Just warn user about history insertion failure
+        // Prevent multiple simultaneous requests for same product
+        if (pendingProductIds.has(product.id)) return;
+
+        // Add to pending set - disable buttons for this product
+        setPendingProductIds((prev) => new Set(prev).add(product.id));
+
+        try {
+            // Call server endpoint instead of direct DB write
+            const response = await fetch(`/api/admin/products/${product.id}/stock`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ delta }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                // Handle specific stock_zero case
+                if ("reason" in errorData && errorData.reason === "stock_zero") {
+                    toast(errorData.message || "Stok sudah nol, tidak dapat dikurangi.", "info");
+                    return;
+                }
+
+                toast(errorData.message || "Gagal memperbarui stok.", "error");
+                return;
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                // Update local state with SERVER RESPONSE value
+                setProducts((items) =>
+                    items.map((item) =>
+                        item.id === product.id ? { ...item, stock: result.newStock } : item
+                    )
+                );
+                toast("Stok berhasil diperbarui.");
+            } else {
+                toast(result.message || "Gagal memperbarui stok.", "error");
+            }
+        } catch (error) {
+            console.error("updateStock error:", error);
+            toast("Terjadi kesalahan pada koneksi server.", "error");
+        } finally {
+            // Remove from pending regardless of success/error
+            setPendingProductIds((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(product.id);
+                return newSet;
+            });
         }
     }
 
@@ -554,7 +565,7 @@ export default function AdminPage() {
                     {loading ? <Skeleton /> : (
                         <div className="mt-6 space-y-6">
                             {activeTab === "home" && <HomePanel summary={summary} adminEmail={adminEmail} />}
-                            {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} />}
+                            {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} _isPendingProduct={pendingProductIds.has} />}
                             {activeTab === "stock" && <StockPanel />}
                             {activeTab === "add" && <ProductFormPanel form={form} categories={categories} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUpload={uploadImage} onCancel={() => setForm(emptyForm)} />}
                             {activeTab === "orders" && <OrdersPanel orders={orders} onStatus={updateOrderStatus} onDetail={setDetailOrder} />}
@@ -614,7 +625,13 @@ function HomePanel({ summary, adminEmail }: { summary: { products: number; stock
     return <div className="space-y-5"><section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">{items.map((item, index) => <motion.div key={item.label} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: index * 0.04 }} className="min-w-0 rounded-[24px] bg-gradient-to-br from-white/95 via-white/80 to-[#D4AF37]/20 p-4 shadow-xl shadow-[#184D47]/10 ring-1 ring-white/70"><div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-[#0F4C45] text-[#D4AF37]"><item.icon size={20} /></div><p className="text-xs font-black uppercase tracking-wide text-[#184D47]/55">{item.label}</p><p className="mt-2 break-words text-2xl font-black leading-tight text-[#184D47] sm:text-3xl"><CountUp value={item.value} money={item.money} /></p></motion.div>)}</section><Card><div className="mb-4 flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.25em] text-[#D4AF37]">Quick Action</p><h3 className="text-2xl font-black">Aksi Cepat</h3></div><span className="rounded-full bg-[#0F4C45]/10 px-3 py-2 text-xs font-black">Realtime</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">{actions.map((action) => <Link key={action.label} href={action.href} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-3xl bg-[#f8f0dd] p-3 text-center font-black shadow-sm transition duration-200 hover:-translate-y-1 hover:bg-[#D4AF37] active:scale-95"><action.icon size={22} />{action.label}</Link>)}</div></Card><Card><p className="font-bold">Akun Admin</p><p className="mt-2 break-all text-[#184D47]/70">Login sebagai {adminEmail}</p></Card></div>;
 }
 
-function ProductsPanel({ products, onEdit, onDelete, onStock }: { products: Product[]; onEdit: (product: Product) => void; onDelete: (product: Product) => void; onStock: (product: Product, delta: number) => void }) {
+function ProductsPanel({ products, onEdit, onDelete, onStock, _isPendingProduct }: { 
+    products: Product[]; 
+    onEdit: (product: Product) => void; 
+    onDelete: (product: Product) => void; 
+    onStock: (product: Product, delta: number) => void;
+    _isPendingProduct: (productId: string) => boolean 
+}) {
     if (!products.length) return <Card><EmptyState title="Belum ada produk" text="Tambahkan produk pertama agar tampil di katalog AFA STORE." action="Tambah Produk" href="/admin/products/new" /></Card>;
     return <Card><div className="mb-5 flex items-center justify-between"><h3 className="text-2xl font-black">Produk</h3><span className="rounded-full bg-[#C8A14A]/20 px-4 py-2 text-sm font-bold">{products.length} item</span></div><div className="hidden overflow-x-auto lg:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-[#184D47]/50"><tr>{["Produk", "Harga", "Stok", "Status", "Aksi"].map((head) => <th key={head} className="p-3">{head}</th>)}</tr></thead><tbody>{products.map((product) => <tr key={product.id} className="border-t border-[#184D47]/10"><td className="flex items-center gap-3 p-3"><Image src={product.image || "/window.svg"} alt={product.name} width={56} height={56} className="h-14 w-14 rounded-2xl object-cover" unoptimized /><div><p className="font-black">{product.name}</p><p className="text-xs text-[#184D47]/55">{product.slug}</p></div></td><td className="p-3 font-black">{rupiah.format(product.price)}</td><td className="p-3 font-bold">{product.stock}</td><td className="p-3"><StatusBadge active={product.isActive} /></td><td className="p-3"><ActionButtons product={product} onEdit={onEdit} onDelete={onDelete} /></td></tr>)}</tbody></table></div><div className="grid gap-3 lg:hidden">{products.map((product) => <motion.article key={product.id} whileTap={{ scale: 0.98 }} className="rounded-[24px] border border-[#184D47]/10 bg-white p-3 shadow-lg shadow-[#184D47]/5"><div className="flex gap-3"><Image src={product.image || "/window.svg"} alt={product.name} width={84} height={84} className="h-24 w-24 shrink-0 rounded-[20px] object-cover" unoptimized /><div className="min-w-0 flex-1"><h4 className="line-clamp-2 font-black leading-tight">{product.name}</h4><p className="mt-1 text-lg font-black text-[#0F4C45]">{rupiah.format(product.price)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black">Stok {product.stock}</span><StatusBadge active={product.isActive} /></div></div></div><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => onEdit(product)} className="min-h-12 rounded-2xl bg-[#0F4C45] font-black text-white active:scale-95"><Edit3 className="mr-2 inline" size={16} />Edit</button><button onClick={() => void onDelete(product)} className="min-h-12 rounded-2xl bg-red-600 font-black text-white active:scale-95"><Trash2 className="mr-2 inline" size={16} />Hapus</button></div><div className="mt-3 flex items-center justify-between rounded-2xl bg-[#f8f0dd] p-2"><button onClick={() => void onStock(product, -1)} className="h-12 w-12 rounded-2xl bg-white font-black">-</button><span className="text-xl font-black">{product.stock}</span><button onClick={() => void onStock(product, 1)} className="h-12 w-12 rounded-2xl bg-white font-black">+</button></div></motion.article>)}</div></Card>;
 }
@@ -625,6 +642,33 @@ function StatusBadge({ active }: { active: boolean }) {
 
 function ActionButtons({ product, onEdit, onDelete }: { product: Product; onEdit: (product: Product) => void; onDelete: (product: Product) => void }) {
     return <div className="flex gap-2"><button onClick={() => onEdit(product)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#184D47] text-white transition active:scale-95"><Edit3 size={17} /></button><button onClick={() => void onDelete(product)} className="grid h-12 w-12 place-items-center rounded-2xl bg-red-600 text-white transition active:scale-95"><Trash2 size={17} /></button></div>;
+}
+
+// Stock adjustment UI component (for future implementation)
+function _StockAdjustmentButtons({ product, onStock, isPending }: { product: Product; onStock: (product: Product, delta: number) => void; isPending: boolean }) {
+    const pending = isPending && product.id !== undefined;
+    
+    return (
+        <div className="flex items-center gap-1">
+            <button
+                onClick={() => onStock(product, -1)}
+                disabled={pending}
+                className="h-10 min-w-10 grid place-items-center rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Kurangi stok"
+            >
+                −
+            </button>
+            <span className="min-w-8 text-center font-black">{product.stock}</span>
+            <button
+                onClick={() => onStock(product, 1)}
+                disabled={pending}
+                className="h-10 min-w-10 grid place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Tambah stok"
+            >
+                +
+            </button>
+        </div>
+    );
 }
 
 function ProductFormPanel({ form, categories, saving, onChange, onSubmit, onUpload, onCancel }: { form: ProductForm; categories: { id: string; name: string }[]; saving: boolean; onChange: (field: keyof ProductForm, value: string | boolean) => void; onSubmit: (event: FormEvent) => void; onUpload: (file: File) => void; onCancel: () => void }) {

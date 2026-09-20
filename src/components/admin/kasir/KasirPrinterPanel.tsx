@@ -150,25 +150,23 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
         shippingLabel: delivery && delivery.shipping > 0 ? formatRupiah(delivery.shipping) : null,
         delivery: delivery
             ? {
-                  recipientName: delivery.recipientName || "-",
-                  recipientPhone: delivery.recipientPhone || "-",
-                  address: delivery.address || "-",
-                  courier: delivery.courier,
-                  service: delivery.service,
-                  // Printed only when the integration really returned a resi / tracking id.
-                  trackingId: delivery.trackingId,
-                  shippingLabel: formatRupiah(delivery.shipping),
-                  // Latest PERSISTED normalized status, so a reprint after a tracking
-                  // update carries the current state and never a stale one.
-                  status: delivery.status.label,
-              }
+                recipientName: delivery.recipientName || "-",
+                recipientPhone: delivery.recipientPhone || "-",
+                address: delivery.address || "-",
+                courier: delivery.courier,
+                service: delivery.service,
+                // Printed only when the integration really returned a resi / tracking id.
+                trackingId: delivery.trackingId,
+                shippingLabel: formatRupiah(delivery.shipping),
+                // Latest PERSISTED normalized status, so a reprint after a tracking
+                // update carries the current state and never a stale one.
+                status: delivery.status.label,
+            }
             : null,
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],
         storeAddress: [
             "AFA STORE",
-            "Komp. Griya Praja Mandiri",
-            "Blok C6 No. 6",
-            "Cibeber, Kota Cilegon",
+            "Kota Cilegon",
             "WA 087770000883",
             "afastore.online",
         ],

@@ -1052,12 +1052,16 @@ export default function CheckoutPage() {
                         </Panel>
 
                         <Panel title="Data Penerima">
-                            {mapsStatus === "unavailable" && (
+                            {/* REMOVED: Google Maps warning - not applicable for Biteship-only checkout */}
+                            /**
+                             {mapsStatus === "unavailable" && (
                                 <div className="mb-4 rounded-xl border border-[#C9A45B]/30 bg-[#FFF2D6] p-3">
                                     <p className="text-xs font-bold text-[#8B6B3F]">⚠️ PETA GOOGLE TIDAK TERSEDIA</p>
                                     <p className="mt-1 text-xs text-[#6D6558]">Karena API kunci Google Maps tidak aktif, silakan isi alamat manual secara lengkap.</p>
                                 </div>
-                            )}
+                             )}
+                            **/
+                            // Manual address field for when map is unavailable - now always shown as fallback
                             
                             <div className="grid gap-3">
                                 <div className="grid gap-3 sm:grid-cols-2">
@@ -1065,25 +1069,8 @@ export default function CheckoutPage() {
                                     <Field label="Nomor HP *" value={form.phone} onChange={(v) => update("phone", v)} placeholder={RECIPIENT_PHONE_PLACEHOLDER} />
                                 </div>
                                 
-                                {/* Manual address field for when map is unavailable */}
-                                {mapsStatus === "unavailable" && (
-                                    <>
-                                        <Field 
-                                            label="Alamat Lengkap (Jalan, No., Blok, Patokan) *" 
-                                            value={form.addressDetail} 
-                                            onChange={(v) => update("addressDetail", v)} 
-                                            placeholder="Contoh: Jl. Sudirman No. 123, Blok C2, de minimarket" 
-                                        />
-                                        <p className="text-xs text-[#6D6558] flex items-center gap-1">
-                                            <TriangleAlert size={12} />
-                                            Sistem akan mencari kecamatan dan kota berdasarkan alamat yang Anda isi menggunakan Biteship area matching.
-                                        </p>
-                                    </>
-                                )}
-
-                                {/* The street line and the administrative components come from the
-                                    confirmed map pin / Biteship area. Only the customer's own
-                                    detail (blok / nomor / RT-RW / patokan) is typed here. */}
+                                {/* Address Detail field - now always visible */}
+                                {/* The street line and administrative components come from confirmed map pin / Biteship area. Only the customer's own detail (blok/RT-RW/patokan) is typed here. */}
                                 <Field label="Detail Alamat (Blok / No. / RT-RW / Patokan)" value={form.addressDetail} onChange={(v) => update("addressDetail", v)} placeholder={ADDRESS_DETAIL_PLACEHOLDER} />
 
                                 <div className="rounded-xl border border-[#C9A45B]/30 bg-[#F8F5EE] p-3">

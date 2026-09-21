@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Reusable ESC/POS encoder for AFA STORE thermal printing.
 //
 // Framework-agnostic and transport-agnostic: produces a `Uint8Array` that can
@@ -12,7 +12,7 @@
 //   GS !    character size (width/height doubling)
 //   LF      line feed
 //   ESC d   feed n lines
-//   GS V    cut (partial) â€” emitted only when `profile.enableCut` is true
+//   GS V    cut (partial) — emitted only when `profile.enableCut` is true
 // ---------------------------------------------------------------------------
 
 import type {
@@ -31,6 +31,13 @@ const ALIGN: Record<TextAlign, number> = {
     right: 0x02,
 };
 
+// GS ! size byte: high nibble = width scale-1, low nibble = height scale-1.
+const SIZE = {
+    normal: 0x00,
+    doubleWidth: 0x10,
+    doubleHeight: 0x01,
+    doubleBoth: 0x11,
+} as const;
 
 const encoder = new TextEncoder();
 
@@ -146,6 +153,9 @@ function cmdBold(on: boolean): Uint8Array {
     return new Uint8Array([ESC, 0x45, on ? 1 : 0]); // ESC E n
 }
 
+function cmdSize(size: number): Uint8Array {
+    return new Uint8Array([GS, 0x21, size]); // GS ! n
+}
 
 function cmdFeed(lines: number): Uint8Array {
     return new Uint8Array([ESC, 0x64, lines & 0xff]); // ESC d n
@@ -164,7 +174,6 @@ function dividerLine(width: number): string {
     return "-".repeat(width);
 }
 
-
 // ---------------------------------------------------------------------------
 // Receipt assembly.
 // ---------------------------------------------------------------------------
@@ -172,28 +181,28 @@ function dividerLine(width: number): string {
 /**
  * Build the full receipt as a `Uint8Array` of ESC/POS bytes. The layout mirrors
  * the existing AFA STORE browser receipt exactly:
- * store header â†’ meta â†’ items â†’ totals â†’ payment â†’ footer.
+ * store header → meta → items → totals → payment → footer.
  */
 export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile): Uint8Array {
     const width = profile.charactersPerLine;
     const chunks: Uint8Array[] = [cmdInitialize()];
 
-    // Store header from ReceiptData.
+    // Store header (centered, double width/height).
+    chunks.push(cmdAlign("center"), cmdSize(SIZE.doubleBoth));
+    chunks.push(cmdLine(formatReceiptLine(data.storeName, width, "center")));
+    chunks.push(cmdSize(SIZE.normal), cmdAlign("left"));
+
+    // Store address lines (centered) when provided.
     if (data.storeAddress && data.storeAddress.length > 0) {
         chunks.push(cmdAlign("center"));
-
-        for (let i = 0; i < data.storeAddress.length; i++) {
-            const line = data.storeAddress[i];
-
-            if (i === 0) chunks.push(cmdBold(true));
+        for (const line of data.storeAddress) {
             chunks.push(cmdLine(formatReceiptLine(line, width, "center")));
-            if (i === 0) chunks.push(cmdBold(false));
         }
-
         chunks.push(cmdFeed(1));
-        chunks.push(cmdLine(dividerLine(width)));
         chunks.push(cmdAlign("left"));
     }
+
+    chunks.push(cmdLine(dividerLine(width)));
 
     // Meta block.
     const meta: Array<[string, string]> = [
@@ -221,7 +230,7 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
     chunks.push(cmdLine(dividerLine(width)));
 
     // Totals. Ongkir is printed between the subtotal and the total ONLY when the
-    // order really carries a shipping charge (delivery) â€” a pickup order never shows it.
+    // order really carries a shipping charge (delivery) — a pickup order never shows it.
     for (const line of formatColumns("Subtotal", data.subtotalLabel, width)) {
         chunks.push(cmdLine(line));
     }
@@ -255,7 +264,7 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
         }
     }
 
-    // PENGIRIMAN block (delivery orders only). Public data only â€” never an area id,
+    // PENGIRIMAN block (delivery orders only). Public data only — never an area id,
     // quote ref, provider order id or coordinate. The address wraps at the full width.
     if (data.delivery) {
         const delivery = data.delivery;

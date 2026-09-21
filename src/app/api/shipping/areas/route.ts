@@ -30,10 +30,18 @@ export async function GET(request: Request) {
         }
         return NextResponse.json({ success: true, areas });
     } catch (error) {
+        // Sanitized diagnostics only: the failure TAXONOMY, never the API key, token,
+        // Authorization header, cookies or customer data. `code` is
+        // "CONFIGURATION" | "UPSTREAM" so an operator can tell a missing/invalid
+        // provider key (CONFIGURATION -> nothing was even sent upstream) apart from a
+        // transient upstream outage (UPSTREAM). The raw upstream HTTP status/body is
+        // logged one layer down in biteship.ts (`biteship_request_failed`).
         if (error instanceof BiteshipUnavailableError) {
+            console.error("shipping_areas_unavailable", { path: "/v1/maps/areas", code: error.code, kind: error.kind, message: error.message });
             return NextResponse.json({ message: error.message }, { status: 503 });
         }
         if (error instanceof BiteshipError) {
+            console.error("shipping_areas_rejected", { path: "/v1/maps/areas", kind: error.kind, message: error.message });
             return NextResponse.json({ message: error.message }, { status: 400 });
         }
         console.error("shipping_areas_failed", { message: error instanceof Error ? error.message : String(error) });

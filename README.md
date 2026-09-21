@@ -43,21 +43,32 @@ is the only place where the required variable names are documented.
 
 | Variable | Purpose |
 | --- | --- |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser key for the checkout location picker (Google Maps JavaScript API + Places API "New"). The key is read by `src/lib/google-maps-loader.ts`, is never logged, and never appears in markup. |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | **Required for checkout location picker**. Browser key for Google Maps JavaScript API + Places API "New" + Geocoding API. The key is read by `src/lib/google-maps-loader.ts`, is never logged, and never appears in markup. |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase client. |
 | `DATABASE_URL`, `DIRECT_URL` | Prisma database connections (server-only). |
 | `MIDTRANS_SERVER_KEY`, `MIDTRANS_MERCHANT_ID`, `MIDTRANS_IS_PRODUCTION`, `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` | Midtrans payments. |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | Support / order follow-up contact. |
 
-### Google Maps key requirements
+### 🗺️ Google Maps API Setup (Quick Start)
 
-The checkout location picker needs a **browser** key that is restricted:
+**The location map WILL NOT work without this key configured!**
 
-- Application restriction: **Websites** — add the production domain and
-  `http://localhost:3000/*` for local development.
-- API restriction: **Maps JavaScript API** and **Places API (New)** only. The reverse
-  geocoding done by the picker runs through the same Maps JavaScript API `Geocoder`.
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create a new project or select existing one
+3. Enable these APIs:
+   - **Maps JavaScript API**
+   - **Places API**
+   - **Geocoding API**
+4. Create credentials → **API key**
+5. Restrict the API key:
+   - **Application restriction**: Add your domains (e.g., `https://yourstore.vercel.app`) and `http://localhost:3000/*` for local dev
+   - **API restriction**: Select only Maps JavaScript API, Places API, and Geocoding API
+6. Copy the API key and add it to your `.env` or `.env.local`:
 
-Without the variable the picker degrades safely: the map shows "Peta belum dikonfigurasi"
-and customers can still type the address manually and pick the kecamatan/kelurahan, so
-checkout never breaks and no address is ever invented.
+```bash
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyD...your-actual-api-key-here
+```
+
+7. Restart your development server if it's running
+
+**Without the key**, the picker shows "Peta belum dikonfigurasi. Hubungi admin AFA STORE." but customers can still manually type their address.

@@ -265,15 +265,13 @@ export function mustInvalidateShipping(previousSignature: string, nextSignature:
 export const MIN_FORMATTED_ADDRESS_LENGTH = 5;
 
 /**
- * A destination may only be used for checkout when it has a formatted address
- * and a valid Biteship destinationAreaId. Coordinates are optional metadata.
+ * A destination may only be used for checkout when it has a formatted address,
+ * a real Biteship `destinationAreaId` and a valid (full precision) pin.
  */
 export function isValidDeliveryLocation(location: DeliveryLocation | null | undefined): boolean {
     if (!location) return false;
-    // Only require one of: valid pin OR valid areaId (areaId-only is acceptable for manual entry)
-    const hasPin = pinSignature(location);
-    const hasAreaId = cleanFieldValue(location.destinationAreaId);
-    if (!hasPin && !hasAreaId) return false;
+    if (!pinSignature(location)) return false;
+    if (!cleanFieldValue(location.destinationAreaId)) return false;
     return cleanFieldValue(location.formattedAddress).length >= MIN_FORMATTED_ADDRESS_LENGTH;
 }
 

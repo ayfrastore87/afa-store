@@ -78,7 +78,7 @@ export function QrisManualConfirmButton({ orderId, invoice, onConfirm }: Props) 
             )}
 
             <p className="mt-2 text-xs text-[#184D47]/60">
-                Invoice #{invoice} • Status: {invoice.toUpperCase()}
+                Invoice #{invoice} • Status: {success ? "Terverifikasi" : "Menunggu Verifikasi"}
             </p>
         </div>
     );

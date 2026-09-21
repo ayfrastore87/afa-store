@@ -1,14 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
 import {
     AlertCircle,
     ArrowLeft,
     Banknote,
-    Clock,
     Loader2,
     Printer,
     QrCode,
@@ -37,6 +35,7 @@ import KasirPrinterPanel from "./KasirPrinterPanel";
 import KasirShipmentActions from "./KasirShipmentActions";
 import KasirDeliveryTimeline from "./KasirDeliveryTimeline";
 import { QrisManualConfirmButton } from "./qris-manual-confirm-button";
+import { QrisPayment } from "@/components/payment/QrisPayment";
 
 // TAHAP D: detail transaksi terhubung ke GET /api/admin/kasir/orders/[id].
 // TAHAP E: satu tombol "Print" menjalankan alur cetak terpadu (BLE via
@@ -406,66 +405,32 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                             ) : order.qrisProvider === "MANUAL" &&
                                ["PENDING", "WAITING_PAYMENT"].includes(order.paymentStatus) &&
                                !order.payment?.transactionId ? (
-                                // Manual QRIS card - simplified and clean layout
+                                // Manual QRIS card - reuses the shared QrisPayment component
                                 <div className="rounded-xl bg-white p-4">
-                                    <div className="text-center text-xs font-bold uppercase tracking-wide text-[#F59E0B]">
-                                        QRIS AFA STORE
-                                    </div>
+                                    {/* Shared, consistent QRIS UI (same component as customer checkout). */}
+                                    <QrisPayment total={order.total} showDownload={false} />
 
-                                    {/* QR Image */}
-                                    <div className="mx-auto my-3 flex h-80 w-full max-w-[320px] items-center justify-center rounded-lg bg-white p-4 shadow-sm ring-1 ring-[#184D47]/10">
-                                        <Image
-                                            src="/payment/qris-afa-store.jpg"
-                                            alt="QRIS AFA STORE"
-                                            width={300}
-                                            height={300}
-                                            className="h-auto w-full rounded object-contain"
-                                            unoptimized
+                                    {/* Admin confirm action (kasir only). The button itself carries the
+                                        "Menunggu Verifikasi" note, so no duplicate note is rendered here. */}
+                                    <div className="mt-4">
+                                        <QrisManualConfirmButton
+                                            orderId={order.id}
+                                            invoice={order.invoice}
+                                            onConfirm={() => loadDetail()}
                                         />
                                     </div>
-
-                                    {/* Warning info */}
-                                    <p className="mb-3 text-center text-xs text-[#184D47]/70">
-                                        Scan QRIS menggunakan aplikasi bank atau e-wallet Anda.
-                                    </p>
-
-                                    {/* Total payment */}
-                                    <div className="mb-4 rounded-xl bg-[#FFF7ED] p-4 text-center">
-                                        <p className="text-xs font-bold uppercase tracking-wide text-[#92400E]">Total Pembayaran</p>
-                                        <p className="mt-1 text-2xl font-black text-[#92400E]">{formatRupiah(order.total)}</p>
-                                        <p className="mt-1 text-xs text-[#92400E]/70">Pastikan nominal pembayaran sesuai.</p>
-                                    </div>
-
-                                    {/* Verification status */}
-                                    <div className="mb-4 rounded-xl border border-[#F59E0B]/20 bg-[#FFFDF7] p-3">
-                                        <p className="text-xs font-bold text-[#92400E]">
-                                            ⚠ QRIS Manual — Menunggu Verifikasi
-                                        </p>
-                                        <p className="mt-1 text-xs text-[#92400E]/70">
-                                            Konfirmasi setelah pembayaran benar-benar diterima.
-                                        </p>
-                                    </div>
-
-                                    {/* Confirmation button */}
-                                    <QrisManualConfirmButton
-                                        orderId={order.id}
-                                        invoice={order.invoice}
-                                        onConfirm={() => loadDetail()}
-                                    />
                                 </div>
                             ) : (
-                                // Midtrans QRIS - show QR code or retry button
+                                // Midtrans QRIS - show QR code (via shared component) or retry button
                                 <div className="text-center">
                                     <p className="mb-3 text-sm font-bold text-[#184D47]">Menunggu Pembayaran QRIS</p>
                                     {order.payment?.qrisUrl && isMidtransQrImageUrl(order.payment.qrisUrl) ? (
-                                        <>
-                                            <Image src={order.payment.qrisUrl} alt="QRIS pembayaran" width={256} height={256} unoptimized className="mx-auto max-w-[256px]" />
-                                            {order.payment.expiredAt && (
-                                                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#8B6B3F]">
-                                                    <Clock size={14} /> Batas pembayaran: {formatDate(order.payment.expiredAt)}
-                                                </p>
-                                            )}
-                                        </>
+                                        <QrisPayment
+                                            total={order.total}
+                                            imageSrc={order.payment.qrisUrl}
+                                            expiryLabel={order.payment.expiredAt ? formatDate(order.payment.expiredAt) : null}
+                                            showDownload={false}
+                                        />
                                     ) : (
                                         <button
                                             type="button"

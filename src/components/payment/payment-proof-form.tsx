@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, Clock, QrCode, ShieldCheck, ShoppingBag } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck, ShoppingBag } from "lucide-react";
 import { getPaymentStatusPresentation } from "@/lib/payment-status";
-import { ManualQrisPaymentDisplay } from "./manual-qris-display";
+import { QrisPayment } from "./QrisPayment";
 
 type Props = {
     invoice: string;
@@ -18,8 +17,6 @@ type Props = {
 
 const money = (value: number) =>
     new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
-
-const SUPPORTED_METHODS = ["GoPay", "OVO", "DANA", "ShopeePay", "Mobile Banking", "QRIS Lainnya"];
 
 export function PaymentProofForm({ invoice, total, paymentMethod, paymentStatus, qrisSrc, expiredAt }: Props) {
     const [status, setStatus] = useState(paymentStatus);
@@ -69,36 +66,11 @@ export function PaymentProofForm({ invoice, total, paymentMethod, paymentStatus,
                 </div>
 
                 {showQris && (
-                    <div className="mt-7">
-                        <div className="flex items-center gap-2.5">
-                            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#123524] text-[#E4C982]">
-                                <QrCode size={18} />
-                            </span>
-                            <h2 className="font-display text-xl font-bold text-[#123524] md:text-2xl">Lakukan Pembayaran</h2>
-                        </div>
-                        <p className="mt-2 text-sm text-[#6D6558]">Scan kode QRIS di bawah ini menggunakan aplikasi pembayaran favorit Anda.</p>
-
-                        {qrisSrc && (
-                            <div className="mt-4 flex justify-center">
-                                <div className="w-full max-w-[200px] overflow-hidden rounded-2xl bg-white p-3 shadow-[0_18px_45px_rgba(18,53,36,0.10)] ring-1 ring-[#C9A45B]/20 sm:max-w-[232px] sm:p-4">
-                                    <Image src={qrisSrc} alt="QRIS pembayaran" width={640} height={640} unoptimized className="h-auto w-full" />
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="mt-4 flex flex-wrap justify-center gap-2">
-                            {SUPPORTED_METHODS.map((method) => (
-                                <span key={method} className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-[#123524] ring-1 ring-[#C9A45B]/20">
-                                    {method}
-                                </span>
-                            ))}
-                        </div>
-
-                        {expiryText && (
-                            <p className="mt-4 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#8B6B3F]">
-                                <Clock size={14} /> Batas pembayaran: {expiryText}
-                            </p>
-                        )}
+                    <div className="mt-7 border-t border-[#C9A45B]/15 pt-7">
+                        {/* Single reusable QRIS UI. In manual mode qrisSrc is empty and the
+                            component falls back to the official static AFA STORE QRIS; when
+                            Midtrans is re-enabled, qrisSrc carries the dynamic QR URL. */}
+                        <QrisPayment total={total} imageSrc={qrisSrc || null} expiryLabel={expiryText} />
                     </div>
                 )}
 

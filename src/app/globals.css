@@ -583,21 +583,21 @@ header > div {
     text-align: center;
   }
 
-  #kasir-receipt .receipt-logo {
-    display: block;
-    width: 20mm;
-    height: auto;
-    margin: 0 auto;
-    object-fit: contain;
-    filter: grayscale(1);
-  }
-
   #kasir-receipt .receipt-store {
-    margin-top: 1mm;
+    margin: 0 0 1.5mm;
     font-size: 14px;
     font-weight: 800;
     line-height: 1.1;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  #kasir-receipt .receipt-contact {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.35;
+    white-space: nowrap;
   }
 
   #kasir-receipt .receipt-divider {
@@ -971,6 +971,68 @@ body:has([data-theme="dark"]) label:has(input[name="paymentMethod"][value="QRIS"
   accent-color: var(--night-gold);
 }
 
+/* Final Night Mode surface audit: one root-scoped visual system for customer UI. */
+html[data-theme="dark"] body {
+  --night-bg: #07150F;
+  --night-surface: #0E2118;
+  --night-surface-elevated: #142A20;
+  --night-surface-hover: #1C392B;
+  --night-input: #10241B;
+  --night-text: #F2EDE3;
+  --night-text-secondary: #D8D2C5;
+  --night-text-muted: #AAA394;
+  --night-placeholder: #929B94;
+  --night-border: rgba(201,164,91,.30);
+  --night-border-strong: rgba(201,164,91,.50);
+  --night-gold: #D4AF37;
+  --night-gold-soft: #C9A45B;
+}
+
+html[data-theme="dark"] body .night-image-stage,
+html[data-theme="dark"] body .product-card > .relative {
+  background: linear-gradient(180deg, #142A20 0%, #10241B 100%) !important;
+  border-color: var(--night-border) !important;
+}
+html[data-theme="dark"] body .night-gallery-stage {
+  background: linear-gradient(180deg, #142A20 0%, #10241B 100%) !important;
+}
+html[data-theme="dark"] body .night-gallery-thumb {
+  background: var(--night-input) !important;
+  border-color: var(--night-border) !important;
+}
+html[data-theme="dark"] body .night-gallery-thumb[aria-current="true"] {
+  background: var(--night-surface-elevated) !important;
+  border-color: var(--night-gold) !important;
+}
+html[data-theme="dark"] body .night-gallery-stage > .absolute.inset-6,
+html[data-theme="dark"] body .night-gallery-stage > .absolute.inset-10,
+html[data-theme="dark"] body .night-gallery-stage .relative > .absolute {
+  background: rgba(28,57,43,.45) !important;
+}
+
+/* Remaining customer UI light utility surfaces; media elements are intentionally excluded. */
+html[data-theme="dark"] body :where(
+  .bg-\[\#F9F3E6\], .bg-\[\#FDF8F3\], .bg-\[\#FBF4E8\], .bg-\[\#FFF2D6\],
+  .bg-\[\#FFF9ED\], .bg-\[\#F8F4EC\], .bg-\[\#FFFDF8\], .bg-\[\#EFE6D5\],
+  .bg-gray-100, .bg-gray-200, .bg-gray-300
+) { background-color: var(--night-surface-elevated) !important; color: var(--night-text) !important; }
+html[data-theme="dark"] body :where(.luxury-card, .theme-dark-card, .catalog-card, .product-card) {
+  background-color: var(--night-surface) !important;
+  border-color: var(--night-border) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] body :where(.product-card-info, .catalog-card > div:not(.night-image-stage)) { background-color: var(--night-surface) !important; }
+html[data-theme="dark"] body :where(.text-red-700, .text-red-600) { color: var(--night-error, #F28B82) !important; }
+html[data-theme="dark"] body :where(.hover\:bg-red-50):hover { background-color: #43221F !important; }
+html[data-theme="dark"] body :where(.skeleton, [class*="animate-pulse"]) { background: linear-gradient(100deg, #0E2118 30%, #142A20 45%, #0E2118 60%) !important; }
+html[data-theme="dark"] body :where(.theme-tooltip, [role="dialog"], [role="menu"], [role="listbox"]) { background-color: var(--night-surface-elevated) !important; color: var(--night-text) !important; border-color: var(--night-border) !important; }
+html[data-theme="dark"] body :where(input, textarea, select, [role="combobox"]) { background-color: var(--night-input) !important; color: var(--night-text) !important; border-color: var(--night-border) !important; }
+html[data-theme="dark"] body :where(input, textarea, select)::placeholder { color: var(--night-placeholder) !important; }
+html[data-theme="dark"] body :where(input, textarea, select):focus { border-color: var(--night-gold) !important; }
+
+/* Actual product/QRIS/logo/map media retain their source pixels; no filter or blend mode. */
+html[data-theme="dark"] body :where(.product-card img, .catalog-card img, .night-gallery-stage img, [src*="qris-afa-store"], [class*="map"] img) { filter: none !important; opacity: 1 !important; mix-blend-mode: normal !important; }
+
 /* Do not let the screen theme leak into receipts or thermal print output. */
 @media print {
   body:has([data-theme="dark"]),
@@ -1007,4 +1069,60 @@ html[data-theme="dark"] body div.rounded-2xl.p-5[class*="bg-[#EAF1ED]"] > p { co
 
 @media print {
   html[data-theme="dark"], html[data-theme="dark"] body, html[data-theme="dark"] body * { background: revert !important; background-color: revert !important; color: revert !important; border-color: revert !important; box-shadow: revert !important; }
+}
+
+
+/* Final semantic Night Mode surface pass. Scoped to the canonical root marker. */
+html[data-theme="dark"] body .night-category-card,
+html[data-theme="dark"] body .night-map-panel,
+html[data-theme="dark"] body .night-address-option,
+html[data-theme="dark"] body .night-payment-option,
+html[data-theme="dark"] body .night-readonly-field,
+html[data-theme="dark"] body .product-card,
+html[data-theme="dark"] body .catalog-card { background-color: var(--night-surface, #0E2118) !important; color: var(--night-text, #F2EDE3) !important; border-color: var(--night-border, rgba(201,164,91,.30)) !important; }
+html[data-theme="dark"] body .night-category-image-stage,
+html[data-theme="dark"] body .night-image-stage,
+html[data-theme="dark"] body .catalog-card-image { background: linear-gradient(145deg, #142A20 0%, #10241B 55%, #0E2118 100%) !important; background-color: #10241B !important; border-color: rgba(201,164,91,.30) !important; }
+html[data-theme="dark"] body .night-category-media-surface { background: transparent !important; background-color: transparent !important; }
+html[data-theme="dark"] body .night-category-image-stage.night-category-media-surface { background: linear-gradient(145deg, #142A20 0%, #10241B 55%, #0E2118 100%) !important; background-color: #10241B !important; }
+html[data-theme="dark"] body .night-image-loading-veil { background: linear-gradient(110deg, rgba(20,42,32,.92), rgba(16,36,27,.98), rgba(20,42,32,.92)) !important; }
+html[data-theme="dark"] body .night-address-option[aria-pressed="true"],
+html[data-theme="dark"] body .night-address-option:has(input:checked),
+html[data-theme="dark"] body .night-payment-option:has(input:checked),
+html[data-theme="dark"] body .night-category-card[aria-current="true"] { background-color: var(--night-surface-elevated, #142A20) !important; border-color: var(--night-gold, #D4AF37) !important; color: var(--night-text, #F2EDE3) !important; }
+html[data-theme="dark"] body .night-readonly-field > :first-child { color: var(--night-text-muted, #AAA394) !important; }
+html[data-theme="dark"] body .night-readonly-field > :not(:first-child) { color: var(--night-text, #F2EDE3) !important; }
+html[data-theme="dark"] body .night-address-option,
+html[data-theme="dark"] body .night-address-option * { color: var(--night-text-secondary, #D8D2C5) !important; }
+html[data-theme="dark"] body .night-address-option[aria-pressed="true"],
+html[data-theme="dark"] body .night-address-option[aria-pressed="true"] * { color: var(--night-text, #F2EDE3) !important; }
+html[data-theme="dark"] body .night-payment-option,
+html[data-theme="dark"] body .night-payment-option * { color: var(--night-text-secondary, #D8D2C5) !important; }
+html[data-theme="dark"] body .night-payment-option:has(input:checked),
+html[data-theme="dark"] body .night-payment-option:has(input:checked) * { color: var(--night-text, #F2EDE3) !important; }
+html[data-theme="dark"] body .night-payment-option input,
+html[data-theme="dark"] body .night-address-option input { accent-color: var(--night-gold, #D4AF37); }
+html[data-theme="dark"] body .product-card > .flex,
+html[data-theme="dark"] body .catalog-card > .flex { background-color: var(--night-surface, #0E2118) !important; color: var(--night-text, #F2EDE3); }
+html[data-theme="dark"] body .product-card h3,
+html[data-theme="dark"] body .catalog-card h3,
+html[data-theme="dark"] body .product-card p,
+html[data-theme="dark"] body .catalog-card p { color: var(--night-text, #F2EDE3) !important; }
+html[data-theme="dark"] body input:-webkit-autofill,
+html[data-theme="dark"] body textarea:-webkit-autofill,
+html[data-theme="dark"] body select:-webkit-autofill { -webkit-text-fill-color: var(--night-text, #F2EDE3) !important; box-shadow: 0 0 0 1000px var(--night-input, #10241B) inset !important; caret-color: var(--night-text, #F2EDE3); }
+html[data-theme="dark"] body :where(input, textarea, select)[readonly],
+html[data-theme="dark"] body :where(input, textarea, select):disabled { background-color: var(--night-input, #10241B) !important; color: var(--night-text, #F2EDE3) !important; }
+html[data-theme="dark"] body :where([role="dialog"], [role="menu"], [role="listbox"], [role="tooltip"]) { background-color: var(--night-surface-elevated, #142A20) !important; color: var(--night-text, #F2EDE3) !important; border-color: var(--night-border, rgba(201,164,91,.30)) !important; }
+html[data-theme="dark"] body .night-image-stage img,
+html[data-theme="dark"] body .night-category-image-stage img { filter: none !important; opacity: 1 !important; mix-blend-mode: normal !important; }
+
+/* Night rules must never affect printable invoices/thermal output. */
+@media print {
+  html[data-theme="dark"] body .night-category-card,
+  html[data-theme="dark"] body .night-category-image-stage,
+  html[data-theme="dark"] body .night-map-panel,
+  html[data-theme="dark"] body .night-address-option,
+  html[data-theme="dark"] body .night-payment-option,
+  html[data-theme="dark"] body .night-readonly-field { background: revert !important; background-color: revert !important; color: revert !important; border-color: revert !important; }
 }

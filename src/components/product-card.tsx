@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
-import Image from "next/image";
+
 import { Heart, Star, Check } from "lucide-react";
 import ProductImage from "./product-image";
 import type { Product } from "@/lib/products";
@@ -26,7 +26,7 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
       className="luxury-card product-card flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] bg-white shadow-sm transition-all hover:shadow-xl border border-gray-100"
     >
       {/* IMAGE AREA */}
-      <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-[#FDF8F3] via-white to-[#FFF8F0]">
+      <div className="night-image-stage relative aspect-square w-full overflow-hidden bg-gradient-to-br from-[#FDF8F3] via-white to-[#FFF8F0]">
         {/* Wishlist Button - Top Right */}
         <motion.button
           whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}

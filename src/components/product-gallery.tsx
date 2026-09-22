@@ -46,7 +46,7 @@ export default function ProductGallery({ product, images, available }: { product
 
     return (
         <div className="min-w-0 lg:sticky lg:top-8">
-            <div className="group relative aspect-square min-w-0 overflow-hidden rounded-[24px] border border-[#C9A45B]/20 bg-[#F9F3E6] shadow-[0_24px_70px_-30px_rgba(18,53,36,0.35)] sm:rounded-[28px]">
+            <div className="group night-gallery-stage relative aspect-square min-w-0 overflow-hidden rounded-[24px] border border-[#C9A45B]/20 bg-[#F9F3E6] shadow-[0_24px_70px_-30px_rgba(18,53,36,0.35)] sm:rounded-[28px]">
                 <div className="absolute inset-6 rounded-full bg-white/70 blur-3xl sm:inset-10" aria-hidden="true" />
 
                 {product.badge && (
@@ -113,7 +113,7 @@ export default function ProductGallery({ product, images, available }: { product
                             onClick={() => goTo(index)}
                             aria-label={`Lihat gambar ${index + 1}`}
                             aria-current={index === currentIndex}
-                            className={`relative aspect-square h-[70px] w-[70px] shrink-0 snap-start overflow-hidden rounded-[12px] border bg-[#F9F3E6] transition-all duration-200 sm:h-[84px] sm:w-[84px] ${index === currentIndex ? "border-[#C9A45B] ring-2 ring-[#C9A45B]/40" : "border-[#C9A45B]/20 hover:border-[#C9A45B]/60"}`}
+                            className={`night-gallery-thumb relative aspect-square h-[70px] w-[70px] shrink-0 snap-start overflow-hidden rounded-[12px] border bg-[#F9F3E6] transition-all duration-200 sm:h-[84px] sm:w-[84px] ${index === currentIndex ? "border-[#C9A45B] ring-2 ring-[#C9A45B]/40" : "border-[#C9A45B]/20 hover:border-[#C9A45B]/60"}`}
                         >
                             <ProductImage src={src} alt={`${product.name} ${index + 1}`} sizes="90px" imgClassName="p-2" />
                         </button>

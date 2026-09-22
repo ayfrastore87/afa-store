@@ -17,7 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, LocateFixed, X } from "lucide-react";
+import { ArrowLeft, Loader2, LocateFixed } from "lucide-react";
 
 import type { DeliveryCoordinates } from "@/lib/coordinates";
 import { CheckoutLocationMap, type CheckoutMapStatus } from "@/components/checkout/location-map";
@@ -117,24 +117,18 @@ export default function KasirLocationPicker({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 px-2 py-3 sm:px-4 sm:py-6">
-            <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-[1.75rem] bg-[#F8F5EE] shadow-2xl">
-                <div className="flex items-center justify-between gap-3 border-b border-[#184D47]/10 bg-white px-4 py-3">
+        <div className="fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#F8F5EE]" style={{ minHeight: "100vh" }}>
+            <div className="shrink-0 border-b border-[#184D47]/10 bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+                <div className="flex items-center gap-3">
+                    <button type="button" onClick={onCancel} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#184D47]/15 text-[#184D47]" aria-label="Kembali">
+                        <ArrowLeft size={18} />
+                    </button>
                     <div className="min-w-0">
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#C9A45B]">Alamat Pengiriman</p>
-                        <h2 className="truncate text-lg font-black text-[#184D47]">Tentukan Lokasi di Peta</h2>
+                        <h2 className="truncate text-lg font-black text-[#184D47]">Pilih Lokasi Pengiriman</h2>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#184D47]/15 text-[#184D47] transition hover:bg-[#184D47]/5"
-                        aria-label="Tutup peta"
-                    >
-                        <X size={18} />
-                    </button>
                 </div>
-
-                <div className="space-y-2 border-b border-[#184D47]/10 bg-white px-4 py-3">
+                <div className="mt-3 space-y-2">
                     <CheckoutLocationSearch onSelect={handleSearchSelect} placeholder="Cari jalan, tempat, atau patokan" />
                     <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -162,9 +156,12 @@ export default function KasirLocationPicker({
                     </div>
                     {message ? <p className="text-xs font-semibold text-[#8B6B3F]">{message}</p> : null}
                 </div>
+            </div>
+
+
 
                 <div className="relative min-h-0 flex-1">
-                    <CheckoutLocationMap
+                <CheckoutLocationMap
                         center={center}
                         zoom={zoom}
                         onCenterChange={setCenter}
@@ -172,6 +169,7 @@ export default function KasirLocationPicker({
                         onInteractionStart={handleInteractionStart}
                         onInteractionEnd={handleInteractionEnd}
                         onStateChange={setMapStatus}
+                        fullscreen
                     />
                 </div>
 
@@ -195,7 +193,6 @@ export default function KasirLocationPicker({
                             GUNAKAN LOKASI INI
                         </button>
                     </div>
-                </div>
             </div>
         </div>
     );

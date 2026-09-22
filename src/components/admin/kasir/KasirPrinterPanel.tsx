@@ -127,7 +127,7 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
     // that already excludes internal identifiers (area id / quote ref / provider order id).
     const delivery = order.delivery;
     return {
-        storeName: "AFA STORE",
+        storeName: "AFA_STORE",
         invoice: order.invoice,
         date: formatDate(order.createdAt),
         customer: order.customer || "-",
@@ -165,8 +165,6 @@ function toReceiptData(order: KasirOrderDetail, cashierName: string): ReceiptDat
             : null,
         footer: ["Terima kasih telah berbelanja", "di AFA STORE"],
         storeAddress: [
-            "AFA STORE",
-            "",
             "WA 087770000883",
             "afastore.online",
         ],

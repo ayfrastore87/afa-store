@@ -187,20 +187,21 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
     const width = profile.charactersPerLine;
     const chunks: Uint8Array[] = [cmdInitialize()];
 
-    // Store header (centered, double width/height).
-    chunks.push(cmdAlign("center"), cmdSize(SIZE.doubleBoth));
+    // Store header: medium, bold, centered, and kept at normal character width
+    // so the name remains one line on both 58mm and 80mm printers.
+    chunks.push(cmdAlign("center"), cmdSize(SIZE.normal), cmdBold(true));
     chunks.push(cmdLine(formatReceiptLine(data.storeName, width, "center")));
-    chunks.push(cmdSize(SIZE.normal), cmdAlign("left"));
+    chunks.push(cmdBold(false), cmdSize(SIZE.normal));
 
-    // Store address lines (centered) when provided.
+    // Store contact lines (centered) when provided.
     if (data.storeAddress && data.storeAddress.length > 0) {
-        chunks.push(cmdAlign("center"));
         for (const line of data.storeAddress) {
             chunks.push(cmdLine(formatReceiptLine(line, width, "center")));
         }
         chunks.push(cmdFeed(1));
-        chunks.push(cmdAlign("left"));
     }
+    // Reset all header formatting before the transaction body.
+    chunks.push(cmdSize(SIZE.normal), cmdAlign("left"));
 
     chunks.push(cmdLine(dividerLine(width)));
 

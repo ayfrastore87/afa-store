@@ -28,7 +28,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
 
     return <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_10%_5%,rgba(201,164,91,0.16),transparent_25rem),linear-gradient(135deg,#F8F5EE,#FFFDF8_58%,#EFE6D5)] pb-28 text-[#123524] md:pb-16">
         <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 sm:py-8 lg:px-10 lg:py-12">
-            <nav aria-label="Breadcrumb" className="mb-6 flex min-w-0 items-center gap-2 text-sm text-[#8B6B3F]"><Link href="/" className="shrink-0 font-semibold hover:text-[#123524]">Beranda</Link><ChevronRight size={15} aria-hidden="true" /><span className="truncate" aria-current="page">{product.name}</span></nav>
+            <nav aria-label="Breadcrumb" className="mb-6 flex min-w-0 items-center gap-2 text-sm text-[#8B6B3F]"><Link href="/" className="shrink-0 font-semibold hover:text-[#123524]">Beranda</Link><ChevronRight size={15} aria-hidden="true" /><Link href="/produk" className="shrink-0 font-semibold hover:text-[#123524]">Katalog</Link><ChevronRight size={15} aria-hidden="true" /><span className="truncate" aria-current="page">{product.name}</span></nav>
             <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.12fr)_minmax(380px,0.88fr)] lg:gap-12 xl:gap-16">
                 <section aria-label={`Gambar ${product.name}`} className="min-w-0">
                     <ProductGallery product={{ id: product.id, name: product.name, price: product.price, image: product.image, badge: product.badge }} images={[product.image]} available={available} />

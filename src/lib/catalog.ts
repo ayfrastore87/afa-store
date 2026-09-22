@@ -64,7 +64,9 @@ export function parseCatalogQuery(params: RawParams): CatalogQuery {
     const minRating = ratingParsed && ratingParsed >= 1 && ratingParsed <= 5 ? ratingParsed : null;
 
     return {
-        search: firstValue(params.search).trim().slice(0, 100),
+        // `q` is the public navigation/search URL contract; keep `search`
+        // readable as a backwards-compatible alias for existing catalog URLs.
+        search: firstValue(params.q) !== "" ? firstValue(params.q).trim().slice(0, 100) : firstValue(params.search).trim().slice(0, 100),
         category: firstValue(params.category).trim().slice(0, 120),
         sort,
         page,
@@ -84,7 +86,7 @@ export function buildCatalogHref(base: Partial<CatalogQuery>, overrides: Partial
     const merged = { ...base, ...overrides };
     const sp = new URLSearchParams();
 
-    if (merged.search) sp.set("search", merged.search);
+    if (merged.search) sp.set("q", merged.search);
     if (merged.category) sp.set("category", merged.category);
     if (merged.sort && merged.sort !== "recommended") sp.set("sort", merged.sort);
     if (merged.minPrice != null) sp.set("minPrice", String(merged.minPrice));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -622,7 +622,7 @@ export default function KasirPOS() {
                                         const isActive = currentStep === step;
                                         const isCompleted = currentStep > step;
                                         return (
-                                            <>
+                                            <Fragment key={`transaction-step-${step}`}>
                                                 <div
                                                     className={`grid h-8 w-8 place-items-center rounded-full text-xs font-black ${
                                                         isActive
@@ -635,7 +635,7 @@ export default function KasirPOS() {
                                                     {isCompleted ? <Check size={14} /> : step}
                                                 </div>
                                                 {idx < arr.length - 1 && <div className="h-0.5 w-6 flex-1 bg-[#184D47]/15" />}
-                                            </>
+                                            </Fragment>
                                         );
                                     })}
                                 </div>

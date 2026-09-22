@@ -906,7 +906,7 @@ export default function CheckoutPage() {
                                 <div className="mt-4 space-y-2">
                                     {profileAddresses.length === 0 && <p className="text-sm text-[#6D6558]">Belum ada alamat tersimpan. Gunakan mode {ADDRESS_MODE_LABELS.other}.</p>}
                                     {profileAddresses.map((a) => (
-                                        <button type="button" key={a.id} onClick={() => selectProfile(a)} className={`w-full rounded-xl border p-3 text-left ${selectedProfileId === a.id ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
+                                        <button type="button" key={a.id} onClick={() => selectProfile(a)} className={`night-address-option w-full rounded-xl border p-3 text-left ${selectedProfileId === a.id ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
                                             <span className="flex items-center justify-between gap-2">
                                                 <b className="text-sm">{a.isDefault ? "Alamat Utama · " : ""}{a.recipientName}</b>
                                                 {selectedProfileId === a.id && <Check size={16} className="shrink-0 text-[#184D47]" />}
@@ -920,7 +920,7 @@ export default function CheckoutPage() {
 
                         <Panel title="1 · Pilih Lokasi di Peta">
                             {confirmedLocation === null ? (
-                                <div className="rounded-2xl border border-[#C9A45B]/30 bg-white p-5 text-center">
+                                <div className="night-map-panel rounded-2xl border border-[#C9A45B]/30 bg-white p-5 text-center">
                                     <MapPin size={28} className="mx-auto text-[#184D47]" />
                                     <h3 className="mt-2 font-display text-lg font-bold text-[#123524]">Pilih Lokasi Pengiriman</h3>
                                     <p className="mt-1 text-sm text-[#6D6558]">Tentukan titik rumah atau lokasi tujuan melalui peta.</p>
@@ -929,7 +929,7 @@ export default function CheckoutPage() {
                                     </button>
                                 </div>
                             ) : (
-                                <div className="rounded-2xl border border-[#184D47]/30 bg-[#EAF1ED] p-5">
+                                <div className="night-map-panel rounded-2xl border border-[#184D47]/30 bg-[#EAF1ED] p-5">
                                     <p className="flex items-center gap-2 text-sm font-bold text-[#184D47]"><Check size={16} /> Lokasi pengiriman dipilih</p>
                                     <p className="mt-2 break-words text-[#2E2A26]">{destinationStreet || "Alamat belum terisi"}</p>
                                     {destinationLocality && <p className="text-sm text-[#2E2A26]">{destinationLocality}</p>}
@@ -968,7 +968,7 @@ export default function CheckoutPage() {
                                 {/* The street line and administrative components come from confirmed map pin / Biteship area. Only the customer's own detail (blok/RT-RW/patokan) is typed here. */}
                                 <Field label="Detail Alamat (Blok / No. / RT-RW / Patokan)" value={form.addressDetail} onChange={(v) => update("addressDetail", v)} placeholder={ADDRESS_DETAIL_PLACEHOLDER} />
 
-                                <div className="rounded-xl border border-[#C9A45B]/30 bg-[#F8F5EE] p-3">
+                                <div className="night-readonly-field rounded-xl border border-[#C9A45B]/30 bg-[#F8F5EE] p-3">
                                     <p className="text-xs font-bold tracking-wide text-[#6D6558]">ALAMAT DARI PETA / AREA</p>
                                     <p className="mt-1 break-words text-sm text-[#2E2A26]">{destinationStreet || "Belum ada alamat dari peta."}</p>
                                     {destinationLocality && <p className="text-sm text-[#2E2A26]">{destinationLocality}</p>}
@@ -1062,7 +1062,7 @@ export default function CheckoutPage() {
                                 <legend className="sr-only">Metode pembayaran</legend>
                                 <div className="space-y-2">
                                     {paymentMethods.map((m) => (
-                                        <label key={m} className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border p-3 ${form.paymentMethod === m ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
+                                        <label key={m} className={`night-payment-option flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border p-3 ${form.paymentMethod === m ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>
                                             <input type="radio" name="paymentMethod" checked={form.paymentMethod === m} onChange={() => update("paymentMethod", m)} />
                                             <span className="text-sm font-bold">{paymentLabels[m]}</span>
                                         </label>
@@ -1189,7 +1189,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function ModeButton({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
     return (
-        <button type="button" onClick={onClick} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border px-2 text-xs font-bold ${active ? "border-[#184D47] bg-[#EAF1ED] text-[#184D47]" : "border-[#C9A45B]/30 text-[#6D6558]"}`}>
+        <button type="button" aria-pressed={active} onClick={onClick} className={`night-address-option flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border px-2 text-xs font-bold ${active ? "border-[#184D47] bg-[#EAF1ED] text-[#184D47]" : "border-[#C9A45B]/30 text-[#6D6558]"}`}>
             {icon}
             {label}
         </button>

@@ -38,6 +38,8 @@ type Props = {
     onInteractionEnd: () => void;
     onStateChange?: (status: CheckoutMapStatus) => void;
     fullscreen?: boolean;
+    /** Compact map presentation used by clickable address thumbnails. */
+    thumbnail?: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -72,6 +74,7 @@ export function CheckoutLocationMap({
     onInteractionEnd,
     onStateChange,
     fullscreen = false,
+    thumbnail = false,
 }: Props) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<GoogleMapsMap | null>(null);
@@ -222,7 +225,7 @@ export function CheckoutLocationMap({
     return (
         <div
             className={`relative w-full overflow-hidden rounded-2xl border border-neutral-200 bg-[#e7e4da] ${
-                fullscreen ? "h-full min-h-[320px]" : "h-64 sm:h-72"
+                fullscreen ? "h-full min-h-[320px] rounded-none border-0" : thumbnail ? "h-full min-h-0 rounded-[1.25rem] border-0" : "h-64 sm:h-72"
             }`}
         >
             <div ref={containerRef} role="application" aria-label="Peta lokasi pengiriman" className="absolute inset-0" />
@@ -245,7 +248,7 @@ export function CheckoutLocationMap({
                 </div>
             ) : null}
 
-            {status === "ready" ? (
+            {status === "ready" && !thumbnail ? (
                 <div className="absolute bottom-3 right-3 z-10 flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white/95 shadow-sm">
                     <button
                         type="button"

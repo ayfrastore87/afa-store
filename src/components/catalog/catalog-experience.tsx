@@ -252,6 +252,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                         <Image src="/AFA LOGO.svg" alt="AFA STORE" width={80} height={120} className="h-12 w-9 object-contain" priority sizes="36px" />
                         <span className="hidden sm:inline">AFA STORE</span>
                     </Link>
+                    <Link href="/produk" aria-current="page" className="inline-flex min-h-10 shrink-0 items-center rounded-full border border-[#C9A45B] bg-[#C9A45B]/10 px-3 text-sm font-bold text-[#123524] shadow-sm sm:px-4">Belanja</Link>
                     <form onSubmit={submitSearch} className="flex flex-1 items-center rounded-full border border-[#C9A45B]/25 bg-white px-4 py-2 shadow-sm">
                         <input
                             value={searchInput}
@@ -564,9 +565,9 @@ function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogC
                             href={buildCatalogHref(query, { category: active ? "" : category.slug, page: 1 })}
                             scroll={false}
                             aria-current={active ? "true" : undefined}
-                            className={`group flex w-[116px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border p-3 text-center transition sm:w-[132px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
+                            className={`night-category-card group flex w-[116px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border p-3 text-center transition sm:w-[132px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
                         >
-                            <span className="relative grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#FBF4E8] sm:h-[72px] sm:w-[72px]">
+                            <span className="night-category-image-stage night-category-media-surface relative grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#FBF4E8] sm:h-[72px] sm:w-[72px]">
                                 <ProductImage src={category.image} alt={category.name} sizes="72px" imgClassName="p-1.5" />
                             </span>
                             <span className={`line-clamp-2 text-xs font-semibold leading-tight ${active ? "text-[#123524]" : "text-[#5c5346] group-hover:text-[#123524]"}`}>{category.name}</span>

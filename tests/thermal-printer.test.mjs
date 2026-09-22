@@ -23,6 +23,8 @@ function readFileSync(url) {
 const bluetooth = readFileSync("../src/lib/thermal-printer/bluetooth-printer.ts");
 const service = readFileSync("../src/lib/thermal-printer/thermal-print-service.ts");
 const panel = readFileSync("../src/components/admin/kasir/KasirPrinterPanel.tsx");
+const receipt = readFileSync("../src/components/admin/kasir/KasirReceipt.tsx");
+const globalsCss = readFileSync("../src/app/globals.css");
 const bluetoothTypes = readFileSync("../src/types/web-bluetooth.d.ts");
 
 // Also read other production source files for inspection tests
@@ -54,6 +56,17 @@ test("ESC/POS encoder implements the required command set", () => {
 test("wrapping never overflows the paper width", () => {
     assert.match(escposFile, /slice\(0, width\)/);
     assert.match(escposFile, /while \(parts\.length > width\)/);
+});
+
+test("receipt header prints one safe single-line AFA_STORE identity", () => {
+    assert.match(panel, /storeName: "AFA_STORE"/);
+    assert.doesNotMatch(panel, /storeName: "AFA STORE"/);
+    assert.equal((panel.match(/"WA 087770000883"/g) || []).length, 1);
+    assert.match(receipt, /className="receipt-store">AFA_STORE</);
+    assert.doesNotMatch(receipt, /AFA LOGO\.svg|receipt-logo/);
+    assert.match(globalsCss, /\.receipt-store[\s\S]*?white-space: nowrap/);
+    assert.match(escposFile, /cmdAlign\("center"\), cmdSize\(SIZE\.normal\), cmdBold\(true\)/);
+    assert.doesNotMatch(code(escposFile), /cmdSize\(SIZE\.doubleBoth\)/);
 });
 
 test("cutter (GS V) is optional and disabled by default", () => {

@@ -47,6 +47,7 @@ import {
     kasirDeliverySignature,
     type KasirDeliveryDraft,
 } from "@/lib/kasir-delivery";
+import { CheckoutLocationMap } from "@/components/checkout/location-map";
 import KasirLocationPicker from "./KasirLocationPicker";
 import { formatRupiah } from "./kasir-shared";
 
@@ -67,6 +68,9 @@ type Rate = {
 type ReverseState = "idle" | "loading" | "done" | "error";
 type AreaState = "idle" | "matching" | "matched" | "not_found";
 type RateState = "idle" | "loading" | "ready" | "empty" | "unavailable" | "configuration" | "error";
+
+const DEFAULT_KASIR_MAP_CENTER: DeliveryCoordinates = { latitude: -6.2, longitude: 106.816666 };
+const ignoreMapEvent = () => undefined;
 
 export type KasirDeliveryPanelProps = {
     draft: KasirDeliveryDraft;
@@ -437,10 +441,22 @@ export default function KasirDeliveryPanel({
                 <button
                     type="button"
                     onClick={() => setMapOpen(true)}
-                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[#184D47]/20 bg-white px-4 text-sm font-black text-[#184D47] transition hover:bg-[#EAF1ED] active:scale-[0.99]"
+                    className="group relative block h-[170px] w-full overflow-hidden rounded-[1.25rem] border border-[#184D47]/20 bg-[#e7e4da] text-left shadow-sm transition hover:border-[#C9A45B] hover:shadow-md sm:h-[185px]"
+                    aria-label="Pilih lokasi pengiriman di peta"
                 >
-                    <MapPin size={16} className="text-[#C9A45B]" />
-                    {draft.address ? "Ubah Lokasi di Peta" : "Tentukan Lokasi di Peta"}
+                    <CheckoutLocationMap
+                        center={draft.latitude != null && draft.longitude != null ? { latitude: draft.latitude, longitude: draft.longitude } : DEFAULT_KASIR_MAP_CENTER}
+                        zoom={draft.latitude != null ? 17 : 12}
+                        onCenterChange={ignoreMapEvent}
+                        onZoomChange={ignoreMapEvent}
+                        onInteractionStart={ignoreMapEvent}
+                        onInteractionEnd={ignoreMapEvent}
+                        thumbnail
+                    />
+                    <span className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-2 rounded-xl bg-[#123524]/90 px-3 py-2 text-xs font-black text-white shadow-lg">
+                        <span>{draft.address ? "Ubah Lokasi Pengiriman" : "Pilih Lokasi Pengiriman"}</span>
+                        <span className="font-semibold text-[#F3D58A]">Klik peta untuk memperbesar</span>
+                    </span>
                 </button>
 
                 {reverseState === "loading" ? (

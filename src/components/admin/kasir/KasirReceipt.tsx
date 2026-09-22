@@ -8,7 +8,6 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import { kasirOrderTypeLabel } from "@/lib/kasir-delivery";
 import {
     formatDate,
@@ -50,16 +49,9 @@ export default function KasirReceipt({
             <div className="receipt-sheet">
                 {/* Header */}
                 <div className="receipt-header">
-                    <Image
-                        src="/AFA LOGO.svg"
-                        alt="AFA STORE"
-                        width={56}
-                        height={56}
-                        unoptimized
-                        priority
-                        className="receipt-logo"
-                    />
-                    <p className="receipt-store">AFA STORE</p>
+                    <p className="receipt-store">AFA_STORE</p>
+                    <p className="receipt-contact">WA 087770000883</p>
+                    <p className="receipt-contact">afastore.online</p>
                 </div>
 
                 <Divider />

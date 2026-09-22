@@ -31,7 +31,7 @@ export function CatalogProductCard({ item, onAdd, onBuy, onWish, wish, addState 
 
     return (
         <article className="catalog-card group flex h-full min-w-0 flex-col overflow-hidden rounded-[16px] border border-[#123524]/[0.08] bg-white shadow-[0_5px_18px_rgba(18,53,36,0.055)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B]/40 hover:shadow-[0_12px_28px_rgba(18,53,36,0.11)]">
-            <div className="catalog-card-image relative w-full overflow-hidden bg-gradient-to-br from-[#FDF8F3] via-white to-[#FBF4E8]">
+            <div className="catalog-card-image night-image-stage relative w-full overflow-hidden bg-gradient-to-br from-[#FDF8F3] via-white to-[#FBF4E8]">
                 <button
                     type="button"
                     onClick={onWish}

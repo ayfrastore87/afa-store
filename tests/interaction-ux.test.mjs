@@ -4,6 +4,9 @@ import fs from "node:fs";
 
 const globalCss = fs.readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
 const pageSource = fs.readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+// The landing product card markup lives in its own component now; assert
+// against the real source that renders it on the homepage.
+const productCardSource = fs.readFileSync(new URL("../src/components/product-card.tsx", import.meta.url), "utf8");
 
 test("enabled interactive elements get pointer cursor", () => {
     assert.match(globalCss, /cursor:\s*pointer/);
@@ -52,9 +55,10 @@ test("cart checkout and clear controls expose disabled state", () => {
 });
 
 test("ProductCard image and title links unchanged", () => {
-    assert.match(pageSource, /href=\{`\/produk\/\$\{item\.slug\}`\}/);
-    assert.match(pageSource, /aria-label=\{`Lihat detail \$\{item\.name\}`\}/);
-    assert.match(pageSource, /aspect-square w-full cursor-pointer/);
+    assert.match(productCardSource, /href=\{`\/produk\/\$\{item\.slug\}`\}/);
+    assert.match(productCardSource, /aria-label=\{`Lihat detail \$\{item\.name\}`\}/);
+    // The image is a clickable Link wrapping an aspect-square image area.
+    assert.match(productCardSource, /aspect-square w-full/);
 });
 
 test("add-to-cart still uses cart context", () => {

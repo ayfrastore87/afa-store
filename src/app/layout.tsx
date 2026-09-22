@@ -2,6 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Poppins } from "next/font/google";
 import { CartProvider } from "@/context/cart-context";
 import { WishlistProvider } from "@/context/wishlist-context";
+import { ThemeProvider } from "@/components/theme-provider";
+import ThemeToggle from "@/components/theme-toggle";
+import Script from "next/script";
+
+const themeInitScript = `(function(){try{var t=localStorage.getItem('afa-theme');if(t!=='dark'&&t!=='light'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){}})()`;
+
 import { validateMidtransEnvOnStartup } from "@/lib/env-check";
 import "./globals.css";
 
@@ -73,9 +79,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={`${display.variable} ${body.variable} h-full antialiased`}>
+    <html lang="id" suppressHydrationWarning className={`${display.variable} ${body.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-[#F8F5EE] text-[#123524]">
-        <CartProvider><WishlistProvider>{children}</WishlistProvider></CartProvider>
+        <Script id="afa-theme-init" strategy="beforeInteractive">{themeInitScript}</Script>
+        <ThemeProvider><CartProvider><WishlistProvider>{children}</WishlistProvider></CartProvider><ThemeToggle /></ThemeProvider>
       </body>
     </html>
   );

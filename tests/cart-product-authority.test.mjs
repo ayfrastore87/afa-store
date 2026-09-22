@@ -9,6 +9,8 @@ const sessionSource = fs.readFileSync(new URL("../src/app/api/checkout/session/r
 const orderSource = fs.readFileSync(new URL("../src/app/api/checkout/order/route.ts", import.meta.url), "utf8");
 const ctaSource = fs.readFileSync(new URL("../src/components/product-detail-cta.tsx", import.meta.url), "utf8");
 const pageSource = fs.readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+// Add-to-cart button UI/loading state lives in the reusable landing card.
+const productCardSource = fs.readFileSync(new URL("../src/components/product-card.tsx", import.meta.url), "utf8");
 const cartContextSource = fs.readFileSync(new URL("../src/context/cart-context.tsx", import.meta.url), "utf8");
 const clientAuthSource = fs.readFileSync(new URL("../src/lib/client-auth.ts", import.meta.url), "utf8");
 const cartLibSource = fs.readFileSync(new URL("../src/lib/cart.ts", import.meta.url), "utf8");
@@ -184,8 +186,10 @@ test("login redirect is safe via loginPath and no guest add happens in catalog",
 });
 
 test("per-product loading prevents rapid double click and disables only that card", () => {
+    // The guard against rapid double-clicks lives in the page handler...
     assert.match(pageSource, /if \(addState\[item\.id\]\) return;/);
-    assert.match(pageSource, /aria-busy=\{addState === "adding"\}/);
-    assert.match(pageSource, /disabled=\{outOfStock \|\| addState === "adding" \|\| addState === "added"\}/);
-    assert.match(pageSource, /"Menambahkan\.\.\."/);
+    // ...while the busy/disabled UI + label live in the reusable card component.
+    assert.match(productCardSource, /aria-busy=\{addState === "adding"\}/);
+    assert.match(productCardSource, /disabled=\{outOfStock \|\| addState === "adding" \|\| addState === "added"\}/);
+    assert.match(productCardSource, /Menambahkan\.\.\./);
 });

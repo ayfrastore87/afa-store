@@ -17,6 +17,12 @@ export type Product = {
 
 type ProductRow = Record<string, unknown>;
 
+export function isValidImageSource(value: string | null | undefined): value is string {
+    if (!value?.trim()) return false;
+    if (value.startsWith("/")) return true;
+    try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; }
+}
+
 type ProductsApiResponse = {
     success: boolean;
     data?: ProductRow[];
@@ -46,7 +52,7 @@ export function mapProduct(row: ProductRow): Product {
         category,
         price: numberValue(row.price),
         stock: numberValue(row.stock),
-        image: stringValue(row.image, "/products/parcel.png"),
+        image: stringValue(row.image),
         rating: numberValue(row.rating, 0),
         badge: typeof row.badge === "string" && row.badge.trim() ? row.badge : null,
         flavor: typeof row.flavor === "string" ? row.flavor : null,

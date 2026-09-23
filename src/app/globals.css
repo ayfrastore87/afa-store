@@ -14,6 +14,16 @@
   --dark-text: #123524;
   --soft-brown: #8B6B3F;
   --card: #FFFFFF;
+  --night-bg: #07150F;
+  --night-surface: #0E2118;
+  --night-surface-elevated: #142A20;
+  --night-surface-hover: #1C392B;
+  --night-input: #10241B;
+  --night-text: #F2EDE3;
+  --night-text-secondary: #D8D2C5;
+  --night-text-muted: #AAA394;
+  --night-gold: #D4AF37;
+  --night-gold-soft: #C9A45B;
 }
 
 html {
@@ -75,7 +85,7 @@ body {
 
 body[data-theme="dark"] {
   /* Deliberately separated premium night hierarchy: page → card → elevated → input. */
-  --background: #061A13;
+  --background: var(--night-bg);
   --foreground: #F8F5EE;
   --muted: #A7B0A8;
   --border: rgba(212, 175, 55, 0.28);
@@ -87,11 +97,11 @@ body[data-theme="dark"] {
   --gold-dark: #C9A45B;
   --dark-text: #F8F5EE;
   --soft-brown: #D8D2C5;
-  --card: #0D2B20;
-  --surface-elevated: #123524;
-  --surface-input: #071F17;
-  --text-secondary: #D8D4C8;
-  --text-placeholder: #A7B0A8;
+  --card: var(--night-surface);
+  --surface-elevated: var(--night-surface-elevated);
+  --surface-input: var(--night-input);
+  --text-secondary: var(--night-text-secondary);
+  --text-placeholder: var(--night-text-muted);
   background:
     radial-gradient(circle at 15% 10%, rgba(201, 164, 91, 0.10), transparent 28rem),
     linear-gradient(135deg, #061A13, #0A241A 52%, #0D2B20);
@@ -99,6 +109,71 @@ body[data-theme="dark"] {
 }
 
 body[data-theme="dark"] main { background: var(--background) !important; color: var(--foreground); }
+
+/* Product detail night surfaces are scoped so image files and unrelated maps,
+   payment widgets, and dialogs retain their own presentation. */
+body[data-theme="dark"] .product-detail-page {
+  background: var(--night-bg) !important;
+  color: var(--night-text) !important;
+}
+body[data-theme="dark"] .product-detail-page .product-detail-breadcrumb {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+body[data-theme="dark"] .product-detail-page .product-detail-breadcrumb a,
+body[data-theme="dark"] .product-detail-page .product-detail-breadcrumb span {
+  color: var(--night-text-secondary);
+}
+body[data-theme="dark"] .product-detail-page .product-detail-breadcrumb svg {
+  color: var(--night-gold-soft);
+}
+body[data-theme="dark"] .product-detail-page .night-gallery-stage,
+body[data-theme="dark"] .product-detail-page .product-detail-page,
+body[data-theme="dark"] .product-detail-page .luxury-card,
+body[data-theme="dark"] .product-detail-page article > a > div {
+  background: var(--night-surface) !important;
+  border-color: rgba(212, 175, 55, .24) !important;
+}
+body[data-theme="dark"] .product-detail-page .product-gallery-wishlist,
+body[data-theme="dark"] .product-detail-page [role="group"] {
+  background: var(--night-surface-elevated) !important;
+  color: var(--night-text) !important;
+  border-color: rgba(212, 175, 55, .28) !important;
+}
+body[data-theme="dark"] .product-detail-page .product-detail-close {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--night-text-secondary) !important;
+}
+body[data-theme="dark"] .product-detail-page h1,
+body[data-theme="dark"] .product-detail-page h2,
+body[data-theme="dark"] .product-detail-page h3,
+body[data-theme="dark"] .product-detail-page dd,
+body[data-theme="dark"] .product-detail-page [role="group"] output,
+body[data-theme="dark"] .product-detail-page [role="group"] button {
+  color: var(--night-text) !important;
+}
+body[data-theme="dark"] .product-detail-page dl > div,
+body[data-theme="dark"] .product-detail-page .product-detail-page {
+  background: var(--night-surface-elevated) !important;
+}
+body[data-theme="dark"] .product-detail-page .product-gallery-wishlist:hover,
+body[data-theme="dark"] .product-detail-page [role="group"] button:hover {
+  background: var(--night-surface-hover) !important;
+  color: var(--night-gold) !important;
+}
+body[data-theme="dark"] .product-detail-page .product-detail-close:hover {
+  background: rgba(212, 175, 55, .06) !important;
+  border-color: rgba(212, 175, 55, .30) !important;
+}
+body[data-theme="dark"] .product-detail-page .night-image-loading-veil {
+  background: linear-gradient(110deg, rgba(201,164,91,.08), rgba(20,42,32,.8), rgba(201,164,91,.08)) !important;
+}
+body[data-theme="dark"] .product-detail-page .fixed.bottom-0 {
+  background: rgba(14, 33, 24, .96) !important;
+  color: var(--night-text) !important;
+}
 body[data-theme="dark"] header { background: rgba(16, 23, 19, 0.94) !important; border-color: var(--border); }
 body[data-theme="dark"] header input::placeholder { color: var(--muted); opacity: 1; }
 body[data-theme="dark"] #beranda {
@@ -176,6 +251,79 @@ body[data-theme="dark"] footer,
 body[data-theme="dark"] section,
 body[data-theme="dark"] main {
   color: var(--dark-text);
+}
+
+/* Homepage presentation layer: keep the existing data/interaction islands,
+   but give them one consistent premium surface hierarchy in both themes. */
+main.min-h-screen {
+  background: var(--cream) !important;
+  color: var(--dark-text);
+}
+
+main.min-h-screen .luxury-card,
+main.min-h-screen .product-card,
+main.min-h-screen .category-menu-card {
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: 0 12px 34px rgba(18, 53, 36, .07);
+}
+
+main.min-h-screen .product-section,
+main.min-h-screen .category-cluster {
+  position: relative;
+}
+
+main.min-h-screen .product-section::before,
+main.min-h-screen .category-cluster::before {
+  content: "";
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+body[data-theme="dark"] main.min-h-screen .luxury-card,
+body[data-theme="dark"] main.min-h-screen .product-card,
+body[data-theme="dark"] main.min-h-screen .category-menu-card,
+body[data-theme="dark"] main.min-h-screen .night-image-stage {
+  background: var(--night-surface) !important;
+  border-color: var(--border) !important;
+  color: var(--night-text);
+}
+
+body[data-theme="dark"] main.min-h-screen input,
+body[data-theme="dark"] main.min-h-screen select,
+body[data-theme="dark"] main.min-h-screen textarea {
+  background-color: var(--night-input) !important;
+  color: var(--night-text) !important;
+  border-color: var(--border) !important;
+}
+
+body[data-theme="dark"] main.min-h-screen input::placeholder {
+  color: var(--night-text-muted);
+}
+
+body[data-theme="dark"] main.min-h-screen .product-card h3,
+body[data-theme="dark"] main.min-h-screen .product-card h3 a,
+body[data-theme="dark"] main.min-h-screen .category-menu-card h3 {
+  color: var(--night-text) !important;
+}
+
+body[data-theme="dark"] main.min-h-screen .product-card p,
+body[data-theme="dark"] main.min-h-screen .category-menu-card p {
+  color: var(--night-text-secondary) !important;
+}
+
+@media (max-width: 767px) {
+  main.min-h-screen header form { display: none; }
+  main.min-h-screen .product-section,
+  main.min-h-screen .category-cluster { padding-left: 1rem; padding-right: 1rem; }
+  main.min-h-screen .product-carousel { margin-inline: -.25rem; padding-inline: .25rem; }
+  main.min-h-screen .category-cluster > div:last-child { display: flex; overflow-x: auto; gap: .75rem; padding-bottom: .5rem; scrollbar-width: none; }
+  main.min-h-screen .category-cluster > div:last-child::-webkit-scrollbar { display: none; }
+  main.min-h-screen .category-menu-card { min-width: 17rem; }
 }
 
 /* The control rules above are the single source of truth for night-mode forms. */
@@ -576,7 +724,7 @@ html[data-theme="dark"] .catalog-page .catalog-category-active .text-xs {
   color: #D4AF37 !important;
 }
 html[data-theme="dark"] .catalog-page .catalog-breadcrumb {
-  background-color: rgba(13, 43, 32, .65) !important;
+  background-color: transparent !important;
   color: #F8F5EE !important;
 }
 html[data-theme="dark"] .catalog-page .catalog-breadcrumb a,

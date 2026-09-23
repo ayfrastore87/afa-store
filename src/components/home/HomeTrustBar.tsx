@@ -1,0 +1,4 @@
+import { Heart, Leaf, ShieldCheck, Truck } from "lucide-react";
+
+export default function HomeTrustBar() { return <section className="mx-auto grid max-w-6xl grid-cols-2 gap-4 px-5 py-10 sm:px-8 md:grid-cols-4"><Trust icon={<Truck />} title="Pengiriman Cepat" text="Seluruh Indonesia" /><Trust icon={<ShieldCheck />} title="Transaksi Aman" text="Data Terlindungi" /><Trust icon={<Leaf />} title="Produk Berkualitas" text="Bahan Pilihan" /><Trust icon={<Heart />} title="Pelanggan Prioritas" text="Kepuasan Anda Utama" /></section>; }
+function Trust({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) { return <div className="flex items-center gap-3"><span className="text-[#123524] dark:text-[#D4AF37]">{icon}</span><div><b className="text-sm">{title}</b><p className="text-xs text-[var(--muted)]">{text}</p></div></div>; }

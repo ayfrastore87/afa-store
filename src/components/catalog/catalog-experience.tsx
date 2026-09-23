@@ -176,7 +176,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                         aria-label="Harga minimum"
                         className="w-full rounded-lg border border-[#C9A45B]/30 bg-white px-3 py-2 text-sm outline-none focus:border-[#C9A45B]"
                     />
-                    <span className="text-[#8B6B3F]">�</span>
+                    <span className="text-[#8B6B3F]">–</span>
                     <input
                         type="number"
                         inputMode="numeric"
@@ -276,11 +276,11 @@ export default function CatalogExperience({ products, categories, totalActive, q
                 </div>
             </header>
 
-            <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-5">
-                <nav aria-label="Breadcrumb" className="catalog-breadcrumb mb-4 flex items-center gap-2 rounded-xl px-2 py-1 text-sm text-[#8B6B3F]">
+            <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+                <nav aria-label="Breadcrumb" className="catalog-breadcrumb mb-4 flex items-center gap-2 text-sm text-[#8B6B3F]">
                     <Link href="/" className="font-semibold hover:text-[#123524]">Beranda</Link>
                     <ChevronRight size={15} aria-hidden="true" />
-                    <span aria-current="page" className="text-[#123524]">Katalog{activeCategoryName ? ` � ${activeCategoryName}` : ""}</span>
+                    <span aria-current="page" className="text-[#123524]">Katalog{activeCategoryName ? ` · ${activeCategoryName}` : ""}</span>
                 </nav>
 
                 {categories.length > 0 && (
@@ -311,7 +311,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                     </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-[216px_minmax(0,1fr)] xl:gap-5">
+                <div className="mt-5 grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)] xl:gap-7">
                     {/* Desktop sidebar */}
                     <aside className="hidden lg:block">
                         <div className="sticky top-24 space-y-6">

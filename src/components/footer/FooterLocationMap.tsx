@@ -41,7 +41,7 @@ export default function FooterLocationMap({ coordinates = null }: Props) {
         return () => document.removeEventListener("keydown", onKey);
     }, [open]);
     return <>
-        <button type="button" onClick={() => setOpen(true)} aria-label="Lihat lokasi AFA STORE" className="relative block h-[105px] w-full max-w-full overflow-hidden rounded-xl border border-[rgba(212,175,55,.28)] bg-[#0E2118] text-left sm:h-[95px] sm:max-w-[360px]">
+        <button type="button" onClick={() => setOpen(true)} aria-label="Lihat lokasi AFA STORE" className="relative block h-[92px] w-full max-w-full overflow-hidden rounded-[10px] border border-[rgba(212,175,55,.28)] bg-[#0E2118] text-left sm:h-[95px] sm:max-w-[360px] sm:rounded-xl">
             <MapCanvas coordinates={coordinates} fullscreen={false} />
             <span className="sr-only">Lihat lokasi AFA STORE</span>
         </button>

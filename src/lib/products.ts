@@ -26,6 +26,7 @@ export function isValidImageSource(value: string | null | undefined): value is s
 type ProductsApiResponse = {
     success: boolean;
     data?: ProductRow[];
+    products?: ProductRow[];
     error?: string;
 };
 
@@ -67,13 +68,25 @@ export async function fetchProducts() {
         const response = await fetch("/api/products", {
             headers: { Accept: "application/json" },
         });
-        const payload = await response.json().catch(() => null) as ProductsApiResponse | null;
+        const payload = await response.json().catch(() => null) as ProductsApiResponse | ProductRow[] | null;
 
-        if (!response.ok || !payload?.success || !Array.isArray(payload.data)) {
+        if (!response.ok || !payload) {
             throw new Error("Produk belum dapat dimuat. Silakan coba lagi.");
         }
 
-        return payload.data.map(mapProduct);
+        const rows = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload.data)
+                ? payload.data
+                : Array.isArray(payload.products)
+                    ? payload.products
+                    : null;
+
+        if (!rows || (!Array.isArray(payload) && payload.success === false)) {
+            throw new Error("Produk belum dapat dimuat. Silakan coba lagi.");
+        }
+
+        return rows.map(mapProduct);
     } catch (error) {
         if (error instanceof Error && error.message === "Produk belum dapat dimuat. Silakan coba lagi.") {
             throw error;

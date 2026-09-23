@@ -353,6 +353,17 @@ body[data-theme="dark"] option {
 html[data-theme="dark"] .premium-footer { background: radial-gradient(circle at 50% 45%, rgba(24,77,71,.18), transparent 38%), linear-gradient(135deg, #061F17 0%, #073126 50%, #061F17 100%); }
 @media (max-width: 767px) { .premium-footer-curve, .premium-footer-orb { opacity: .22; } }
 
+body[data-theme="dark"] .customer-review-card {
+  background: var(--night-surface) !important;
+  border-color: rgba(212, 175, 55, .18) !important;
+  box-shadow: none !important;
+  color: var(--night-text);
+}
+body[data-theme="dark"] .customer-review-card > p { color: var(--night-text-secondary) !important; }
+body[data-theme="dark"] .customer-review-card > div p:first-child { color: var(--night-text) !important; }
+body[data-theme="dark"] .customer-review-card > div p:last-child { color: var(--night-text-muted) !important; }
+@media (hover: hover) { body[data-theme="dark"] .customer-review-card:hover { background: var(--night-surface-elevated) !important; border-color: rgba(212, 175, 55, .30) !important; } }
+
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 

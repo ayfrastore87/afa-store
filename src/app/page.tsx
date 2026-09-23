@@ -15,21 +15,19 @@ import ProductImage from "@/components/product-image";
 import HomeHero from "@/components/home/HomeHero";
 import HomeCategories from "@/components/home/HomeCategories";
 import HomeFeaturedProducts from "@/components/home/HomeFeaturedProducts";
-import HomePromoBanners from "@/components/home/HomePromoBanners";
+import HomeCustomerReviews from "@/components/home/HomeCustomerReviews";
 import HomeTrustBar from "@/components/home/HomeTrustBar";
 import { CartItem, type CartToast, useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
 import { parseJsonResponse } from "@/lib/api-fetch";
 import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 import { fetchProducts, formatRupiah, type Product } from "@/lib/products";
-type Banner = { id: string; title: string; subtitle: string; image: string | null; ctaLabel: string | null; ctaUrl: string | null };
 
 export default function Home() {
   const [cartOpen, setCartOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [query, setQuery] = useState(""), [filter, setFilter] = useState("Semua"), [sort, setSort] = useState("featured");
   const [products, setProducts] = useState<Product[]>([]), [productsLoading, setProductsLoading] = useState(true), [productsError, setProductsError] = useState("");
-  const [banners, setBanners] = useState<Banner[]>([]);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [addState, setAddState] = useState<Record<string, "adding" | "added">>({});
@@ -128,16 +126,15 @@ export default function Home() {
     setProductsError("");
     fetchProducts()
       .then(setProducts)
-      .catch(() => setProductsError("Produk sedang mengalami gangguan. Silakan coba lagi beberapa saat."))
+      .catch((error: unknown) => {
+        if (process.env.NODE_ENV === "development") console.error("Homepage products failed", error);
+        setProductsError("Produk belum dapat dimuat.");
+      })
       .finally(() => setProductsLoading(false));
   }, []);
 
   useEffect(() => {
     loadProducts();
-    void fetch("/api/banners", { headers: { Accept: "application/json" } }).then(async (response) => {
-      const payload = await response.json() as { success?: boolean; data?: Banner[] };
-      if (response.ok && payload.success && Array.isArray(payload.data)) setBanners(payload.data);
-    }).catch(() => undefined);
   }, [loadProducts]);
 
   useEffect(() => {
@@ -155,7 +152,7 @@ export default function Home() {
     <HomeHero products={products} onProducts={() => katalogRef.current?.scrollIntoView({ behavior: "smooth" })} />
     <HomeCategories groups={categoryGroups} loading={productsLoading} onSelect={selectCatalogCategory} />
     <HomeFeaturedProducts products={visibleProducts} loading={productsLoading} error={productsError} isWishlisted={isWishlisted} toggleWishlist={toggleWishlist} addCart={addCart} addState={addState} buyNow={buyNow} onRetry={loadProducts} carouselRef={productsCarouselRef} onPause={() => { carouselPauseRef.current = true; }} onResume={() => { carouselPauseRef.current = false; }} onPrevious={() => moveProducts(-1)} onNext={() => moveProducts(1)} />
-    <HomePromoBanners banners={banners} /><HomeTrustBar /><PremiumFooter /><Floating onCart={openCart} totalItems={totalItems} /><CartDrawer open={cartOpen} cart={cart} subtotal={subtotal} checkoutPending={checkoutPending} checkoutError={checkoutError} itemState={itemState} onClose={() => setCartOpen(false)} onCheckout={continueToCheckout} increaseQty={increaseQty} decreaseQty={decreaseQty} removeFromCart={removeFromCart} clearCart={clearCart} />
+    <HomeCustomerReviews /><HomeTrustBar /><PremiumFooter /><Floating onCart={openCart} totalItems={totalItems} /><CartDrawer open={cartOpen} cart={cart} subtotal={subtotal} checkoutPending={checkoutPending} checkoutError={checkoutError} itemState={itemState} onClose={() => setCartOpen(false)} onCheckout={continueToCheckout} increaseQty={increaseQty} decreaseQty={decreaseQty} removeFromCart={removeFromCart} clearCart={clearCart} />
   </main>;
 }
 function CategoryCluster({ groups, loading, onSelect }: { groups: { name: string; items: Product[] }[]; loading: boolean; onSelect: (category: string) => void }) {

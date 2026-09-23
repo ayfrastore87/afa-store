@@ -37,7 +37,7 @@ export function CatalogProductCard({ item, onAdd, onBuy, onWish, wish, addState 
                     onClick={onWish}
                     aria-pressed={wish}
                     aria-label={wish ? `Hapus ${item.name} dari wishlist` : `Tambah ${item.name} ke wishlist`}
-                    className="absolute right-2.5 top-2.5 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/95 shadow-[0_3px_10px_rgba(18,53,36,0.12)] backdrop-blur transition-transform hover:scale-105 active:scale-95"
+                    className="night-wishlist absolute right-2.5 top-2.5 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/95 shadow-[0_3px_10px_rgba(18,53,36,0.12)] backdrop-blur transition-transform hover:scale-105 active:scale-95"
                 >
                     <Heart size={16} fill={wish ? "#D14343" : "none"} className={wish ? "text-[#D14343]" : "text-[#C9A45B]"} />
                 </button>
@@ -98,7 +98,7 @@ export function CatalogProductCard({ item, onAdd, onBuy, onWish, wish, addState 
                         disabled={outOfStock || addState === "adding" || addState === "added"}
                         aria-busy={addState === "adding"}
                         aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke keranjang`}
-                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/40 bg-white text-[#8B6B3F] transition-all hover:border-[#C9A45B] hover:bg-[#F8F5EE] active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
+                        className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/40 bg-white text-[#8B6B3F] transition-all hover:border-[#C9A45B] hover:bg-[#F8F5EE] active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                         {addState === "adding" ? (
                             <svg className="h-4 w-4 animate-spin text-[#C9A45B]" viewBox="0 0 24 24" aria-hidden="true">

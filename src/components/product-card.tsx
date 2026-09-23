@@ -23,7 +23,7 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, scale: 1.01 }}
-      className="luxury-card product-card flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] bg-white shadow-sm transition-all hover:shadow-xl border border-gray-100"
+      className="luxury-card product-card flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] border border-gray-100 bg-white shadow-sm transition-all hover:shadow-xl"
     >
       {/* IMAGE AREA */}
       <div className="night-image-stage relative aspect-square w-full overflow-hidden bg-gradient-to-br from-[#FDF8F3] via-white to-[#FFF8F0]">
@@ -32,7 +32,7 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
           whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
           onClick={(e) => { e.preventDefault(); onWish?.(); }}
           aria-label={wish ? `Hapus ${item.name} dari wishlist` : `Tambah ${item.name} ke wishlist`}
-          className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white p-2 shadow-md backdrop-blur-sm transition-all"
+          className="night-wishlist absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white p-2 shadow-md backdrop-blur-sm transition-all"
         >
           <Heart 
             fill={wish ? "#ef4444" : "none"} 
@@ -72,7 +72,7 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
 
         {/* Variant/Size Badge */}
         {item.size && (
-          <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-[#F8F5EE] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[#8B6B3F] sm:text-[10px] md:text-xs">
+          <span className="night-size-badge mt-0.5 inline-flex w-fit items-center rounded-full bg-[#F8F5EE] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[#8B6B3F] sm:text-[10px] md:text-xs">
             {item.size}
           </span>
         )}
@@ -92,7 +92,7 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
       </div>
 
       {/* ACTION AREA */}
-      <div className="border-t border-gray-100 px-4 py-3">
+      <div className="night-card-actions border-t border-gray-100 px-4 py-3">
         <div className="flex flex-col gap-2">
           {/* Add to Cart Button */}
           <button 
@@ -101,7 +101,7 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
             disabled={outOfStock || addState === "adding" || addState === "added"}
             aria-busy={addState === "adding"}
             aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke keranjang`}
-            className="group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#C9A45B]/30 bg-white px-4 py-2.5 text-[10px] font-semibold text-[#8B6B3F] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-sm active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/30 disabled:hover:bg-transparent sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
+            className="night-secondary-button group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#C9A45B]/30 bg-white px-4 py-2.5 text-[10px] font-semibold text-[#8B6B3F] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-sm active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/30 disabled:hover:bg-transparent sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
           >
             {addState === "adding" ? (
               <>

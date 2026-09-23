@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, X } from "lucide-react";
 import type { CheckoutItem } from "@/lib/checkout";
@@ -334,6 +335,15 @@ export default function CheckoutPage() {
             reverseAbortRef.current?.abort();
         };
     }, []);
+
+    // A map picker is a viewport-level interaction: prevent the checkout behind it from
+    // scrolling, and always restore the exact previous body style on close/unmount.
+    useEffect(() => {
+        if (!mapOpen || typeof document === "undefined") return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = previousOverflow; };
+    }, [mapOpen]);
 
     useEffect(() => {
         fetch("/api/checkout/session")
@@ -920,12 +930,10 @@ export default function CheckoutPage() {
 
                         <Panel title="1 · Pilih Lokasi di Peta">
                             {confirmedLocation === null ? (
-                                <div className="night-map-panel rounded-2xl border border-[#C9A45B]/30 bg-white p-5 text-center">
-                                    <MapPin size={28} className="mx-auto text-[#184D47]" />
-                                    <h3 className="mt-2 font-display text-lg font-bold text-[#123524]">Pilih Lokasi Pengiriman</h3>
-                                    <p className="mt-1 text-sm text-[#6D6558]">Tentukan titik rumah atau lokasi tujuan melalui peta.</p>
-                                    <button type="button" onClick={openLocationPicker} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#184D47] px-5 text-sm font-bold text-white hover:bg-[#123524] sm:w-auto sm:px-8">
-                                        <MapPin size={16} /> Buka Peta
+                                <div className="night-map-panel relative h-[230px] overflow-hidden rounded-2xl border border-[#C9A45B]/30 bg-[#e7e4da] sm:h-[260px] lg:h-[320px]">
+                                    <button type="button" onClick={openLocationPicker} className="absolute inset-0 z-20 cursor-pointer text-left" aria-label="Buka peta untuk memilih lokasi">
+                                        <CheckoutLocationMap center={draftLocation} zoom={mapZoom} onCenterChange={() => undefined} onZoomChange={() => undefined} onInteractionStart={() => undefined} onInteractionEnd={() => undefined} thumbnail />
+                                        <span className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#123524]/95 px-4 py-2 text-xs font-bold text-white shadow-lg"><MapPin size={14} /> PILIH LOKASI · BUKA PETA</span>
                                     </button>
                                 </div>
                             ) : (
@@ -1081,7 +1089,7 @@ export default function CheckoutPage() {
                 </form>
             </div>
 
-            {mapOpen && (
+            {mapOpen && typeof document !== "undefined" && createPortal((
                 <div className="fixed inset-0 z-[100] flex h-[100dvh] w-full flex-col overflow-hidden bg-[#F8F5EE]" role="dialog" aria-modal="true" aria-label="Tentukan Lokasi Pengiriman">
                     {/* Header */}
                     <header className="flex shrink-0 items-center gap-2 border-b border-[#C9A45B]/30 bg-white px-3 py-3">
@@ -1178,7 +1186,7 @@ export default function CheckoutPage() {
                         </button>
                     </div>
                 </div>
-            )}
+            ), document.body)}
         </main>
     );
 }

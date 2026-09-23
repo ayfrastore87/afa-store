@@ -7,10 +7,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, ChevronLeft, ChevronRight, Heart, LayoutGrid, Search, ShoppingCart, SlidersHorizontal, Star, User, X } from "lucide-react";
 import { CatalogProductCard } from "@/components/catalog/catalog-product-card";
+import ThemeToggle from "@/components/theme-toggle";
+import FloatingWhatsApp from "@/components/floating-whatsapp";
 import ProductImage from "@/components/product-image";
 import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
-import { hasAuthenticatedUser, loginPath, whatsappUrl } from "@/lib/client-auth";
+import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 import type { Product } from "@/lib/products";
 import {
     CATALOG_SORT_LABELS,
@@ -174,7 +176,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                         aria-label="Harga minimum"
                         className="w-full rounded-lg border border-[#C9A45B]/30 bg-white px-3 py-2 text-sm outline-none focus:border-[#C9A45B]"
                     />
-                    <span className="text-[#8B6B3F]">—</span>
+                    <span className="text-[#8B6B3F]">�</span>
                     <input
                         type="number"
                         inputMode="numeric"
@@ -242,7 +244,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
     );
 
     return (
-        <main className="min-h-screen bg-[#F8F5EE] text-[#123524]">
+        <main className="catalog-page min-h-screen bg-[#F8F5EE] text-[#123524]">
             <WishlistToast message={wishToast} />
             <CartToast toast={cartToast} onDismiss={dismissToast} />
 
@@ -252,14 +254,13 @@ export default function CatalogExperience({ products, categories, totalActive, q
                         <Image src="/AFA LOGO.svg" alt="AFA STORE" width={80} height={120} className="h-12 w-9 object-contain" priority sizes="36px" />
                         <span className="hidden sm:inline">AFA STORE</span>
                     </Link>
-                    <Link href="/produk" aria-current="page" className="inline-flex min-h-10 shrink-0 items-center rounded-full border border-[#C9A45B] bg-[#C9A45B]/10 px-3 text-sm font-bold text-[#123524] shadow-sm sm:px-4">Belanja</Link>
-                    <form onSubmit={submitSearch} className="flex flex-1 items-center rounded-full border border-[#C9A45B]/25 bg-white px-4 py-2 shadow-sm">
+                    <form onSubmit={submitSearch} className="catalog-search flex flex-1 items-center rounded-full border border-[#C9A45B]/25 bg-white px-4 py-2 shadow-sm">
                         <input
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
                             placeholder="Cari produk AFA STORE..."
                             aria-label="Cari produk"
-                            className="w-full bg-transparent text-sm outline-none placeholder:text-[#8B6B3F]/70"
+                            className="w-full bg-transparent text-sm text-[#123524] outline-none placeholder:text-[#8B6B3F]/70"
                         />
                         <button type="submit" aria-label="Cari" className="grid h-8 w-8 place-items-center text-[#C9A45B]">
                             <Search size={18} />
@@ -268,6 +269,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                     <Link href="/wishlist" aria-label="Wishlist" className="grid h-10 w-10 place-items-center text-[#123524] transition hover:text-[#C9A45B]">
                         <Heart size={20} />
                     </Link>
+                    <ThemeToggle />
                     <Link href="/account" aria-label="Akun" className="grid h-10 w-10 place-items-center text-[#123524] transition hover:text-[#C9A45B]">
                         <User size={20} />
                     </Link>
@@ -275,10 +277,10 @@ export default function CatalogExperience({ products, categories, totalActive, q
             </header>
 
             <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-5">
-                <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm text-[#8B6B3F]">
+                <nav aria-label="Breadcrumb" className="catalog-breadcrumb mb-4 flex items-center gap-2 rounded-xl px-2 py-1 text-sm text-[#8B6B3F]">
                     <Link href="/" className="font-semibold hover:text-[#123524]">Beranda</Link>
                     <ChevronRight size={15} aria-hidden="true" />
-                    <span aria-current="page" className="text-[#123524]">Katalog{activeCategoryName ? ` · ${activeCategoryName}` : ""}</span>
+                    <span aria-current="page" className="text-[#123524]">Katalog{activeCategoryName ? ` � ${activeCategoryName}` : ""}</span>
                 </nav>
 
                 {categories.length > 0 && (
@@ -290,7 +292,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                     <button
                         type="button"
                         onClick={() => setDrawerOpen(true)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-full border border-[#C9A45B]/30 bg-white py-2.5 text-sm font-bold text-[#123524] shadow-sm"
+                        className="catalog-control flex flex-1 items-center justify-center gap-2 rounded-full border border-[#C9A45B]/30 bg-white py-2.5 text-sm font-bold text-[#123524] shadow-sm"
                     >
                         <SlidersHorizontal size={16} /> Filter
                     </button>
@@ -300,7 +302,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                             id="mobile-sort"
                             value={query.sort}
                             onChange={(event) => navigate({ sort: event.target.value as CatalogSort, page: 1 })}
-                            className="w-full rounded-full border border-[#C9A45B]/30 bg-white py-2.5 pl-4 pr-8 text-sm font-bold text-[#123524] shadow-sm"
+                            className="catalog-control w-full rounded-full border border-[#C9A45B]/30 bg-white py-2.5 pl-4 pr-8 text-sm font-bold text-[#123524] shadow-sm"
                         >
                             {(Object.keys(CATALOG_SORT_LABELS) as CatalogSort[]).map((value) => (
                                 <option key={value} value={value}>{CATALOG_SORT_LABELS[value]}</option>
@@ -313,13 +315,13 @@ export default function CatalogExperience({ products, categories, totalActive, q
                     {/* Desktop sidebar */}
                     <aside className="hidden lg:block">
                         <div className="sticky top-24 space-y-6">
-                            <div className="rounded-2xl border border-[#C9A45B]/15 bg-white p-4 shadow-sm">
+                            <div className="catalog-surface rounded-2xl border border-[#C9A45B]/15 bg-white p-4 shadow-sm">
                                 <p className="mb-3 flex items-center gap-2 text-sm font-bold text-[#123524]">
                                     <LayoutGrid size={16} className="text-[#C9A45B]" /> Semua Kategori
                                 </p>
                                 {categoryList}
                             </div>
-                            <div className="rounded-2xl border border-[#C9A45B]/15 bg-white p-4 shadow-sm">
+                            <div className="catalog-surface rounded-2xl border border-[#C9A45B]/15 bg-white p-4 shadow-sm">
                                 <p className="mb-3 text-sm font-bold text-[#123524]">Filter</p>
                                 {filterBlock}
                             </div>
@@ -327,7 +329,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                     </aside>
                     {/* Catalog main column */}
                     <section aria-label="Daftar produk" className="min-w-0">
-                        <div className="catalog-toolbar mb-4 flex min-h-[52px] flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[#123524]/[0.08] bg-white px-4 py-2.5 shadow-[0_5px_18px_rgba(18,53,36,0.045)]">
+                        <div className="catalog-toolbar catalog-surface mb-4 flex min-h-[52px] flex-wrap items-center justify-between gap-3 rounded-[16px] border border-[#123524]/[0.08] bg-white px-4 py-2.5 shadow-[0_5px_18px_rgba(18,53,36,0.045)]">
                             <div className="hidden items-center gap-2 sm:flex">
                                 <span className="text-sm font-semibold text-[#8B6B3F]">Urutkan</span>
                                 <div className="flex flex-wrap items-center gap-1.5">
@@ -437,19 +439,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                     {totalItems > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-[#C9A45B] px-1.5 text-[10px] font-bold text-white">{totalItems > 99 ? "99+" : totalItems}</span>}
                 </span>
             </Link>
-            {whatsappUrl("Halo AFA STORE, saya ingin bertanya tentang produk Anda.") && (
-                <a
-                    href={whatsappUrl("Halo AFA STORE, saya ingin bertanya tentang produk Anda.")!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Chat WhatsApp"
-                    className="fixed bottom-[96px] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-white/90 text-[#25D366] shadow-[0_5px_16px_rgba(18,53,36,0.12)] transition hover:scale-105 active:scale-95"
-                >
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-7 w-7 drop-shadow-[0_3px_4px_rgba(37,211,102,0.40)]">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347Z" />
-                    </svg>
-                </a>
-            )}
+            <FloatingWhatsApp />
             <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Kembali ke atas" className="fixed bottom-5 right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-white/90 text-[#C9A45B] shadow-[0_5px_16px_rgba(18,53,36,0.12)] transition hover:scale-105 active:scale-95">
                 <ArrowUp size={28} strokeWidth={2.4} className="drop-shadow-[0_3px_4px_rgba(201,164,91,0.45)]" />
             </button>
@@ -463,7 +453,7 @@ function CategoryLink({ label, count, active, href }: { label: string; count: nu
             href={href}
             scroll={false}
             aria-current={active ? "true" : undefined}
-            className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition ${active ? "bg-[#F8F5EE] font-semibold text-[#123524]" : "text-[#5c5346] hover:bg-[#F8F5EE]"}`}
+            className={`catalog-category-link flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm transition ${active ? "catalog-category-active bg-[#F8F5EE] font-semibold text-[#123524]" : "text-[#5c5346] hover:bg-[#F8F5EE]"}`}
         >
             <span className="flex items-center gap-2 truncate">
                 {active && <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full bg-[#C9A45B]" />}
@@ -480,7 +470,7 @@ function SortButton({ active, label, href }: { active: boolean; label: string; h
             href={href}
             scroll={false}
             aria-current={active ? "true" : undefined}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${active ? "bg-[#123524] text-white" : "text-[#5c5346] hover:bg-[#F8F5EE]"}`}
+            className={`catalog-sort rounded-full border px-3.5 py-1.5 text-sm font-semibold transition ${active ? "catalog-sort-active bg-[#123524] text-white" : "text-[#5c5346] hover:bg-[#F8F5EE]"}`}
         >
             {label}
         </Link>
@@ -490,13 +480,13 @@ function SortButton({ active, label, href }: { active: boolean; label: string; h
 function PriceSortToggle({ query, navigate }: { query: CatalogQuery; navigate: (overrides: Partial<CatalogQuery>) => void }) {
     const active = query.sort === "price_asc" || query.sort === "price_desc";
     const next: CatalogSort = query.sort === "price_asc" ? "price_desc" : "price_asc";
-    const label = query.sort === "price_asc" ? "Harga ↑" : query.sort === "price_desc" ? "Harga ↓" : "Harga";
+    const label = query.sort === "price_asc" ? "Harga ?" : query.sort === "price_desc" ? "Harga ?" : "Harga";
     return (
         <button
             type="button"
             onClick={() => navigate({ sort: next, page: 1 })}
             aria-pressed={active}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${active ? "bg-[#123524] text-white" : "text-[#5c5346] hover:bg-[#F8F5EE]"}`}
+            className={`catalog-sort rounded-full border px-3.5 py-1.5 text-sm font-semibold transition ${active ? "catalog-sort-active bg-[#123524] text-white" : "text-[#5c5346] hover:bg-[#F8F5EE]"}`}
         >
             {label}
         </button>
@@ -542,7 +532,7 @@ function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogC
                     <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#A7833A]">Kategori Pilihan</p>
                     <div className="flex items-end justify-between gap-3">
                         <h2 id="kategori-pilihan" className="mt-1 font-display text-xl font-bold text-[#123524] sm:text-2xl">Belanja per Kategori</h2>
-                        <Link href="/produk" scroll={false} className="shrink-0 pb-0.5 text-xs font-bold text-[#A7833A] transition hover:text-[#123524] sm:text-sm">Lihat Semua</Link>
+                        <Link href="/produk" scroll={false} className="shrink-0 rounded-md px-1 py-1 text-xs font-bold text-[#D4AF37] transition hover:text-[#E4C982] sm:text-sm">Lihat Semua Produk&nbsp; ?</Link>
                     </div>
                 </div>
                 {overflowing && (
@@ -565,7 +555,7 @@ function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogC
                             href={buildCatalogHref(query, { category: active ? "" : category.slug, page: 1 })}
                             scroll={false}
                             aria-current={active ? "true" : undefined}
-                            className={`night-category-card group flex w-[116px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border p-3 text-center transition sm:w-[132px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
+                            className={`catalog-category-card night-category-card group flex w-[116px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border p-3 text-center transition sm:w-[132px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
                         >
                             <span className="night-category-image-stage night-category-media-surface relative grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#FBF4E8] sm:h-[72px] sm:w-[72px]">
                                 <ProductImage src={category.image} alt={category.name} sizes="72px" imgClassName="p-1.5" />
@@ -611,7 +601,7 @@ function CartToast({ toast, onDismiss }: { toast: { title: string; message: stri
                 >
                     <div className="w-full max-w-sm rounded-2xl border border-[#C9A45B]/30 bg-white p-4 text-[#2E2A26] shadow-[0_18px_45px_rgba(46,42,38,0.18)] md:w-96">
                         <div className="flex items-start gap-3">
-                            <span aria-hidden="true" className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full font-bold text-white ${toast.variant === "success" ? "bg-[#2e7d32]" : "bg-[#c62828]"}`}>{toast.variant === "success" ? "✓" : "!"}</span>
+                            <span aria-hidden="true" className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full font-bold text-white ${toast.variant === "success" ? "bg-[#2e7d32]" : "bg-[#c62828]"}`}>{toast.variant === "success" ? "?" : "!"}</span>
                             <div className="min-w-0 flex-1">
                                 <p className="font-bold leading-tight">{toast.title}</p>
                                 <p className="mt-1 break-words text-sm text-[#8B6B3F]">{toast.message}</p>
@@ -627,4 +617,5 @@ function CartToast({ toast, onDismiss }: { toast: { title: string; message: stri
         </AnimatePresence>
     );
 }
+
 

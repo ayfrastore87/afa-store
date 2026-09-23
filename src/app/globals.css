@@ -75,26 +75,26 @@ body {
 
 body[data-theme="dark"] {
   /* Deliberately separated premium night hierarchy: page → card → elevated → input. */
-  --background: #07150F;
+  --background: #061A13;
   --foreground: #F8F5EE;
-  --muted: #AAA394;
-  --border: rgba(201, 164, 91, 0.28);
+  --muted: #A7B0A8;
+  --border: rgba(212, 175, 55, 0.28);
   --accent: #D4AF37;
-  --cream: #0E2118;
-  --ivory: #142A20;
-  --secondary: #10241B;
+  --cream: #0D2B20;
+  --ivory: #123524;
+  --secondary: #0A241A;
   --gold: #D4AF37;
   --gold-dark: #C9A45B;
   --dark-text: #F8F5EE;
   --soft-brown: #D8D2C5;
-  --card: #0E2118;
-  --surface-elevated: #142A20;
-  --surface-input: #10241B;
-  --text-secondary: #D8D2C5;
-  --text-placeholder: #8F968F;
+  --card: #0D2B20;
+  --surface-elevated: #123524;
+  --surface-input: #071F17;
+  --text-secondary: #D8D4C8;
+  --text-placeholder: #A7B0A8;
   background:
     radial-gradient(circle at 15% 10%, rgba(201, 164, 91, 0.10), transparent 28rem),
-    linear-gradient(135deg, #07150F, #081711 52%, #0E2118);
+    linear-gradient(135deg, #061A13, #0A241A 52%, #0D2B20);
   color: var(--foreground);
 }
 
@@ -187,6 +187,30 @@ body[data-theme="dark"] option {
 
 .theme-toggle {
   isolation: isolate;
+}
+
+.premium-footer {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(24,77,71,.18), transparent 38%),
+    linear-gradient(135deg, #061F17 0%, #073126 50%, #061F17 100%);
+}
+.premium-footer-orb, .premium-footer-curve { pointer-events: none; position: absolute; }
+.premium-footer-orb { width: 15rem; height: 15rem; border: 1px solid rgba(212,175,55,.08); border-radius: 48% 52% 62% 38%; opacity: .5; transform: rotate(28deg); }
+.premium-footer-orb-left { left: -8rem; top: 3rem; }
+.premium-footer-orb-right { right: -8rem; bottom: 3rem; transform: rotate(-30deg); }
+.premium-footer-curve { left: 34%; top: 18%; width: 34%; height: 58%; border-top: 1px solid rgba(212,175,55,.20); border-radius: 50%; transform: rotate(-12deg); }
+.premium-footer-faq { scrollbar-width: thin; scrollbar-color: rgba(212,175,55,.35) transparent; }
+.premium-footer-faq::-webkit-scrollbar { width: 4px; }
+.premium-footer-faq::-webkit-scrollbar-thumb { background: rgba(212,175,55,.35); border-radius: 999px; }
+html[data-theme="dark"] .premium-footer { background: radial-gradient(circle at 50% 45%, rgba(24,77,71,.18), transparent 38%), linear-gradient(135deg, #061F17 0%, #073126 50%, #061F17 100%); }
+@media (max-width: 767px) { .premium-footer-curve, .premium-footer-orb { opacity: .22; } }
+
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .product-carousel { scroll-behavior: auto; }
 }
 
 .theme-tooltip {
@@ -518,6 +542,61 @@ header > div {
   background: transparent;
 }
 
+/* Catalog-only night polish. Media is intentionally not targeted here. */
+html[data-theme="dark"] .catalog-page .catalog-surface,
+html[data-theme="dark"] .catalog-page .catalog-category-card {
+  background-color: #0D2B20 !important;
+  border-color: rgba(212, 175, 55, .22) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-search,
+html[data-theme="dark"] .catalog-page .catalog-control,
+html[data-theme="dark"] .catalog-page .catalog-sort,
+html[data-theme="dark"] .catalog-page .catalog-page-arrow {
+  background-color: #071F17 !important;
+  border-color: rgba(212, 175, 55, .18) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-sort-active,
+html[data-theme="dark"] .catalog-page .catalog-category-active {
+  background-color: rgba(212, 175, 55, .14) !important;
+  border-color: #D4AF37 !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-category-link:not(.catalog-category-active) {
+  color: #A7B0A8 !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-category-active {
+  border-left: 3px solid #D4AF37 !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-category-link .text-xs {
+  color: #A7B0A8 !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-category-active .text-xs {
+  color: #D4AF37 !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-breadcrumb {
+  background-color: rgba(13, 43, 32, .65) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-breadcrumb a,
+html[data-theme="dark"] .catalog-page .catalog-breadcrumb span,
+html[data-theme="dark"] .catalog-page .catalog-search input {
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-search input::placeholder {
+  color: #A7B0A8 !important;
+}
+html[data-theme="dark"] .catalog-page .catalog-search:focus-within {
+  border-color: #D4AF37 !important;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, .08);
+}
+html[data-theme="dark"] .catalog-page .catalog-sort:hover,
+html[data-theme="dark"] .catalog-page .catalog-control:hover {
+  background-color: rgba(212, 175, 55, .08) !important;
+  border-color: rgba(212, 175, 55, .45) !important;
+}
+
 /* ---------------------------------------------------------------------------
    TAHAP E — Kasir thermal receipt print (58mm).
    The receipt is portalled directly under <body> with id="kasir-receipt".
@@ -710,18 +789,18 @@ header > div {
 /* Images, maps, QRIS, logos, and provider widgets are never recolored.       */
 /* ========================================================================== */
 body:has([data-theme="dark"]) {
-  --night-bg: #07150F;
-  --night-bg-secondary: #081711;
-  --night-surface: #0E2118;
-  --night-surface-elevated: #142A20;
-  --night-surface-hover: #1C392B;
-  --night-input: #10241B;
-  --night-text: #F2EDE3;
-  --night-text-secondary: #D8D2C5;
-  --night-text-muted: #AAA394;
-  --night-placeholder: #929B94;
-  --night-border: rgba(201, 164, 91, .30);
-  --night-border-strong: rgba(201, 164, 91, .50);
+  --night-bg: #061A13;
+  --night-bg-secondary: #0A241A;
+  --night-surface: #0D2B20;
+  --night-surface-elevated: #123524;
+  --night-surface-hover: #184B35;
+  --night-input: #071F17;
+  --night-text: #F8F5EE;
+  --night-text-secondary: #D8D4C8;
+  --night-text-muted: #A7B0A8;
+  --night-placeholder: #A7B0A8;
+  --night-border: rgba(212, 175, 55, .28);
+  --night-border-strong: rgba(212, 175, 55, .42);
   --night-gold: #D4AF37;
   --night-gold-soft: #C9A45B;
   --night-success: #83C69A;
@@ -973,19 +1052,55 @@ body:has([data-theme="dark"]) label:has(input[name="paymentMethod"][value="QRIS"
 
 /* Final Night Mode surface audit: one root-scoped visual system for customer UI. */
 html[data-theme="dark"] body {
-  --night-bg: #07150F;
-  --night-surface: #0E2118;
-  --night-surface-elevated: #142A20;
-  --night-surface-hover: #1C392B;
-  --night-input: #10241B;
-  --night-text: #F2EDE3;
-  --night-text-secondary: #D8D2C5;
-  --night-text-muted: #AAA394;
-  --night-placeholder: #929B94;
-  --night-border: rgba(201,164,91,.30);
-  --night-border-strong: rgba(201,164,91,.50);
+  --night-bg: #061A13;
+  --night-bg-secondary: #0A241A;
+  --night-surface: #0D2B20;
+  --night-surface-elevated: #123524;
+  --night-surface-hover: #184B35;
+  --night-input: #071F17;
+  --night-text: #F8F5EE;
+  --night-text-secondary: #D8D4C8;
+  --night-text-muted: #A7B0A8;
+  --night-placeholder: #A7B0A8;
+  --night-border: rgba(212,175,55,.28);
+  --night-border-strong: rgba(212,175,55,.42);
   --night-gold: #D4AF37;
   --night-gold-soft: #C9A45B;
+}
+
+/* Final surface guard: keep every customer-facing layer in the night system. */
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: var(--night-bg) !important;
+  color: var(--night-text);
+}
+html[data-theme="dark"] body > header,
+html[data-theme="dark"] header,
+html[data-theme="dark"] nav {
+  background-color: var(--night-surface) !important;
+  border-color: var(--night-border) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] main,
+html[data-theme="dark"] main[class*="bg-"],
+html[data-theme="dark"] section[class*="bg-"] {
+  background-color: var(--night-bg) !important;
+  color: var(--night-text);
+}
+html[data-theme="dark"] body :where(.luxury-card, .theme-dark-card, .catalog-card, .product-card, [role="dialog"], [role="menu"], [role="listbox"]) {
+  background-color: var(--night-surface) !important;
+  border-color: var(--night-border) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] body :where(.modal, [data-modal="true"], .modal-content) {
+  background-color: var(--night-surface-elevated) !important;
+  color: var(--night-text) !important;
+  border-color: var(--night-border) !important;
+}
+html[data-theme="dark"] body :where(input, textarea, select, [role="combobox"]) {
+  background-color: var(--night-input) !important;
+  color: var(--night-text) !important;
+  border-color: var(--night-border) !important;
 }
 
 html[data-theme="dark"] body .night-image-stage,
@@ -1028,6 +1143,43 @@ html[data-theme="dark"] body :where(.skeleton, [class*="animate-pulse"]) { backg
 html[data-theme="dark"] body :where(.theme-tooltip, [role="dialog"], [role="menu"], [role="listbox"]) { background-color: var(--night-surface-elevated) !important; color: var(--night-text) !important; border-color: var(--night-border) !important; }
 html[data-theme="dark"] body :where(input, textarea, select, [role="combobox"]) { background-color: var(--night-input) !important; color: var(--night-text) !important; border-color: var(--night-border) !important; }
 html[data-theme="dark"] body :where(input, textarea, select)::placeholder { color: var(--night-placeholder) !important; }
+
+/* Compact interactive surfaces that must never become white in night mode. */
+html[data-theme="dark"] body :where(.night-wishlist, .night-secondary-button) {
+  background-color: rgba(7, 31, 23, .90) !important;
+  border-color: var(--night-border-strong) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] body :where(.night-secondary-button):hover {
+  background-color: rgba(212, 175, 55, .08) !important;
+}
+html[data-theme="dark"] body .night-size-badge {
+  background-color: rgba(248, 245, 238, .12) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] body .night-card-actions { border-color: var(--night-border) !important; }
+
+/* SweetAlert2 is mounted directly under body, so it needs an explicit root rule. */
+html[data-theme="dark"] body :where(.swal2-popup) {
+  background: var(--night-surface) !important;
+  color: var(--night-text) !important;
+  border: 1px solid var(--night-border);
+}
+html[data-theme="dark"] body :where(.swal2-title) { color: var(--night-text) !important; }
+html[data-theme="dark"] body :where(.swal2-html-container, .swal2-content) { color: var(--night-text-secondary) !important; }
+html[data-theme="dark"] body :where(.swal2-input, .swal2-textarea, .swal2-select) {
+  background: var(--night-input) !important;
+  color: var(--night-text) !important;
+  border-color: var(--night-border) !important;
+}
+html[data-theme="dark"] body :where(.swal2-confirm) {
+  background: #124B35 !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] body :where(.swal2-cancel) {
+  background: rgba(167, 176, 168, .15) !important;
+  color: var(--night-text-secondary) !important;
+}
 html[data-theme="dark"] body :where(input, textarea, select):focus { border-color: var(--night-gold) !important; }
 
 /* Actual product/QRIS/logo/map media retain their source pixels; no filter or blend mode. */
@@ -1117,6 +1269,132 @@ html[data-theme="dark"] body :where([role="dialog"], [role="menu"], [role="listb
 html[data-theme="dark"] body .night-image-stage img,
 html[data-theme="dark"] body .night-category-image-stage img { filter: none !important; opacity: 1 !important; mix-blend-mode: normal !important; }
 
+/* Final catalog polish: image and information share one restrained premium card. */
+html[data-theme="dark"] body :where(.product-card, .catalog-card) {
+  background-color: #0D2B20 !important;
+  border-color: rgba(212,175,55,.18) !important;
+}
+html[data-theme="dark"] body :where(.product-card > .relative, .catalog-card-image, .night-image-stage) {
+  background: #0D2B20 !important;
+  border-color: rgba(212,175,55,.10) !important;
+}
+html[data-theme="dark"] body :where(.product-card-info, .catalog-card > .flex, .catalog-card > div:not(.catalog-card-image):not(.night-image-stage)) {
+  background: #0A241A !important;
+  border-top-color: rgba(212,175,55,.10) !important;
+}
+html[data-theme="dark"] body :where(.product-card h3, .catalog-card h3, .product-card p, .catalog-card p, .product-card strong, .catalog-card strong) {
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] body :where(.product-card .text-\[\#D4AF37\], .catalog-card .text-\[\#D4AF37\], .product-card [aria-label*="rating"], .catalog-card [aria-label*="rating"]) {
+  color: #D4AF37 !important;
+}
+html[data-theme="dark"] body :where(.product-card .bg-\[\#D4AF37\], .catalog-card .bg-\[\#D4AF37\]) {
+  background-color: #D4AF37 !important;
+  color: #061A13 !important;
+}
+html[data-theme="dark"] body :where(.product-card .bg-white\/10, .catalog-card .bg-white\/10) {
+  background-color: rgba(248,245,238,.12) !important;
+  color: #F8F5EE !important;
+}
+
+/* Catalog controls and floating actions use the same input/surface language. */
+html[data-theme="dark"] body :where(.catalog-experience input, .catalog-experience select, .catalog-experience [role="combobox"]) {
+  background-color: #071F17 !important;
+  border-color: rgba(212,175,55,.25) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] body :where(.catalog-experience input, .catalog-experience select, .catalog-experience [role="combobox"]):focus {
+  border-color: #D4AF37 !important;
+}
+html[data-theme="dark"] body :where(a[aria-label="Keranjang"], a[aria-label^="Keranjang,"], button[aria-label="Kembali ke atas"]) {
+  background-color: #071F17 !important;
+  border: 1px solid rgba(212,175,55,.30) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] body .theme-toggle {
+  background-color: #071F17 !important;
+  border: 1px solid rgba(212,175,55,.30) !important;
+  color: #D4AF37 !important;
+}
+
+/* WhatsApp remains an icon-only floating action in both themes. */
+.floating-whatsapp {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none;
+  backdrop-filter: none !important;
+  color: #25D366 !important;
+}
+.floating-whatsapp svg { filter: none !important; }
+.floating-whatsapp:hover {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transform: scale(1.08);
+}
+.floating-whatsapp:active {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.floating-whatsapp:focus-visible {
+  outline: 2px solid rgba(37, 211, 102, .65);
+  outline-offset: 4px;
+}
+
+/* Remove remaining light utility borders/surfaces from product actions and badges. */
+html[data-theme="dark"] body .product-card > .border-t,
+html[data-theme="dark"] body .catalog-card > .flex:last-child {
+  background-color: #0A241A !important;
+  border-color: rgba(212,175,55,.14) !important;
+}
+html[data-theme="dark"] body .product-card > .border-t button[class*="bg-white"],
+html[data-theme="dark"] body .catalog-card > .flex:last-child button:first-child {
+  background-color: #071F17 !important;
+  border-color: rgba(212,175,55,.35) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] body .product-card > .border-t button[class*="bg-white"]:hover,
+html[data-theme="dark"] body .catalog-card > .flex:last-child button:first-child:hover {
+  background-color: rgba(212,175,55,.08) !important;
+  border-color: #D4AF37 !important;
+}
+html[data-theme="dark"] body .product-card > .border-t button:last-child,
+html[data-theme="dark"] body .catalog-card > .flex:last-child button:last-child {
+  background-color: #124B35 !important;
+  border-color: transparent !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] body .product-card > .border-t button:last-child:hover,
+html[data-theme="dark"] body .catalog-card > .flex:last-child button:last-child:hover {
+  background-color: #185C40 !important;
+}
+html[data-theme="dark"] body .product-card > .border-t button:disabled,
+html[data-theme="dark"] body .catalog-card > .flex:last-child button:disabled {
+  background-color: rgba(167,176,168,.15) !important;
+  border-color: transparent !important;
+  color: rgba(248,245,238,.55) !important;
+}
+html[data-theme="dark"] body .product-card span[class*="bg-\[\#F8F5EE\]"] {
+  background-color: rgba(212,175,55,.12) !important;
+  border: 1px solid rgba(212,175,55,.18) !important;
+  color: #F8F5EE !important;
+}
+html[data-theme="dark"] body .product-card > .relative button[class*="bg-white"],
+html[data-theme="dark"] body .catalog-card-image button[class*="bg-white"] {
+  background-color: #071F17 !important;
+  border: 1px solid rgba(212,175,55,.30) !important;
+}
+html[data-theme="dark"] body .product-card > .relative button[class*="bg-white"]:hover,
+html[data-theme="dark"] body .catalog-card-image button[class*="bg-white"]:hover {
+  background-color: rgba(212,175,55,.08) !important;
+}
+
 /* Night rules must never affect printable invoices/thermal output. */
 @media print {
   html[data-theme="dark"] body .night-category-card,
@@ -1126,3 +1404,7 @@ html[data-theme="dark"] body .night-category-image-stage img { filter: none !imp
   html[data-theme="dark"] body .night-payment-option,
   html[data-theme="dark"] body .night-readonly-field { background: revert !important; background-color: revert !important; color: revert !important; border-color: revert !important; }
 }
+
+.faq-panel { scrollbar-width: thin; scrollbar-color: rgba(212,175,55,.35) transparent; }
+.faq-panel::-webkit-scrollbar { width: 4px; }
+.faq-panel::-webkit-scrollbar-thumb { background: rgba(212,175,55,.35); border-radius: 999px; }

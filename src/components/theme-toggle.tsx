@@ -12,8 +12,8 @@ export default function ThemeToggle() {
   useEffect(() => setMounted(true), []);
 
   return (
-    <button type="button" onClick={toggleTheme} aria-label={dark ? "Aktifkan mode terang" : "Aktifkan mode malam"} title={dark ? "Aktifkan mode terang" : "Aktifkan mode malam"} aria-pressed={dark} className="theme-toggle fixed bottom-5 left-5 z-[100] grid h-11 w-11 place-items-center rounded-full border border-[#C9A45B]/50 bg-[#F8F5EE]/90 text-[#A7833A] shadow-lg backdrop-blur transition hover:scale-105">
-      {dark ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
+    <button type="button" onClick={toggleTheme} aria-label={dark ? "Aktifkan mode terang" : "Aktifkan mode gelap"} title={dark ? "Aktifkan mode terang" : "Aktifkan mode gelap"} aria-pressed={dark} className="theme-toggle grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#C9A45B]/35 bg-[#F8F5EE]/80 text-[#A7833A] transition hover:border-[#C9A45B]/60 hover:bg-[#C9A45B]/10 md:h-9 md:w-9">
+      {dark ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
     </button>
   );
 }

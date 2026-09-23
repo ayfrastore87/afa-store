@@ -143,7 +143,7 @@ export function CheckoutLocationMap({
                     disableDefaultUI: true,
                     clickableIcons: false,
                     keyboardShortcuts: false,
-                    gestureHandling: mapGestureHandling(),
+                    gestureHandling: thumbnail ? "none" : mapGestureHandling(),
                     backgroundColor: "#e7e4da",
                 });
                 mapRef.current = map;

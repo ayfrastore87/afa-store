@@ -30,7 +30,7 @@ export async function GET() {
 
         return NextResponse.json({ success: true, data }, { status: 200 });
     } catch (error) {
-        console.error("Failed to load products", error);
+        console.error("[GET /api/products]", error);
         return NextResponse.json(
             { success: false, error: "Produk belum dapat dimuat" },
             { status: 500 }

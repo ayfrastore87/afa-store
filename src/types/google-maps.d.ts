@@ -130,6 +130,7 @@ interface GoogleMapsPlacesLibrary {
 interface GoogleMapsApi {
     maps: {
         Map: new (element: HTMLElement, options?: GoogleMapsMapOptions) => GoogleMapsMap;
+        Marker?: new (options: { map: GoogleMapsMap; position: { lat: number; lng: number }; title?: string }) => unknown;
         /**
          * Optional on purpose: the class arrives with the `geocoding` library, so `google.maps`
          * can exist without it. Consumers await the loader's `loadGoogleMapsGeocoder()` instead

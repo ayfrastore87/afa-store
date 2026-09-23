@@ -67,11 +67,26 @@ export async function fetchProducts() {
     try {
         const response = await fetch("/api/products", {
             headers: { Accept: "application/json" },
+            cache: "no-store",
         });
-        const payload = await response.json().catch(() => null) as ProductsApiResponse | ProductRow[] | null;
+        const responseBody = await response.text().catch(() => "");
+        const payload = (() => {
+            try {
+                return JSON.parse(responseBody) as ProductsApiResponse | ProductRow[];
+            } catch {
+                return null;
+            }
+        })();
 
         if (!response.ok || !payload) {
-            throw new Error("Produk belum dapat dimuat. Silakan coba lagi.");
+            if (process.env.NODE_ENV === "development") {
+                console.error("PRODUCT_API_ERROR", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: responseBody.slice(0, 1000),
+                });
+            }
+            throw new Error(`Produk belum dapat dimuat. HTTP ${response.status}`);
         }
 
         const rows = Array.isArray(payload)
@@ -83,12 +98,19 @@ export async function fetchProducts() {
                     : null;
 
         if (!rows || (!Array.isArray(payload) && payload.success === false)) {
-            throw new Error("Produk belum dapat dimuat. Silakan coba lagi.");
+            if (process.env.NODE_ENV === "development") {
+                console.error("PRODUCT_API_ERROR", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: responseBody.slice(0, 1000),
+                });
+            }
+            throw new Error("Produk API mengembalikan format yang tidak valid.");
         }
 
         return rows.map(mapProduct);
     } catch (error) {
-        if (error instanceof Error && error.message === "Produk belum dapat dimuat. Silakan coba lagi.") {
+        if (error instanceof Error && (error.message.startsWith("Produk belum dapat dimuat. HTTP ") || error.message === "Produk API mengembalikan format yang tidak valid.")) {
             throw error;
         }
         throw new Error("Produk belum dapat dimuat. Silakan coba lagi.");

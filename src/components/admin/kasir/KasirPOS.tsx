@@ -423,7 +423,7 @@ export default function KasirPOS() {
 
                     <div className="flex items-center gap-2">
                         <Link
-                            href="/admin/kasir/riwayat"
+                            href="/kasir/riwayat"
                             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#D4AF37] px-3 text-sm font-black text-[#184D47] transition hover:brightness-105 active:scale-95"
                         >
                             <History size={18} />

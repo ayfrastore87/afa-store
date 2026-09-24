@@ -557,7 +557,7 @@ export default function KasirPOS() {
                 </section>
 
                 <aside className={`kasir-cart-panel ${mobileCartOpen || checkoutOpen ? "kasir-cart-open" : ""} ${checkoutOpen ? "kasir-mobile-checkout" : ""}`}>
-                    <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-xl shadow-[#184D47]/10">
+                    <div className="kasir-cart-shell overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/90 shadow-xl shadow-[#184D47]/10">
                         <div className="flex items-center justify-between border-b border-[#184D47]/10 p-5">
                             {checkoutOpen ? <button type="button" onClick={() => setCheckoutOpen(false)} className="mr-2 rounded-xl p-2 lg:hidden" aria-label="Kembali ke keranjang"><ArrowLeft size={20} /></button> : null}
                             <div>
@@ -577,7 +577,7 @@ export default function KasirPOS() {
                             </div>
                         )}
 
-                        <div className="kasir-cart-items max-h-[340px] space-y-2 overflow-y-auto p-5">
+                        <div className="kasir-cart-items space-y-3 p-5">
                             {cart.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-10 text-center">
                                     <ShoppingCart size={36} className="text-[#C9A45B]" />
@@ -586,8 +586,8 @@ export default function KasirPOS() {
                                 </div>
                             ) : (
                                 cart.map((line, index) => (
-                                    <div key={line.productId ?? `manual-${index}`} className="flex items-center gap-3 rounded-2xl bg-[#f8f6f0] p-3">
-                                        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#f8f0dd]">
+                                    <div key={line.productId ?? `manual-${index}`} className="kasir-cart-item flex min-w-0 items-center gap-3 rounded-2xl bg-[#f8f6f0] p-3">
+                                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[#f8f0dd]">
                                             {line.image ? (
                                                 <Image src={line.image} alt={line.name} fill sizes="48px" className="object-cover" unoptimized />
                                             ) : (
@@ -595,15 +595,15 @@ export default function KasirPOS() {
                                             )}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-black">{line.name}</p>
+                                            <p className="kasir-cart-item-name line-clamp-2 text-sm font-black leading-snug">{line.name}</p>
                                             {line.size && <p className="text-[11px] text-[#184D47]/50">Ukuran {line.size}</p>}
                                             <p className="text-xs font-bold text-[#0F4C45]">{formatRupiah(line.price * line.quantity)}</p>
                                         </div>
-                                        <div className="flex items-center gap-1">
+                                        <div className="kasir-quantity-control flex shrink-0 items-center gap-1">
                                             <button
                                                 type="button"
                                                 onClick={() => setQuantity(line.productId, line.quantity - 1)}
-                                                className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90"
+                                                className="grid h-9 w-9 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90"
                                                 aria-label="Kurangi"
                                             >
                                                 <Minus size={14} />
@@ -614,14 +614,14 @@ export default function KasirPOS() {
                                                 max={Math.max(1, line.stock)}
                                                 value={line.quantity}
                                                 onChange={(event) => setQuantity(line.productId, Number(event.target.value))}
-                                                className="h-8 w-12 rounded-lg border border-[#184D47]/10 bg-white text-center text-sm font-black outline-none"
+                                                className="h-9 w-11 rounded-lg border border-[#184D47]/10 bg-white text-center text-sm font-black outline-none"
                                                 aria-label="Jumlah"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setQuantity(line.productId, line.quantity + 1)}
                                                 disabled={line.quantity >= Math.max(1, line.stock)}
-                                                className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90 disabled:opacity-40"
+                                                className="grid h-9 w-9 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90 disabled:opacity-40"
                                                 aria-label="Tambah"
                                             >
                                                 <Plus size={14} />
@@ -630,7 +630,7 @@ export default function KasirPOS() {
                                         <button
                                             type="button"
                                             onClick={() => removeLine(line.productId)}
-                                            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600 transition active:scale-90"
+                                            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600 transition active:scale-90"
                                             aria-label="Hapus"
                                         >
                                             <Trash2 size={15} />

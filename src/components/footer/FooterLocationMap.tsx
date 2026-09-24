@@ -6,7 +6,8 @@ import { getGoogleMapsApi, loadGoogleMaps } from "@/lib/google-maps-loader";
 import { preferredGestureHandling } from "@/lib/map-gesture";
 
 const MAPS_URL = "https://maps.app.goo.gl/YqgCHmL7amhsWyZD6";
-const FALLBACK_CENTER = { lat: -6.2, lng: 106.816666 };
+// Resolved from MAPS_URL, the existing AFA STORE Google Maps location link.
+const STORE_COORDINATES = { latitude: -6.0260352, longitude: 106.0569088 } as const;
 
 type Props = { coordinates?: { latitude: number; longitude: number } | null };
 
@@ -19,20 +20,21 @@ function MapCanvas({ coordinates }: { fullscreen: boolean; coordinates?: Props["
             if (disposed || !ref.current) return;
             const api = getGoogleMapsApi();
             if (!api) return;
-            const center = coordinates ? { lat: coordinates.latitude, lng: coordinates.longitude } : FALLBACK_CENTER;
+            if (!coordinates) return;
+            const center = { lat: coordinates.latitude, lng: coordinates.longitude };
             const map = new api.maps.Map(ref.current, {
-                center, zoom: coordinates ? 16 : 11, fullscreenControl: false, streetViewControl: false,
+                center, zoom: 16, fullscreenControl: false, streetViewControl: false,
                 mapTypeControl: false, gestureHandling: preferredGestureHandling(window), clickableIcons: false,
             });
             mapRef.current = map;
-            if (coordinates && api.maps.Marker) new api.maps.Marker({ map, position: center, title: "AFA STORE" });
+            if (api.maps.Marker) new api.maps.Marker({ map, position: center, title: "AFA STORE • Cilegon, Banten" });
         }).catch(() => undefined);
         return () => { disposed = true; mapRef.current = null; };
     }, [coordinates]);
     return <div ref={ref} role="application" aria-label="Peta lokasi AFA STORE" className="absolute inset-0" />;
 }
 
-export default function FooterLocationMap({ coordinates = null }: Props) {
+export default function FooterLocationMap({ coordinates = STORE_COORDINATES }: Props) {
     const [open, setOpen] = useState(false);
     useEffect(() => {
         if (!open) return;
@@ -41,7 +43,7 @@ export default function FooterLocationMap({ coordinates = null }: Props) {
         return () => document.removeEventListener("keydown", onKey);
     }, [open]);
     return <>
-        <button type="button" onClick={() => setOpen(true)} aria-label="Lihat lokasi AFA STORE" className="relative block h-[92px] w-full max-w-full overflow-hidden rounded-[10px] border border-[rgba(212,175,55,.28)] bg-[#0E2118] text-left sm:h-[95px] sm:max-w-[360px] sm:rounded-xl">
+        <button type="button" onClick={() => setOpen(true)} aria-label="Lihat lokasi AFA STORE" className="relative mx-auto block h-[125px] w-[min(100%,150px)] max-w-full shrink-0 overflow-hidden rounded-xl border border-[rgba(212,175,55,.32)] bg-[#0E2118] text-left sm:mx-0 sm:h-[135px] sm:w-[160px]">
             <MapCanvas coordinates={coordinates} fullscreen={false} />
             <span className="sr-only">Lihat lokasi AFA STORE</span>
         </button>

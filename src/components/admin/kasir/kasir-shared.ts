@@ -23,6 +23,8 @@ export const SOURCE_LABELS: Record<string, string> = {
     ONLINE: "Online",
     TATAP_MUKA: "COD",
     WHATSAPP: "WhatsApp",
+    MARKETPLACE: "Marketplace",
+    OTHER: "Lainnya",
 };
 
 export function sourceLabel(source: string | null | undefined) {
@@ -90,6 +92,10 @@ export type KasirOrderDetailItem = {
     subtotal: number;
     size: string | null;
     image: string | null;
+    description?: string | null;
+    notes?: string | null;
+    itemType?: string;
+    unitPrice?: number | null;
 };
 
 export type KasirOrderDetail = {
@@ -124,7 +130,13 @@ export type KasirOrderDetail = {
     /** PENGIRIMAN data, or null for a pickup order. Public data only. */
     delivery: KasirDeliveryDetail | null;
     items: KasirOrderDetailItem[];
+    publicToken?: string | null;
 };
+
+export function itemTypeLabel(itemType: string | null | undefined) {
+    const key = String(itemType ?? "PRODUCT").toUpperCase();
+    return key === "CUSTOM_PRODUCT" ? "Custom" : key === "SERVICE" ? "Jasa" : "Katalog";
+}
 
 /**
  * JENIS PESANAN. Kept separate from `source` (COD / WhatsApp): the transaction

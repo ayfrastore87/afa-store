@@ -72,6 +72,8 @@ export default function KasirReceipt({
                     {order.items.map((item) => (
                         <div key={item.id} className="receipt-item">
                             <p className="receipt-item-name">{item.name}</p>
+                            {item.description ? <p className="receipt-item-size">{item.description}</p> : null}
+                            {item.notes ? <p className="receipt-item-size">Catatan: {item.notes}</p> : null}
                             {item.size ? <p className="receipt-item-size">{item.size}</p> : null}
                             <div className="receipt-item-row">
                                 <span>{item.quantity} x {formatRupiah(item.price)}</span>

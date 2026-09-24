@@ -64,13 +64,16 @@ import {
 type Category = { id: string; name: string };
 
 type CartLine = {
-    productId: string;
+    productId: string | null;
+    itemType: "PRODUCT" | "CUSTOM_PRODUCT" | "SERVICE";
     name: string;
     price: number;
     size: string | null;
     stock: number;
     image: string | null;
     quantity: number;
+    description?: string;
+    notes?: string;
 };
 
 type KasirOrderResponse = {
@@ -103,12 +106,19 @@ export default function KasirPOS() {
     const [activeCategory, setActiveCategory] = useState<string>("");
 
     const [cart, setCart] = useState<CartLine[]>([]);
+    const [manualOpen, setManualOpen] = useState(false);
+    const [manualType, setManualType] = useState<"CUSTOM_PRODUCT" | "SERVICE">("CUSTOM_PRODUCT");
+    const [manualName, setManualName] = useState("");
+    const [manualDescription, setManualDescription] = useState("");
+    const [manualPrice, setManualPrice] = useState("");
+    const [manualQuantity, setManualQuantity] = useState("1");
+    const [manualNotes, setManualNotes] = useState("");
 
     const [paymentMethod, setPaymentMethod] = useState<KasirPaymentMethod>("TUNAI");
     const [cashReceived, setCashReceived] = useState("");
     const [customerName, setCustomerName] = useState("");
     const [customerWhatsapp, setCustomerWhatsapp] = useState("");
-    const [source, setSource] = useState<"TATAP_MUKA" | "WHATSAPP">("TATAP_MUKA");
+    const [source, setSource] = useState<"TATAP_MUKA" | "WHATSAPP" | "MARKETPLACE" | "OTHER">("TATAP_MUKA");
     // JENIS PESANAN. Pickup keeps the existing cashier flow; Kirim enables the delivery block.
     const [orderType, setOrderType] = useState<KasirOrderType>(DEFAULT_KASIR_ORDER_TYPE);
     const [deliveryDraft, setDeliveryDraft] = useState<KasirDeliveryDraft>(() => emptyKasirDeliveryDraft());
@@ -218,7 +228,7 @@ export default function KasirPOS() {
                     // server re-quotes Biteship with authoritative product data.
                     delivery: orderType === "DELIVERY" ? kasirDeliveryRequest(deliveryDraft) : undefined,
                     ...(paymentMethod === "TUNAI" && orderType !== "DELIVERY" ? { cashReceived: Number(cashReceived) || 0 } : {}),
-                    items: cart.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+                    items: cart.map((line) => line.productId ? { productId: line.productId, quantity: line.quantity } : { itemType: line.itemType, name: line.name, description: line.description, notes: line.notes, quantity: line.quantity, unitPrice: line.price }),
                 }),
             });
 
@@ -298,6 +308,7 @@ export default function KasirPOS() {
                 ...current,
                 {
                     productId: product.id,
+                    itemType: "PRODUCT",
                     name: product.name,
                     price: product.price,
                     size: product.size,
@@ -309,7 +320,7 @@ export default function KasirPOS() {
         });
     }
 
-    function setQuantity(productId: string, quantity: number) {
+    function setQuantity(productId: string | null, quantity: number) {
         setCart((current) =>
             current
                 .map((line) => {
@@ -321,8 +332,20 @@ export default function KasirPOS() {
         );
     }
 
-    function removeLine(productId: string) {
+    function removeLine(productId: string | null) {
         setCart((current) => current.filter((line) => line.productId !== productId));
+    }
+
+    function addManualItem() {
+        const name = manualName.trim();
+        const price = Number(manualPrice);
+        const quantity = Number(manualQuantity);
+        if (!name || !Number.isInteger(price) || price < 0 || !Number.isInteger(quantity) || quantity < 1) {
+            void Swal.fire({ title: "Data belum lengkap", text: "Nama, jumlah, dan harga satuan harus valid.", icon: "warning", confirmButtonColor: "#184D47" });
+            return;
+        }
+        setCart((current) => [...current, { productId: null, itemType: manualType, name, price, size: null, stock: 999, image: null, quantity, description: manualDescription.trim(), notes: manualNotes.trim() }]);
+        setManualName(""); setManualDescription(""); setManualPrice(""); setManualQuantity("1"); setManualNotes(""); setManualOpen(false);
     }
 
     const subtotal = useMemo(() => cart.reduce((sum, line) => sum + line.price * line.quantity, 0), [cart]);
@@ -334,7 +357,7 @@ export default function KasirPOS() {
     // button: POST /api/admin/kasir/order re-validates everything (products, weights, pin,
     // area id, courier selection) and re-quotes Biteship server-side.
     const deliveryItems = useMemo(
-        () => cart.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        () => cart.filter((line) => line.productId).map((line) => ({ productId: line.productId as string, quantity: line.quantity })),
         [cart],
     );
     const deliverySignature = kasirDeliverySignature(
@@ -430,6 +453,9 @@ export default function KasirPOS() {
                             className="h-full w-full bg-transparent text-sm font-medium outline-none placeholder:text-[#184D47]/40"
                         />
                     </label>
+                    <button type="button" onClick={() => setManualOpen(true)} className="mb-4 inline-flex min-h-12 items-center gap-2 rounded-2xl bg-[#D4AF37] px-5 font-black text-[#184D47]">
+                        <Plus size={18} /> Tambah Item Manual / Jasa
+                    </button>
 
                     <div className="mb-4 flex flex-wrap gap-2">
                         <button
@@ -558,8 +584,8 @@ export default function KasirPOS() {
                                     <p className="text-sm text-[#184D47]/60">Tambahkan produk dari katalog di sebelah kiri.</p>
                                 </div>
                             ) : (
-                                cart.map((line) => (
-                                    <div key={line.productId} className="flex items-center gap-3 rounded-2xl bg-[#f8f6f0] p-3">
+                                cart.map((line, index) => (
+                                    <div key={line.productId ?? `manual-${index}`} className="flex items-center gap-3 rounded-2xl bg-[#f8f6f0] p-3">
                                         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#f8f0dd]">
                                             {line.image ? (
                                                 <Image src={line.image} alt={line.name} fill sizes="48px" className="object-cover" unoptimized />
@@ -770,14 +796,14 @@ export default function KasirPOS() {
                                 <div>
                                     <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Sumber Transaksi</p>
                                     <div className="grid grid-cols-2 gap-2">
-                                        {(["TATAP_MUKA", "WHATSAPP"] as const).map((item) => (
+                                        {(["TATAP_MUKA", "WHATSAPP", "MARKETPLACE", "OTHER"] as const).map((item) => (
                                             <button
                                                 key={item}
                                                 type="button"
                                                 onClick={() => setSource(item)}
                                                 className={`min-h-12 rounded-2xl border px-3 text-xs font-bold transition ${source === item ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]/70 hover:border-[#184D47]/40"}`}
                                             >
-                                                {item === "TATAP_MUKA" ? "COD" : "WhatsApp"}
+                                                {item === "TATAP_MUKA" ? "Kasir / Toko" : item === "WHATSAPP" ? "WhatsApp" : item === "MARKETPLACE" ? "Marketplace" : "Lainnya"}
                                             </button>
                                         ))}
                                     </div>
@@ -851,6 +877,21 @@ export default function KasirPOS() {
                     </div>
                 </aside>
             </main>
+            {manualOpen ? (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
+                    <div className="max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-[#F8F5EE] p-5 shadow-2xl">
+                        <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-black">Tambah Item Manual</h2><button type="button" onClick={() => setManualOpen(false)} className="rounded-xl px-3 py-2 font-black">×</button></div>
+                        <div className="space-y-3">
+                            <select value={manualType} onChange={(e) => setManualType(e.target.value as "CUSTOM_PRODUCT" | "SERVICE")} className="min-h-12 w-full rounded-xl border border-[#184D47]/15 bg-white px-3 font-bold"><option value="CUSTOM_PRODUCT">Barang Custom</option><option value="SERVICE">Jasa</option></select>
+                            <input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Nama barang/jasa *" className="min-h-12 w-full rounded-xl border border-[#184D47]/15 bg-white px-3" />
+                            <textarea value={manualDescription} onChange={(e) => setManualDescription(e.target.value)} placeholder="Deskripsi" className="min-h-20 w-full rounded-xl border border-[#184D47]/15 bg-white px-3 py-3" />
+                            <div className="grid grid-cols-2 gap-3"><input type="number" min="1" value={manualQuantity} onChange={(e) => setManualQuantity(e.target.value)} placeholder="Qty" className="min-h-12 rounded-xl border border-[#184D47]/15 bg-white px-3" /><input type="number" min="0" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder="Harga satuan *" className="min-h-12 rounded-xl border border-[#184D47]/15 bg-white px-3" /></div>
+                            <textarea value={manualNotes} onChange={(e) => setManualNotes(e.target.value)} placeholder="Catatan" className="min-h-20 w-full rounded-xl border border-[#184D47]/15 bg-white px-3 py-3" />
+                            <div className="flex gap-3"><button type="button" onClick={() => setManualOpen(false)} className="min-h-12 flex-1 rounded-xl border border-[#184D47]/20 bg-white font-black">Batal</button><button type="button" onClick={addManualItem} className="min-h-12 flex-1 rounded-xl bg-[#184D47] font-black text-white">Tambahkan</button></div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 }

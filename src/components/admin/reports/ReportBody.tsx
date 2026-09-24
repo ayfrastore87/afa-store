@@ -157,6 +157,13 @@ export function ReportBody({
 
             <ChartCard granularity={granularity} setGranularity={setGranularity} data={chartData} />
 
+            <section className="rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm">
+                <h3 className="mb-4 text-lg font-black text-[#184D47]">Penjualan berdasarkan sumber</h3>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    {(report.sources ?? []).map((item) => <div key={item.source} className="rounded-xl bg-[#f8f6f0] p-3"><p className="text-xs font-bold text-[#184D47]/60">{item.source}</p><p className="font-black text-[#184D47]">{formatRupiah(item.total)}</p><p className="text-xs text-[#184D47]/60">{item.count} transaksi</p></div>)}
+                </div>
+            </section>
+
             <section className="grid gap-5 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm">
                     <h3 className="mb-4 text-lg font-black text-[#184D47]">Penjualan</h3>

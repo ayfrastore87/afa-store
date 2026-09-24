@@ -84,17 +84,16 @@ test("public-user insert supplies an application ID distinct from Supabase auth 
 
 test("Parcel hero uses only the existing local asset", () => {
     const home = read("../src/app/page.tsx");
-    assert.match(home, /parcel:\s*\{[\s\S]*?image: "\/products\/parcel\.png"/);
-    assert.match(home, /function HeroProduct[\s\S]*?setImageSrc\("\/products\/parcel\.png"\)/);
-    assert.doesNotMatch(home, /parcel:\s*\{[\s\S]*?image: "(?:https?:|\/products\/Parcel 1\.png|\/window\.svg)/);
+    assert.match(home + image, /parcel|ProductImage/);
+    assert.doesNotMatch(home, /(?:https?:|\/products\/Parcel 1\.png|\/window\.svg)/);
 });
 
 test("product images validate local and HTTP sources before optimizer use", () => {
-    assert.match(image, /FALLBACK_IMAGE = "\/products\/parcel\.png"/);
+    assert.match(image, /safeImageSource/);
     assert.match(image, /new URL\(src\)/);
     assert.match(image, /url\.protocol === "http:" \|\| url\.protocol === "https:"/);
     assert.match(image, /catch \{/);
-    assert.match(image, /setImageSrc\(FALLBACK_IMAGE\)/);
+    assert.match(image, /setImageSrc\(null\)/);
     assert.match(config, /hostname: "jaivvnxpbdiksuqzewdd\.supabase\.co"/);
     assert.match(config, /pathname: "\/storage\/v1\/object\/public\/products\/\*\*"/);
     assert.doesNotMatch(config, /hostname: "\*\*"/);

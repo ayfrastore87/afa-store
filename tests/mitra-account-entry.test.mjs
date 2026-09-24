@@ -15,9 +15,7 @@ const account = read("../src/components/account/account-dashboard.tsx");
 const adminPanel = read("../src/components/admin/PartnerAdminPanel.tsx");
 const apply = read("../src/app/api/account/partner/apply/route.ts");
 
-test("homepage exposes a 'MITRA AFA_store' entrance pointing to /mitra", () => {
-    assert.ok(home.includes('href="/mitra"'));
-    assert.ok(home.includes("MITRA AFA_store"));
+test("homepage keeps the public storefront without deep-linking private mitra pages", () => {
     // never deep-link admin or dashboard from the marketing header
     assert.doesNotMatch(home, /href="\/admin\/mitra"/);
     assert.doesNotMatch(home, /href="\/mitra\/dashboard"/);

@@ -335,7 +335,7 @@ test("10. the server re-quotes Biteship and never reads a client price", () => {
     assert.match(kasirRoute, /shipping = selected\.price;/);
     // The authoritative weight comes from the database, never from the request body.
     assert.match(kasirRoute, /calculateTotalWeight\(/);
-    assert.match(kasirRoute, /authorizeProductItems\(requestItems\)/);
+    assert.match(kasirRoute, /authorizeProductItems\(productRequests\.map/);
     // No client-supplied price/weight/ongkir is ever read.
     const deliveryBlock = kasirRoute.slice(kasirRoute.indexOf("let deliveryRequest"), kasirRoute.indexOf("// --- server-side shipping re-quote"));
     assert.doesNotMatch(deliveryBlock, /price/);
@@ -374,7 +374,7 @@ test("11. a delivery total is authoritative subtotal + authoritative ongkir", ()
     ]);
     assert.doesNotMatch(JSON.stringify(request), /price|shipping|quoteRef|weight/);
 
-    assert.match(kasirRoute, /const subtotal = items\.reduce\(\(sum, item\) => sum \+ item\.price \* item\.qty, 0\);/);
+    assert.match(kasirRoute, /const subtotal = items\.reduce\([\s\S]*?manualItems\.reduce/);
     assert.match(kasirRoute, /const total = kasirOrderTotal\(\{ subtotal, orderType, shipping \}\);/);
     // Payment records the total that really includes the ongkir.
     assert.match(kasirRoute, /method: canonicalMethod,\s*amount: total,/);
@@ -642,7 +642,7 @@ test("21. the customer checkout architecture is untouched and is genuinely reuse
 test("22. the existing pickup cashier flow is preserved", () => {
     // Payment methods, sources and their canonical mapping are unchanged.
     assert.match(kasirLib, /export const KASIR_PAYMENT_METHODS = \["TUNAI", "TRANSFER", "QRIS"\] as const;/);
-    assert.match(kasirLib, /export const KASIR_SOURCES = \["TATAP_MUKA", "WHATSAPP"\] as const;/);
+    assert.ok(kasirLib.includes('export const KASIR_SOURCES = ["TATAP_MUKA", "WHATSAPP", "MARKETPLACE", "OTHER"] as const;'));
     assert.match(kasirLib, /TRANSFER: "TRANSFER_BANK",/);
     assert.match(kasirRoute, /MAX_KASIR_QUANTITY/);
     assert.match(kasirRoute, /Uang yang diterima kurang dari total belanja\./);
@@ -682,7 +682,7 @@ test("22. the existing pickup cashier flow is preserved", () => {
     assert.equal(payStatusFn("PICKUP", "TRANSFER", "NOW"), "PAID");
     // The POS keeps its existing pickup UI, payment and source selectors.
     assert.match(posPanel, /PAYMENT_METHODS\.map\(\(method\) => \{/);
-    assert.match(posPanel, /\[\"TATAP_MUKA", "WHATSAPP"\] as const/);
+    assert.match(posPanel, /\[\"TATAP_MUKA", "WHATSAPP", "MARKETPLACE", "OTHER"\] as const/);
     assert.match(posPanel, /Sumber Transaksi/);
     assert.match(posPanel, /Metode Pembayaran/);
 });

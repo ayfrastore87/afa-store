@@ -94,7 +94,7 @@ export async function GET(request: Request) {
     const where: Prisma.OrderWhereInput = from ? { createdAt: { gte: from } } : {};
 
     try {
-        const [orderAgg, itemAgg, groupRows, itemsForTop, customerIds, methodRows, chartRows, recentRows] =
+        const [orderAgg, itemAgg, groupRows, itemsForTop, customerIds, methodRows, chartRows, recentRows, sourceRows] =
             await Promise.all([
                 prisma.order.aggregate({
                     where,
@@ -137,6 +137,7 @@ export async function GET(request: Request) {
                     orderBy: { createdAt: "desc" },
                     take: 50,
                 }),
+                prisma.order.groupBy({ by: ["source"], where, _count: { _all: true }, _sum: { total: true } }),
             ]);
 
         const transactionCount = orderAgg._count._all;
@@ -203,6 +204,7 @@ export async function GET(request: Request) {
             topProducts,
             customers: { total: customerUserIds.length, newCount, returningCount },
             paymentMethods,
+            sources: sourceRows.map((row) => ({ source: row.source, count: row._count._all, total: row._sum.total ?? 0 })),
             orderStatuses: ORDERED_BARS.map((status) => ({ status, count: grouped[status] })),
             chart: {
                 harian: bucketChart(chartRows, "harian"),

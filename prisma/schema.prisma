@@ -177,6 +177,7 @@ model Order {
   updatedAt           DateTime             @updatedAt
   payment             Payment?
   checkoutIdempotency CheckoutIdempotency?
+  publicToken         String?              @unique
 
   @@map("orders")
 }
@@ -208,8 +209,12 @@ model OrderItem {
   order     Order    @relation(fields: [orderId], references: [id])
   product   Product? @relation(fields: [productId], references: [id])
   name      String
+  description String?
+  notes     String?
+  itemType  String   @default("PRODUCT")
   quantity  Int
   price     Int
+  unitPrice Int?
   subtotal  Int
   weight    Int      @default(0)
 

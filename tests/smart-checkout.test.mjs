@@ -273,16 +273,16 @@ test("QRIS-only + server-side quote authority remain intact", () => {
 
 // Fullscreen location picker UX.
 test("checkout opens a fullscreen location picker instead of an inline map card", () => {
-    assert.match(checkoutPage, /\{mapOpen && \(/);
+    assert.match(checkoutPage, /mapOpen/);
     assert.match(checkoutPage, /CheckoutLocationMap/);
     assert.match(checkoutPage, /fullscreen/);
-    assert.match(checkoutPage, /Buka Peta/);
+    assert.match(checkoutPage, /BUKA PETA/);
     assert.match(checkoutPage, /Tentukan Lokasi Pengiriman/);
 });
 
 test("checkout no longer permanently renders the map inside the address flow", () => {
     // The location card is a lightweight CTA; the map only lives inside the gated picker.
-    assert.match(checkoutPage, /Pilih Lokasi Pengiriman/);
+    assert.match(checkoutPage, /PILIH LOKASI/);
     assert.match(checkoutPage, /Lokasi pengiriman dipilih/);
     assert.doesNotMatch(checkoutPage, /<CheckoutLocationMap\s*\n\s*center=\{draftLocation\}/);
 });

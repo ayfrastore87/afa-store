@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
+import { SITE_URL } from "@/lib/site-url";
 import {
     AlertCircle,
     ArrowLeft,
@@ -24,6 +25,7 @@ import {
     type KasirOrderDetail,
     type KasirShipmentSyncResponse,
     isMidtransQrImageUrl,
+    itemTypeLabel,
 } from "./kasir-shared";
 import {
     KASIR_DELIVERY_AUTO_REFRESH_MS,
@@ -303,6 +305,20 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
     const isPendingCOD = isTunai && isDeliveryOrder && ["PENDING", "WAITING_PAYMENT"].includes(order.paymentStatus);
     // PENGIRIMAN block: present for a delivery order only.
     const delivery = order.delivery;
+    const publicUrl = order.publicToken ? `${SITE_URL}/pesanan/${order.publicToken}` : null;
+    const shareOrder = () => {
+        if (!publicUrl || !order.phone) return;
+        const phone = order.phone.replace(/\D/g, "").replace(/^0/, "62");
+        const summary = order.items.map((item) => `${item.name} (${item.quantity}x)`).join(", ");
+        const message = `Halo ${order.customer} 👋\n\nTerima kasih telah melakukan pemesanan di AFA STORE.\n\nNo. Pesanan:\n${order.invoice}\n\nPesanan:\n${summary}\n\nSubtotal:\n${formatRupiah(order.subtotal)}\n\nOngkir:\n${formatRupiah(order.shipping)}\n\nTotal Tagihan:\n${formatRupiah(order.total)}\n\nStatus:\n${statusLabel(order.paymentStatus)}\n\nDetail & pembayaran:\n${publicUrl}\n\nTerima kasih.\nAFA STORE\nDari Kami Untuk Keluarga`;
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    };
+    const copyOrderLink = async () => {
+        if (!publicUrl || !navigator.clipboard) return;
+        await navigator.clipboard.writeText(publicUrl);
+        const Swal = (await import("sweetalert2")).default;
+        void Swal.fire({ icon: "success", title: "Link pesanan berhasil disalin.", timer: 1800, showConfirmButton: false });
+    };
 
     return (
         <>
@@ -316,6 +332,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                 </div>
                 <KasirPrinterPanel order={order} cashierName={cashierName} />
             </div>
+            {publicUrl ? <div className="flex flex-wrap gap-2 px-5 pt-4"><button type="button" onClick={shareOrder} disabled={!order.phone} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Kirim ke WhatsApp</button><button type="button" onClick={() => void copyOrderLink()} className="rounded-xl border border-[#184D47]/20 px-4 py-2 text-sm font-bold">Salin Link Pesanan</button></div> : null}
 
             <div className="space-y-5 p-5">
                 <section className="grid grid-cols-2 gap-3">
@@ -350,7 +367,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                         </div>
                         {order.items.map((item) => (
                             <div key={item.id} className="grid grid-cols-2 gap-2 border-t border-[#184D47]/10 px-4 py-3 text-sm sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
-                                <span className="col-span-2 font-semibold sm:col-span-1">{item.name}</span>
+                                <span className="col-span-2 font-semibold sm:col-span-1">{item.name} <span className={`ml-2 rounded-full px-2 py-1 text-[10px] ${item.itemType === "CUSTOM_PRODUCT" ? "bg-amber-100 text-amber-900" : item.itemType === "SERVICE" ? "bg-neutral-200 text-neutral-800" : "bg-[#184D47] text-white"}`}>{itemTypeLabel(item.itemType)}</span>{item.description ? <small className="mt-1 block font-normal text-[#184D47]/60">{item.description}</small> : null}{item.notes ? <small className="block font-normal italic text-[#184D47]/60">Catatan: {item.notes}</small> : null}</span>
                                 <span className="text-[#184D47]/60 sm:w-14 sm:text-center">×{item.quantity}</span>
                                 <span className="text-[#184D47]/70 sm:w-24 sm:text-right">{formatRupiah(item.price)}</span>
                                 <span className="font-black sm:w-28 sm:text-right">{formatRupiah(item.subtotal)}</span>

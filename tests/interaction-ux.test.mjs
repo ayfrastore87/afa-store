@@ -51,7 +51,7 @@ test("cart drawer navigation and action controls preserved", () => {
 
 test("cart checkout and clear controls expose disabled state", () => {
     assert.match(pageSource, /disabled=\{!cart\.length \|\| checkoutPending\}/);
-    assert.match(pageSource, /disabled=\{!cart\.length\}/);
+    assert.match(pageSource, /disabled=\{!cart\.length \|\| checkoutPending\}/);
 });
 
 test("ProductCard image and title links unchanged", () => {

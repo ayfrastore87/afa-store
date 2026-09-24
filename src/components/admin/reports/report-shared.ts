@@ -43,6 +43,7 @@ export type ReportSummary = {
 export type TopProduct = { name: string; quantity: number; revenue: number };
 export type CustomerStats = { total: number; newCount: number; returningCount: number };
 export type PaymentMethodStat = { method: string; count: number; total: number };
+export type SourceStat = { source: string; count: number; total: number };
 export type OrderStatusStat = { status: string; count: number };
 export type ChartPoint = { label: string; revenue: number; count: number };
 
@@ -54,6 +55,7 @@ export type SalesReport = {
     topProducts: TopProduct[];
     customers: CustomerStats;
     paymentMethods: PaymentMethodStat[];
+    sources: SourceStat[];
     orderStatuses: OrderStatusStat[];
     chart: {
         harian: ChartPoint[];

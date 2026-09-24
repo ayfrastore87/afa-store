@@ -30,6 +30,8 @@ import {
     MAX_KASIR_QUANTITY,
 } from "@/lib/kasir";
 import { getQrisProvider } from "@/lib/qris-config";
+import { randomBytes } from "node:crypto";
+import { validateManualItem } from "@/lib/custom-order";
 
 export const runtime = "nodejs";
 
@@ -79,6 +81,8 @@ type KasirOrderBody = {
     delivery?: unknown;
 };
 
+type ParsedKasirItem = { kind: "PRODUCT"; id: string; qty: number } | { kind: "MANUAL"; item: ReturnType<typeof validateManualItem> };
+
 export async function POST(request: Request) {
     const admin = await getCurrentAdmin();
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
@@ -94,7 +98,7 @@ export async function POST(request: Request) {
     // Tidak ada default diam-diam: source wajib dikirim oleh klien.
     const source = typeof body.source === "string" ? body.source.trim().toUpperCase() : "";
     if (!isKasirSource(source)) {
-        return NextResponse.json({ message: "source wajib diisi dan harus TATAP_MUKA atau WHATSAPP." }, { status: 400 });
+        return NextResponse.json({ message: "source tidak valid." }, { status: 400 });
     }
 
     // --- paymentMethod -----------------------------------------------------
@@ -113,13 +117,19 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: `Jumlah item melebihi batas ${MAX_KASIR_ITEMS}.` }, { status: 400 });
     }
 
-    const requestItems: { id: string; qty: number }[] = [];
+    const requestItems: ParsedKasirItem[] = [];
     for (const raw of rawItems) {
         if (typeof raw !== "object" || raw === null) {
             return NextResponse.json({ message: "Format item tidak valid." }, { status: 400 });
         }
         const item = raw as Record<string, unknown>;
         const productId = typeof item.productId === "string" ? item.productId.trim() : "";
+        if (!productId && (item.itemType === "CUSTOM_PRODUCT" || item.itemType === "SERVICE")) {
+            try { requestItems.push({ kind: "MANUAL", item: validateManualItem(item) }); } catch (error) {
+                return NextResponse.json({ message: error instanceof Error ? error.message : "Item manual tidak valid." }, { status: 400 });
+            }
+            continue;
+        }
         const quantity = item.quantity;
         if (!productId) {
             return NextResponse.json({ message: "productId wajib diisi pada setiap item." }, { status: 400 });
@@ -130,7 +140,7 @@ export async function POST(request: Request) {
         if (quantity > MAX_KASIR_QUANTITY) {
             return NextResponse.json({ message: `quantity tidak boleh melebihi ${MAX_KASIR_QUANTITY}.` }, { status: 400 });
         }
-        requestItems.push({ id: productId, qty: quantity });
+        requestItems.push({ kind: "PRODUCT", id: productId, qty: quantity });
     }
 
     // --- customer ------------------------------------------------------------
@@ -246,7 +256,8 @@ export async function POST(request: Request) {
 
     if (orderType === "DELIVERY" && deliveryRequest) {
         try {
-            const quotedItems = await authorizeProductItems(requestItems);
+            const productRequests = requestItems.filter((item): item is Extract<ParsedKasirItem, { kind: "PRODUCT" }> => item.kind === "PRODUCT");
+            const quotedItems = await authorizeProductItems(productRequests.map((item) => ({ id: item.id, qty: item.qty })));
             const totalWeight = calculateTotalWeight(
                 quotedItems.map((item) => ({ id: item.id, weight: item.weight, qty: item.qty })),
             );
@@ -296,8 +307,10 @@ export async function POST(request: Request) {
     try {
         const created = await prisma.$transaction(async (tx) => {
             // F. authoritative products + price from database.
-            const items = await authorizeProductItems(requestItems, tx);
-            const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+            const productRequests = requestItems.filter((item): item is Extract<ParsedKasirItem, { kind: "PRODUCT" }> => item.kind === "PRODUCT");
+            const items = await authorizeProductItems(productRequests.map((item) => ({ id: item.id, qty: item.qty })), tx);
+            const manualItems = requestItems.filter((item): item is Extract<ParsedKasirItem, { kind: "MANUAL" }> => item.kind === "MANUAL");
+            const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0) + manualItems.reduce((sum, entry) => sum + entry.item.unitPrice * entry.item.quantity, 0);
             // TOTAL = authoritative subtotal + authoritative ongkir (0 for pickup).
             const total = kasirOrderTotal({ subtotal, orderType, shipping });
 
@@ -365,6 +378,7 @@ export async function POST(request: Request) {
                 data: {
                     ...deliveryData,
                     invoice: formatOrderInvoice(now, todayCount + 1),
+                    publicToken: randomBytes(24).toString("base64url"),
                     customer: customerName || "Pelanggan",
                     phone: customerWhatsapp,
                     subtotal,
@@ -381,16 +395,21 @@ export async function POST(request: Request) {
                     change,
                     completedAt: orderType === "DELIVERY" ? null : now,
                     items: {
-                        create: items.map((item) => ({
+                        create: [
+                            ...items.map((item) => ({
                             productId: item.id,
                             name: item.name,
+                            itemType: "PRODUCT",
                             quantity: item.qty,
                             price: item.price,
+                            unitPrice: item.price,
                             subtotal: item.price * item.qty,
                             // Frozen authoritative weight snapshot: the Biteship shipment
                             // payload reads this, never a browser-supplied weight.
                             weight: orderType === "DELIVERY" ? item.weight : 0,
-                        })),
+                            })),
+                            ...manualItems.map(({ item }) => ({ productId: null, name: item.name, description: item.description, notes: item.notes, itemType: item.itemType, quantity: item.quantity, price: item.unitPrice, unitPrice: item.unitPrice, subtotal: item.unitPrice * item.quantity, weight: 0 })),
+                        ],
                     },
                 },
                 include: { items: true, user: true },
@@ -481,6 +500,7 @@ export async function POST(request: Request) {
                 change: method === "TUNAI" ? created.order.change : null,
                 status: created.order.status,
                 paymentStatus: created.order.paymentStatus,
+                publicToken: created.order.publicToken,
             },
             { status: 201 },
         );

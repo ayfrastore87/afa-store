@@ -17,7 +17,7 @@ import {
 // second shipping engine.
 // ---------------------------------------------------------------------------
 
-export const KASIR_SOURCES = ["TATAP_MUKA", "WHATSAPP"] as const;
+export const KASIR_SOURCES = ["TATAP_MUKA", "WHATSAPP", "MARKETPLACE", "OTHER"] as const;
 export type KasirSource = (typeof KASIR_SOURCES)[number];
 
 // Payment methods accepted by the Kasir API. These match the Kasir UI contract
@@ -54,6 +54,10 @@ type KasirOrderItem = {
     price: number;
     subtotal: number;
     product: { image: string | null; size: string | null } | null;
+    description?: string | null;
+    notes?: string | null;
+    itemType?: string;
+    unitPrice?: number | null;
 };
 
 type KasirOrderRecord = {
@@ -234,6 +238,10 @@ export function formatKasirOrder(order: KasirOrderRecord) {
             subtotal: item.subtotal,
             size: item.product?.size ?? null,
             image: item.product?.image ?? null,
+                description: item.description ?? null,
+                notes: item.notes ?? null,
+                itemType: item.itemType,
+                unitPrice: item.unitPrice ?? item.price,
         })),
     };
 }

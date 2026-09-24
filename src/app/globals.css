@@ -1650,15 +1650,11 @@ html[data-theme="dark"] body .catalog-card-image button[class*="bg-white"]:hover
   background: linear-gradient(112deg, #0E3A32 0%, #14544A 48%, #0B2D27 100%);
   box-shadow: 0 26px 60px rgba(12,43,37,.24);
 }
-/* Hero grid: [ text ][ art ][ actions ] — art has its own reserved column, so no overlap with title/buttons. */
+/* Hero grid: [ text ][ actions ] — no reserved artwork column. */
 .admin-hero-grid { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "text actions"; }
 .admin-hero-text { grid-area: text; }
-.admin-hero-art { grid-area: art; }
 .admin-hero-actions { grid-area: actions; }
 .admin-hero-title { font-size: clamp(1.75rem, 1.1rem + 1.4vw, 2.5rem); }
-@media (min-width: 1280px) {
-  .admin-hero-grid { grid-template-columns: minmax(0, 1fr) 128px auto; grid-template-areas: "text art actions"; }
-}
 .admin-hero-orb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(2px); }
 .admin-hero-orb-a { right: -6%; top: -60%; width: 46%; aspect-ratio: 1; background: radial-gradient(circle, rgba(46,139,87,.45), transparent 62%); }
 .admin-hero-orb-b { right: 8%; bottom: -80%; width: 34%; aspect-ratio: 1; background: radial-gradient(circle, rgba(212,175,55,.26), transparent 65%); }
@@ -1666,7 +1662,6 @@ html[data-theme="dark"] body .catalog-card-image button[class*="bg-white"]:hover
   position: absolute; left: 0; right: 0; bottom: 0; height: 3px; pointer-events: none;
   background: linear-gradient(90deg, transparent 0%, rgba(212,175,55,.85) 22%, rgba(232,206,140,.5) 55%, transparent 100%);
 }
-.admin-hero-art { filter: drop-shadow(0 18px 30px rgba(0,0,0,.35)); opacity: .96; margin-bottom: -20px; }
 .admin-website-btn:focus-visible, .admin-logout-btn:focus-visible { outline: 3px solid #E4C982; outline-offset: 3px; }
 
 /* Cards + statistics */
@@ -1721,7 +1716,6 @@ html[data-theme="dark"] body .catalog-card-image button[class*="bg-white"]:hover
   .admin-hero { min-height: 118px; }
   .admin-hero-grid { padding-top: 16px; padding-bottom: 16px; }
   .admin-hero-title { font-size: clamp(1.6rem, 1rem + 1.2vw, 2.1rem); }
-  .admin-hero-art { height: 92px; width: 86px; }
   .admin-content { margin-top: 14px; }
   .admin-content > * + *, .admin-content .space-y-4 > * + *, .admin-content .xl\:space-y-\[18px\] > * + * { margin-top: 14px; }
   .admin-stat { min-height: 118px; padding: 14px 16px; }

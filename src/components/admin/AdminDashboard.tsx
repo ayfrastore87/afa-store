@@ -572,9 +572,6 @@ export default function AdminPage() {
                                 <h2 className="admin-hero-title mt-1.5 font-black leading-[1.05]">Dashboard Admin</h2>
                                 <p className="mt-1.5 max-w-xl text-[14px] leading-snug text-white/75">Kelola produk, stok, pesanan, pelanggan dan operasional AFA STORE secara realtime tanpa refresh.</p>
                             </div>
-                            <span aria-hidden="true" className="admin-hero-art pointer-events-none hidden h-[104px] w-[96px] select-none justify-self-center self-end xl:block">
-                                <Image src="/products/parcel.png" alt="" width={190} height={285} priority={false} className="h-full w-full object-contain object-bottom" />
-                            </span>
                             <div className="admin-hero-actions flex shrink-0 gap-3 justify-self-end"><AdminHeaderWebsiteButton /><button onClick={logout} className="admin-logout-btn flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 px-5 font-semibold transition duration-300 hover:bg-white/15"><LogOut size={18} /> Logout</button></div>
                         </motion.div>
                     </header>

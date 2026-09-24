@@ -4,10 +4,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart } from "lucide-react";
+import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart, ArrowRight, CalendarDays, Coins } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
-import { BarChart3, Boxes, CheckCircle2, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
+import { BarChart3, Boxes, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
@@ -553,23 +554,38 @@ export default function AdminPage() {
     }
 
     return (
-        <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,#fff8df_0,#f7efd9_34%,#edf4ef_68%,#e4dcc7_100%)] pb-28 text-[#184D47]">
+        <main className="admin-shell min-h-screen overflow-x-hidden pb-28 text-[#184D47] lg:pb-8">
             <MobileHeader adminEmail={adminEmail} onMenu={() => setDrawerOpen(true)} />
-            <div className="mx-auto flex w-full max-w-7xl gap-6 px-3 py-4 sm:px-4 lg:p-8">
+            <div className="admin-frame mx-auto flex w-full max-w-[1560px] gap-[22px] px-3 py-4 sm:px-4 lg:px-6 lg:py-5 xl:px-7 xl:py-6">
                 <AdminSidebar activeTab={activeTab} onClose={() => setDrawerOpen(false)} />
                 <MobileDrawer open={drawerOpen} activeTab={activeTab} onClose={() => setDrawerOpen(false)} />
 
                 <section className="min-w-0 flex-1">
                     <AdminBreadcrumb />
-                    <header className="hidden overflow-hidden rounded-[2rem] bg-[#184D47] p-5 text-white shadow-xl md:p-8 lg:block">
-                        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                            <div><p className="text-xs font-bold uppercase tracking-[0.35em] text-[#C8A14A]">Premium Control Room</p><h2 className="mt-3 text-3xl font-black md:text-5xl">Dashboard Admin</h2><p className="mt-2 max-w-2xl text-white/75">Kelola produk, stok, upload gambar, dan pesanan Supabase secara realtime tanpa refresh.</p></div>
-                            <div className="flex gap-3"><AdminHeaderWebsiteButton /><button onClick={logout} className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 font-semibold hover:bg-white/10"><LogOut size={18} /> Logout</button></div>
+                    <header className="admin-hero relative hidden overflow-hidden rounded-[26px] text-white lg:block lg:min-h-[150px] xl:min-h-[165px]">
+                        <span aria-hidden="true" className="admin-hero-orb admin-hero-orb-a" />
+                        <span aria-hidden="true" className="admin-hero-orb admin-hero-orb-b" />
+                        <span aria-hidden="true" className="admin-hero-line" />
+                        <span aria-hidden="true" className="admin-hero-art pointer-events-none absolute inset-y-0 right-[19%] hidden w-[190px] xl:block">
+                            <Image src="/products/parcel.png" alt="" width={190} height={285} priority={false} className="h-full w-full object-contain object-bottom" />
+                        </span>
+                        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 flex flex-col gap-5 p-7 xl:flex-row xl:items-center xl:justify-between xl:p-9">
+                            <div className="max-w-xl">
+                                <p className="admin-kicker text-[11px] font-bold uppercase tracking-[0.42em] text-[#E4C982]">Premium Control Room</p>
+                                <h2 className="admin-hero-title mt-3 text-4xl font-black leading-[1.05] xl:text-5xl">Dashboard Admin</h2>
+                                <p className="mt-3 text-[15px] leading-relaxed text-white/75">Kelola produk, stok, pesanan, pelanggan dan operasional AFA STORE secara realtime tanpa refresh.</p>
+                            </div>
+                            <div className="flex shrink-0 gap-3"><AdminHeaderWebsiteButton /><button onClick={logout} className="admin-logout-btn flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 px-5 font-semibold transition duration-300 hover:bg-white/15"><LogOut size={18} /> Logout</button></div>
                         </motion.div>
                     </header>
 
+                    <div className="mt-3 flex gap-3 lg:hidden">
+                        <AdminHeaderWebsiteButton />
+                        <button onClick={logout} className="admin-logout-btn flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-4 font-semibold text-white transition active:scale-[0.98]"><LogOut size={18} /> Logout</button>
+                    </div>
+
                     {loading ? <Skeleton /> : (
-                        <div className="mt-6 space-y-6">
+                        <div className="mt-[22px] space-y-[22px]">
                             {activeTab === "home" && <HomePanel summary={summary} adminEmail={adminEmail} />}
                             {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} _isPendingProduct={pendingProductIds.has} />}
                             {activeTab === "stock" && <StockPanel />}
@@ -595,15 +611,36 @@ function MobileHeader({ adminEmail, onMenu }: { adminEmail: string; onMenu: () =
 }
 
 function SidebarContent({ activeTab, onClose }: { activeTab: string; onClose?: () => void }) {
-    return <><div className="rounded-3xl border border-[#D4AF37]/35 p-5"><p className="text-sm uppercase tracking-[0.35em] text-[#D4AF37]">AFA STORE</p><h1 className="mt-3 text-3xl font-black">Admin Panel</h1></div><nav className="mt-6 flex-1 space-y-2 overflow-y-auto pr-1"><AdminDashboardLink onClick={onClose} />{tabs.filter((tab) => tab.id !== "home").map((tab) => <Link onClick={onClose} key={tab.id} href={tab.href} className={`flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition duration-200 active:scale-[0.98] ${activeTab === tab.id ? "bg-[#D4AF37] text-[#184D47] shadow-lg shadow-[#D4AF37]/20" : "hover:bg-white/10"}`}><tab.icon size={20} />{tab.label}</Link>)}</nav></>;
+    return (
+        <>
+            <div className="admin-brand relative px-2 pb-5 pt-2 text-center">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white/[0.07] ring-1 ring-[#D4AF37]/35"><Image src="/AFA LOGO.svg" alt="" width={38} height={38} className="h-9 w-9" /></div>
+                <h1 className="admin-brand-title mt-3 text-[26px] font-black leading-none tracking-[0.06em] text-white">AFA STORE</h1>
+                <p className="mt-1.5 text-[13px] font-medium tracking-[0.12em] text-white/70">Admin Panel</p>
+                <span aria-hidden="true" className="admin-brand-rule mx-auto mt-4 block h-px w-4/5" />
+            </div>
+            <nav className="admin-sidebar-nav relative z-10 flex-1 space-y-1.5 overflow-y-auto pr-1" aria-label="Menu admin">
+                <AdminDashboardLink onClick={onClose} />
+                {tabs.filter((tab) => tab.id !== "home").map((tab) => {
+                    const active = activeTab === tab.id;
+                    return (
+                        <Link onClick={onClose} key={tab.id} href={tab.href} aria-current={active ? "page" : undefined} className={`admin-nav-item flex min-h-12 w-full items-center gap-3 rounded-[15px] px-4 py-3 text-left text-[15px] font-semibold transition duration-200 active:scale-[0.98] ${active ? "admin-nav-active text-white" : "text-white/85 hover:translate-x-0.5 hover:bg-white/[0.08] hover:text-white"}`}>
+                            <tab.icon size={20} className="shrink-0" />
+                            <span className="truncate">{tab.label}</span>
+                        </Link>
+                    );
+                })}
+            </nav>
+        </>
+    );
 }
 
 function AdminSidebar({ activeTab, onClose }: { activeTab: string; onClose: () => void }) {
-    return <aside className="sticky top-6 hidden h-[calc(100vh-48px)] w-72 shrink-0 rounded-[2rem] bg-[#184D47] p-5 text-white shadow-2xl lg:flex lg:flex-col"><SidebarContent activeTab={activeTab} onClose={onClose} /></aside>;
+    return <aside className="admin-sidebar sticky top-5 hidden h-[calc(100dvh-40px)] w-[245px] shrink-0 overflow-hidden rounded-[26px] p-4 text-white lg:flex lg:flex-col"><SidebarContent activeTab={activeTab} onClose={onClose} /><span aria-hidden="true" className="admin-sidebar-wave" /></aside>;
 }
 
 function MobileDrawer({ open, activeTab, onClose }: { open: boolean; activeTab: string; onClose: () => void }) {
-    return <>{open && <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm lg:hidden" aria-label="Tutup menu" />}<motion.aside drag="x" dragConstraints={{ left: 0, right: 0 }} onDragEnd={(_, info) => info.offset.x < -80 && onClose()} initial={false} animate={{ x: open ? 0 : "-110%" }} transition={{ type: "spring", stiffness: 320, damping: 32 }} className="fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-80 flex-col rounded-r-[2rem] bg-[#184D47] p-5 text-white shadow-2xl lg:hidden"><button onClick={onClose} className="mb-4 ml-auto grid h-11 w-11 place-items-center rounded-2xl bg-white/10"><X /></button><SidebarContent activeTab={activeTab} onClose={onClose} /></motion.aside></>;
+    return <>{open && <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm lg:hidden" aria-label="Tutup menu" />}<motion.aside drag="x" dragConstraints={{ left: 0, right: 0 }} onDragEnd={(_, info) => info.offset.x < -80 && onClose()} initial={false} animate={{ x: open ? 0 : "-110%" }} transition={{ type: "spring", stiffness: 320, damping: 32 }} className="admin-sidebar fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-80 flex-col overflow-hidden rounded-r-[26px] p-4 text-white shadow-2xl lg:hidden"><button onClick={onClose} className="relative z-10 mb-2 ml-auto grid h-11 w-11 place-items-center rounded-2xl bg-white/10" aria-label="Tutup menu"><X /></button><SidebarContent activeTab={activeTab} onClose={onClose} /><span aria-hidden="true" className="admin-sidebar-wave" /></motion.aside></>;
 }
 
 function MobileBottomNav({ activeTab }: { activeTab: string }) {
@@ -612,11 +649,11 @@ function MobileBottomNav({ activeTab }: { activeTab: string }) {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-    return <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className={`rounded-[1.75rem] border border-white/70 bg-white/85 p-5 shadow-xl shadow-[#184D47]/10 backdrop-blur ${className}`}>{children}</motion.div>;
+    return <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className={`admin-card rounded-[24px] border border-white/70 bg-white/85 p-5 shadow-xl shadow-[#184D47]/10 backdrop-blur ${className}`}>{children}</motion.div>;
 }
 
 function Skeleton() {
-    return <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="relative h-32 overflow-hidden rounded-[1.75rem] bg-white/70 shadow"><span className="absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/80 to-transparent" /></div>)}</div>;
+    return <div className="mt-[22px] grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="admin-card skeleton relative h-36 overflow-hidden rounded-[24px] bg-white/70 shadow" />)}</div>;
 }
 
 function CountUp({ value, money = false }: { value: number; money?: boolean }) {
@@ -625,10 +662,104 @@ function CountUp({ value, money = false }: { value: number; money?: boolean }) {
     return <>{money ? rupiah.format(display) : display}</>;
 }
 
+type StatTone = "green" | "gold" | "forest" | "amber" | "coral" | "blue";
+type StatItem = { label: string; hint: string; value: number; money?: boolean; icon: LucideIcon; tone: StatTone };
+type QuickAction = { label: string; href: string; icon: LucideIcon; tone: StatTone };
+
 function HomePanel({ summary, adminEmail }: { summary: { products: number; stock: number; orders: number; revenueToday: number; lowStock: number; pending: number }; adminEmail: string }) {
-    const items = [{ label: "Total Produk", value: summary.products, icon: Boxes }, { label: "Total Stok", value: summary.stock, icon: BarChart3 }, { label: "Pesanan", value: summary.orders, icon: ShoppingBag }, { label: "Pendapatan", value: summary.revenueToday, money: true, icon: CheckCircle2 }, { label: "Produk Hampir Habis", value: summary.lowStock, icon: AlertTriangle }, { label: "Pending Order", value: summary.pending, icon: Bell }];
-    const actions = [{ label: "Tambah Produk", href: "/admin/products/new", icon: PlusCircle }, { label: "Kelola Stok", href: "/admin/stock", icon: BarChart3 }, { label: "Pesanan Baru", href: "/admin/orders", icon: ShoppingBag }, { label: "Laporan", href: "/admin/reports", icon: FileText }, { label: "Website", href: "/", icon: ExternalLink }, { label: "QRIS", href: "/admin/settings", icon: QrCode }];
-    return <div className="space-y-5"><section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">{items.map((item, index) => <motion.div key={item.label} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: index * 0.04 }} className="min-w-0 rounded-[24px] bg-gradient-to-br from-white/95 via-white/80 to-[#D4AF37]/20 p-4 shadow-xl shadow-[#184D47]/10 ring-1 ring-white/70"><div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-[#0F4C45] text-[#D4AF37]"><item.icon size={20} /></div><p className="text-xs font-black uppercase tracking-wide text-[#184D47]/55">{item.label}</p><p className="mt-2 break-words text-2xl font-black leading-tight text-[#184D47] sm:text-3xl"><CountUp value={item.value} money={item.money} /></p></motion.div>)}</section><Card><div className="mb-4 flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.25em] text-[#D4AF37]">Quick Action</p><h3 className="text-2xl font-black">Aksi Cepat</h3></div><span className="rounded-full bg-[#0F4C45]/10 px-3 py-2 text-xs font-black">Realtime</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">{actions.map((action) => <Link key={action.label} href={action.href} className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-3xl bg-[#f8f0dd] p-3 text-center font-black shadow-sm transition duration-200 hover:-translate-y-1 hover:bg-[#D4AF37] active:scale-95"><action.icon size={22} />{action.label}</Link>)}</div></Card><Card><p className="font-bold">Akun Admin</p><p className="mt-2 break-all text-[#184D47]/70">Login sebagai {adminEmail}</p></Card></div>;
+    // Visual-only copy; every value below is the existing `summary` calculation untouched.
+    const items: StatItem[] = [
+        { label: "Total Produk", hint: "Produk aktif di toko", value: summary.products, icon: Boxes, tone: "green" },
+        { label: "Total Stok", hint: "Stok tersedia saat ini", value: summary.stock, icon: BarChart3, tone: "gold" },
+        { label: "Pesanan", hint: "Total pesanan masuk", value: summary.orders, icon: ShoppingBag, tone: "forest" },
+        { label: "Pendapatan", hint: "Total pendapatan", value: summary.revenueToday, money: true, icon: Coins, tone: "amber" },
+        { label: "Produk Hampir Habis", hint: "Perlu segera restock", value: summary.lowStock, icon: AlertTriangle, tone: "coral" },
+        { label: "Pending Order", hint: "Menunggu konfirmasi", value: summary.pending, icon: Bell, tone: "blue" },
+    ];
+    // hrefs are identical to the previous implementation.
+    const actions: QuickAction[] = [
+        { label: "Tambah Produk", href: "/admin/products/new", icon: PlusCircle, tone: "green" },
+        { label: "Kelola Stok", href: "/admin/stock", icon: BarChart3, tone: "gold" },
+        { label: "Pesanan Baru", href: "/admin/orders", icon: ShoppingBag, tone: "forest" },
+        { label: "Laporan", href: "/admin/reports", icon: FileText, tone: "amber" },
+        { label: "Website", href: "/", icon: ExternalLink, tone: "coral" },
+        { label: "QRIS", href: "/admin/settings", icon: QrCode, tone: "blue" },
+    ];
+    const initial = (adminEmail || "A").slice(0, 1).toUpperCase();
+
+    return (
+        <div className="space-y-[22px]">
+            <section className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-[22px]" aria-label="Statistik toko">
+                {items.map((item, index) => (
+                    <motion.article key={item.label} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: index * 0.04 }} data-tone={item.tone} className="admin-card admin-stat relative min-w-0 overflow-hidden rounded-[24px] border border-white/70 bg-white p-5 shadow-xl shadow-[#184D47]/8 xl:p-6">
+                        <span aria-hidden="true" className="admin-stat-wave" />
+                        <item.icon aria-hidden="true" className="admin-stat-ghost absolute right-4 top-4 hidden sm:block" size={64} strokeWidth={1.2} />
+                        <div className="relative z-10 flex items-start gap-4">
+                            <div className="admin-stat-icon grid h-14 w-14 shrink-0 place-items-center rounded-[16px] text-white shadow-lg"><item.icon size={26} /></div>
+                            <div className="min-w-0 flex-1">
+                                <p className="admin-label text-[11px] font-bold uppercase tracking-[0.2em] text-[#184D47]/60">{item.label}</p>
+                                <p className="admin-stat-value mt-1 break-words text-[30px] font-black leading-tight text-[#184D47] sm:text-[34px] xl:text-[38px]"><CountUp value={item.value} money={item.money} /></p>
+                                <p className="admin-stat-hint mt-1.5 text-sm text-[#184D47]/65">{item.hint}</p>
+                            </div>
+                        </div>
+                        <span aria-hidden="true" className="admin-stat-arrow absolute bottom-5 right-5 z-10 text-[#184D47]/55"><ArrowRight size={20} /></span>
+                    </motion.article>
+                ))}
+            </section>
+
+            <Card className="admin-quick">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <div><p className="admin-label text-[11px] font-bold uppercase tracking-[0.3em] text-[#B8902F]">Quick Action</p><h3 className="admin-section-title text-2xl font-black xl:text-[28px]">Aksi Cepat</h3></div>
+                    <span className="admin-pill inline-flex items-center gap-2 rounded-full bg-[#0F4C45]/8 px-3.5 py-2 text-xs font-bold text-[#184D47]"><span aria-hidden="true" className="admin-dot h-2 w-2 rounded-full bg-[#2E8B57]" />Realtime</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 xl:gap-4">
+                    {actions.map((action) => (
+                        <Link key={action.label} href={action.href} data-tone={action.tone} className="admin-action group relative flex min-h-[112px] flex-col justify-between gap-3 overflow-hidden rounded-[20px] p-4 font-bold text-[#184D47] shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.97]">
+                            <div className="flex items-start gap-3">
+                                <span className="admin-action-icon grid h-11 w-11 shrink-0 place-items-center rounded-[13px] text-white shadow-md"><action.icon size={20} /></span>
+                                <span className="pt-0.5 text-[15px] leading-tight">{action.label}</span>
+                            </div>
+                            <span aria-hidden="true" className="admin-action-arrow ml-auto grid h-8 w-8 place-items-center rounded-full bg-white/70 text-[#184D47] transition duration-300 group-hover:translate-x-0.5"><ArrowRight size={16} /></span>
+                        </Link>
+                    ))}
+                </div>
+            </Card>
+
+            <Card className="admin-account !p-4 sm:!p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                        <div className="admin-avatar grid h-14 w-14 shrink-0 place-items-center rounded-full text-xl font-black text-white shadow-lg" aria-hidden="true">{initial}</div>
+                        <div className="min-w-0">
+                            <p className="text-base font-black text-[#184D47]">Akun Admin</p>
+                            <p className="admin-account-email mt-0.5 break-all text-sm text-[#184D47]/70">Login sebagai: {adminEmail}</p>
+                        </div>
+                    </div>
+                    <span className="admin-pill inline-flex w-fit items-center gap-2 rounded-full bg-[#2E8B57]/10 px-3.5 py-2 text-xs font-bold text-[#1F6B43]"><span aria-hidden="true" className="admin-dot h-2 w-2 rounded-full bg-[#2E8B57]" />Online</span>
+                    <AdminClock />
+                </div>
+            </Card>
+        </div>
+    );
+}
+
+function AdminClock() {
+    // Rendered as empty on the server and first client paint, then filled after mount —
+    // this keeps the markup identical during hydration (no mismatch) while still showing local time.
+    const [now, setNow] = useState<Date | null>(null);
+    useEffect(() => {
+        setNow(new Date());
+        const timer = window.setInterval(() => setNow(new Date()), 30_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    if (!now) return <div className="hidden min-h-12 sm:block sm:w-px" aria-hidden="true" />;
+    const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now);
+    const timeLabel = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false }).format(now).replace(".", ":");
+    return (
+        <div className="admin-clock flex items-center gap-3 border-t border-[#184D47]/10 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+            <span className="admin-clock-icon grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[#0F4C45]/8 text-[#0F4C45]"><CalendarDays size={20} /></span>
+            <div className="min-w-0"><p className="text-sm font-bold text-[#184D47]">{dateLabel}</p><p className="admin-clock-time text-xs text-[#184D47]/65"><time>{timeLabel}</time></p></div>
+        </div>
+    );
 }
 
 function ProductsPanel({ products, onEdit, onDelete, onStock, _isPendingProduct }: { 

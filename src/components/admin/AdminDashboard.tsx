@@ -554,28 +554,28 @@ export default function AdminPage() {
     }
 
     return (
-        <main className="admin-shell min-h-screen overflow-x-hidden pb-28 text-[#184D47] lg:pb-8">
+        <main className="admin-shell min-h-screen overflow-x-hidden pb-28 text-[#184D47] lg:pb-[max(32px,env(safe-area-inset-bottom))]">
             <MobileHeader adminEmail={adminEmail} onMenu={() => setDrawerOpen(true)} />
-            <div className="admin-frame mx-auto flex w-full max-w-[1560px] gap-[22px] px-3 py-4 sm:px-4 lg:px-6 lg:py-5 xl:px-7 xl:py-6">
+            <div className="admin-frame mx-auto flex w-full max-w-[1560px] gap-[18px] px-3 py-4 sm:px-4 lg:px-5 lg:py-4 xl:gap-[22px] xl:px-6">
                 <AdminSidebar activeTab={activeTab} onClose={() => setDrawerOpen(false)} />
                 <MobileDrawer open={drawerOpen} activeTab={activeTab} onClose={() => setDrawerOpen(false)} />
 
                 <section className="min-w-0 flex-1">
                     <AdminBreadcrumb />
-                    <header className="admin-hero relative hidden overflow-hidden rounded-[26px] text-white lg:block lg:min-h-[150px] xl:min-h-[165px]">
+                    <header className="admin-hero relative hidden overflow-hidden rounded-[24px] text-white lg:block lg:min-h-[128px] xl:min-h-[136px]">
                         <span aria-hidden="true" className="admin-hero-orb admin-hero-orb-a" />
                         <span aria-hidden="true" className="admin-hero-orb admin-hero-orb-b" />
                         <span aria-hidden="true" className="admin-hero-line" />
-                        <span aria-hidden="true" className="admin-hero-art pointer-events-none absolute inset-y-0 right-[19%] hidden w-[190px] xl:block">
-                            <Image src="/products/parcel.png" alt="" width={190} height={285} priority={false} className="h-full w-full object-contain object-bottom" />
-                        </span>
-                        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 flex flex-col gap-5 p-7 xl:flex-row xl:items-center xl:justify-between xl:p-9">
-                            <div className="max-w-xl">
-                                <p className="admin-kicker text-[11px] font-bold uppercase tracking-[0.42em] text-[#E4C982]">Premium Control Room</p>
-                                <h2 className="admin-hero-title mt-3 text-4xl font-black leading-[1.05] xl:text-5xl">Dashboard Admin</h2>
-                                <p className="mt-3 text-[15px] leading-relaxed text-white/75">Kelola produk, stok, pesanan, pelanggan dan operasional AFA STORE secara realtime tanpa refresh.</p>
+                        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="admin-hero-grid relative z-10 grid items-center gap-x-5 gap-y-3 px-6 py-5 xl:px-7">
+                            <div className="admin-hero-text min-w-0">
+                                <p className="admin-kicker text-[11px] font-bold uppercase tracking-[0.38em] text-[#E4C982]">Premium Control Room</p>
+                                <h2 className="admin-hero-title mt-1.5 font-black leading-[1.05]">Dashboard Admin</h2>
+                                <p className="mt-1.5 max-w-xl text-[14px] leading-snug text-white/75">Kelola produk, stok, pesanan, pelanggan dan operasional AFA STORE secara realtime tanpa refresh.</p>
                             </div>
-                            <div className="flex shrink-0 gap-3"><AdminHeaderWebsiteButton /><button onClick={logout} className="admin-logout-btn flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 px-5 font-semibold transition duration-300 hover:bg-white/15"><LogOut size={18} /> Logout</button></div>
+                            <span aria-hidden="true" className="admin-hero-art pointer-events-none hidden h-[104px] w-[96px] select-none justify-self-center self-end xl:block">
+                                <Image src="/products/parcel.png" alt="" width={190} height={285} priority={false} className="h-full w-full object-contain object-bottom" />
+                            </span>
+                            <div className="admin-hero-actions flex shrink-0 gap-3 justify-self-end"><AdminHeaderWebsiteButton /><button onClick={logout} className="admin-logout-btn flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 px-5 font-semibold transition duration-300 hover:bg-white/15"><LogOut size={18} /> Logout</button></div>
                         </motion.div>
                     </header>
 
@@ -585,7 +585,7 @@ export default function AdminPage() {
                     </div>
 
                     {loading ? <Skeleton /> : (
-                        <div className="mt-[22px] space-y-[22px]">
+                        <div className="admin-content mt-4 flex flex-col gap-4 xl:mt-[18px] xl:gap-[18px]">
                             {activeTab === "home" && <HomePanel summary={summary} adminEmail={adminEmail} />}
                             {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} _isPendingProduct={pendingProductIds.has} />}
                             {activeTab === "stock" && <StockPanel />}
@@ -613,18 +613,18 @@ function MobileHeader({ adminEmail, onMenu }: { adminEmail: string; onMenu: () =
 function SidebarContent({ activeTab, onClose }: { activeTab: string; onClose?: () => void }) {
     return (
         <>
-            <div className="admin-brand relative px-2 pb-5 pt-2 text-center">
-                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white/[0.07] ring-1 ring-[#D4AF37]/35"><Image src="/AFA LOGO.svg" alt="" width={38} height={38} className="h-9 w-9" /></div>
-                <h1 className="admin-brand-title mt-3 text-[26px] font-black leading-none tracking-[0.06em] text-white">AFA STORE</h1>
-                <p className="mt-1.5 text-[13px] font-medium tracking-[0.12em] text-white/70">Admin Panel</p>
-                <span aria-hidden="true" className="admin-brand-rule mx-auto mt-4 block h-px w-4/5" />
+            <div className="admin-brand relative shrink-0 px-2 pb-3 pt-1 text-center">
+                <div className="admin-brand-logo mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.07] ring-1 ring-[#D4AF37]/35"><Image src="/AFA LOGO.svg" alt="" width={38} height={38} className="h-8 w-8" /></div>
+                <h1 className="admin-brand-title mt-2 text-[23px] font-black leading-none tracking-[0.06em] text-white">AFA STORE</h1>
+                <p className="mt-1 text-[12px] font-medium tracking-[0.12em] text-white/70">Admin Panel</p>
+                <span aria-hidden="true" className="admin-brand-rule mx-auto mt-3 block h-px w-4/5" />
             </div>
-            <nav className="admin-sidebar-nav relative z-10 flex-1 space-y-1.5 overflow-y-auto pr-1" aria-label="Menu admin">
+            <nav className="admin-sidebar-nav relative z-10 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-2 pr-1" aria-label="Menu admin">
                 <AdminDashboardLink onClick={onClose} />
                 {tabs.filter((tab) => tab.id !== "home").map((tab) => {
                     const active = activeTab === tab.id;
                     return (
-                        <Link onClick={onClose} key={tab.id} href={tab.href} aria-current={active ? "page" : undefined} className={`admin-nav-item flex min-h-12 w-full items-center gap-3 rounded-[15px] px-4 py-3 text-left text-[15px] font-semibold transition duration-200 active:scale-[0.98] ${active ? "admin-nav-active text-white" : "text-white/85 hover:translate-x-0.5 hover:bg-white/[0.08] hover:text-white"}`}>
+                        <Link onClick={onClose} key={tab.id} href={tab.href} aria-current={active ? "page" : undefined} className={`admin-nav-item flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3.5 py-2.5 text-left text-[15px] font-semibold transition duration-200 active:scale-[0.98] ${active ? "admin-nav-active text-white" : "text-white/85 hover:translate-x-0.5 hover:bg-white/[0.08] hover:text-white"}`}>
                             <tab.icon size={20} className="shrink-0" />
                             <span className="truncate">{tab.label}</span>
                         </Link>
@@ -636,7 +636,7 @@ function SidebarContent({ activeTab, onClose }: { activeTab: string; onClose?: (
 }
 
 function AdminSidebar({ activeTab, onClose }: { activeTab: string; onClose: () => void }) {
-    return <aside className="admin-sidebar sticky top-5 hidden h-[calc(100dvh-40px)] w-[245px] shrink-0 overflow-hidden rounded-[26px] p-4 text-white lg:flex lg:flex-col"><SidebarContent activeTab={activeTab} onClose={onClose} /><span aria-hidden="true" className="admin-sidebar-wave" /></aside>;
+    return <aside className="admin-sidebar admin-sidebar-desktop sticky top-4 hidden max-h-[calc(100dvh-32px)] w-[240px] shrink-0 self-start rounded-[24px] p-3.5 text-white lg:flex lg:flex-col"><SidebarContent activeTab={activeTab} onClose={onClose} /><span aria-hidden="true" className="admin-sidebar-wave" /></aside>;
 }
 
 function MobileDrawer({ open, activeTab, onClose }: { open: boolean; activeTab: string; onClose: () => void }) {
@@ -688,47 +688,47 @@ function HomePanel({ summary, adminEmail }: { summary: { products: number; stock
     const initial = (adminEmail || "A").slice(0, 1).toUpperCase();
 
     return (
-        <div className="space-y-[22px]">
-            <section className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-[22px]" aria-label="Statistik toko">
+        <div className="admin-stack flex flex-col gap-4 xl:gap-[18px]">
+            <section className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-[18px]" aria-label="Statistik toko">
                 {items.map((item, index) => (
-                    <motion.article key={item.label} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: index * 0.04 }} data-tone={item.tone} className="admin-card admin-stat relative min-w-0 overflow-hidden rounded-[24px] border border-white/70 bg-white p-5 shadow-xl shadow-[#184D47]/8 xl:p-6">
+                    <motion.article key={item.label} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: index * 0.04 }} data-tone={item.tone} className="admin-card admin-stat relative min-h-[126px] min-w-0 overflow-hidden rounded-[22px] border border-white/70 bg-white p-4 shadow-xl shadow-[#184D47]/8 xl:min-h-[132px] xl:px-5 xl:py-[18px]">
                         <span aria-hidden="true" className="admin-stat-wave" />
-                        <item.icon aria-hidden="true" className="admin-stat-ghost absolute right-4 top-4 hidden sm:block" size={64} strokeWidth={1.2} />
-                        <div className="relative z-10 flex items-start gap-4">
-                            <div className="admin-stat-icon grid h-14 w-14 shrink-0 place-items-center rounded-[16px] text-white shadow-lg"><item.icon size={26} /></div>
+                        <item.icon aria-hidden="true" className="admin-stat-ghost pointer-events-none absolute right-4 top-3 hidden sm:block" size={56} strokeWidth={1.2} />
+                        <div className="relative z-10 flex items-start gap-3.5 pr-7">
+                            <div className="admin-stat-icon grid h-12 w-12 shrink-0 place-items-center rounded-[14px] text-white shadow-lg"><item.icon size={23} /></div>
                             <div className="min-w-0 flex-1">
                                 <p className="admin-label text-[11px] font-bold uppercase tracking-[0.2em] text-[#184D47]/60">{item.label}</p>
-                                <p className="admin-stat-value mt-1 break-words text-[30px] font-black leading-tight text-[#184D47] sm:text-[34px] xl:text-[38px]"><CountUp value={item.value} money={item.money} /></p>
-                                <p className="admin-stat-hint mt-1.5 text-sm text-[#184D47]/65">{item.hint}</p>
+                                <p className="admin-stat-value mt-0.5 break-words text-[28px] font-black leading-tight text-[#184D47] sm:text-[30px] xl:text-[32px]"><CountUp value={item.value} money={item.money} /></p>
+                                <p className="admin-stat-hint mt-1 text-[13px] text-[#184D47]/65">{item.hint}</p>
                             </div>
                         </div>
-                        <span aria-hidden="true" className="admin-stat-arrow absolute bottom-5 right-5 z-10 text-[#184D47]/55"><ArrowRight size={20} /></span>
+                        <span aria-hidden="true" className="admin-stat-arrow pointer-events-none absolute bottom-4 right-4 z-10 text-[#184D47]/55"><ArrowRight size={18} /></span>
                     </motion.article>
                 ))}
             </section>
 
-            <Card className="admin-quick">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <div><p className="admin-label text-[11px] font-bold uppercase tracking-[0.3em] text-[#B8902F]">Quick Action</p><h3 className="admin-section-title text-2xl font-black xl:text-[28px]">Aksi Cepat</h3></div>
+            <Card className="admin-quick !p-4 xl:!p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                    <div><p className="admin-label text-[11px] font-bold uppercase tracking-[0.3em] text-[#B8902F]">Quick Action</p><h3 className="admin-section-title text-[22px] font-black leading-tight xl:text-2xl">Aksi Cepat</h3></div>
                     <span className="admin-pill inline-flex items-center gap-2 rounded-full bg-[#0F4C45]/8 px-3.5 py-2 text-xs font-bold text-[#184D47]"><span aria-hidden="true" className="admin-dot h-2 w-2 rounded-full bg-[#2E8B57]" />Realtime</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6 xl:gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-2.5 xl:gap-3.5">
                     {actions.map((action) => (
-                        <Link key={action.label} href={action.href} data-tone={action.tone} className="admin-action group relative flex min-h-[112px] flex-col justify-between gap-3 overflow-hidden rounded-[20px] p-4 font-bold text-[#184D47] shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.97]">
+                        <Link key={action.label} href={action.href} data-tone={action.tone} className="admin-action group relative flex min-h-[104px] flex-col justify-between gap-2.5 overflow-hidden rounded-[18px] p-3.5 font-bold text-[#184D47] shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.97]">
                             <div className="flex items-start gap-3">
-                                <span className="admin-action-icon grid h-11 w-11 shrink-0 place-items-center rounded-[13px] text-white shadow-md"><action.icon size={20} /></span>
-                                <span className="pt-0.5 text-[15px] leading-tight">{action.label}</span>
+                                <span className="admin-action-icon grid h-10 w-10 shrink-0 place-items-center rounded-[12px] text-white shadow-md"><action.icon size={19} /></span>
+                                <span className="pt-0.5 text-[14px] leading-tight lg:text-[13px] xl:text-[14px]">{action.label}</span>
                             </div>
-                            <span aria-hidden="true" className="admin-action-arrow ml-auto grid h-8 w-8 place-items-center rounded-full bg-white/70 text-[#184D47] transition duration-300 group-hover:translate-x-0.5"><ArrowRight size={16} /></span>
+                            <span aria-hidden="true" className="admin-action-arrow ml-auto grid h-7 w-7 place-items-center rounded-full bg-white/70 text-[#184D47] transition duration-300 group-hover:translate-x-0.5"><ArrowRight size={15} /></span>
                         </Link>
                     ))}
                 </div>
             </Card>
 
-            <Card className="admin-account !p-4 sm:!p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="flex min-w-0 flex-1 items-center gap-4">
-                        <div className="admin-avatar grid h-14 w-14 shrink-0 place-items-center rounded-full text-xl font-black text-white shadow-lg" aria-hidden="true">{initial}</div>
+            <Card className="admin-account !p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                        <div className="admin-avatar grid h-12 w-12 shrink-0 place-items-center rounded-full text-lg font-black text-white shadow-lg" aria-hidden="true">{initial}</div>
                         <div className="min-w-0">
                             <p className="text-base font-black text-[#184D47]">Akun Admin</p>
                             <p className="admin-account-email mt-0.5 break-all text-sm text-[#184D47]/70">Login sebagai: {adminEmail}</p>

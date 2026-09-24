@@ -827,6 +827,10 @@ export default function KasirPOS() {
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (!checkoutOpen) {
+                                            setCheckoutOpen(true);
+                                            return;
+                                        }
                                         // ONE-CLICK UX: If ALL data complete, submit immediately without requiring step-by-step clicks.
                                         if (allRequirementsMet()) {
                                             void submitOrder();
@@ -886,7 +890,7 @@ export default function KasirPOS() {
                     </div>
                 </aside>
             </main>
-            {cart.length > 0 && !checkoutOpen ? <button type="button" onClick={() => { setMobileCartOpen(true); setCheckoutOpen(true); }} className="kasir-mobile-cart-bar lg:hidden"><span><b>{totalItems} Item</b><small>Keranjang aktif</small></span><strong>{rupiah.format(orderTotal)}</strong><span className="kasir-mobile-cart-cta">Lanjutkan</span></button> : null}
+            {cart.length > 0 && !checkoutOpen ? <button type="button" onClick={() => setMobileCartOpen(true)} className="kasir-mobile-cart-bar lg:hidden"><span><b>{totalItems} Item</b><small>Keranjang aktif</small></span><strong>{rupiah.format(orderTotal)}</strong><span className="kasir-mobile-cart-cta">Lanjutkan</span></button> : null}
             {manualOpen ? (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
                     <div className="max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-[#F8F5EE] p-5 shadow-2xl">

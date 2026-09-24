@@ -4,6 +4,10 @@ import { ClipboardList, FileText, History, Menu, Settings, ShoppingCart, LogOut 
 
 export const dynamic = "force-dynamic";
 
+// Authoritative server-side guard for every protected /kasir route.
+// This layout belongs to the `(protected)` route group so it NEVER wraps
+// /kasir/login; otherwise requireCashier() would redirect the login page to
+// itself and the browser would report ERR_TOO_MANY_REDIRECTS.
 export default async function KasirLayout({ children }: { children: React.ReactNode }) {
     const user = await requireCashier();
     const menu = [['Transaksi','/kasir',ShoppingCart],['Pesanan','/kasir/pesanan',ClipboardList],['Riwayat','/kasir/riwayat',History],['Laporan','/kasir/laporan',FileText],['Pengaturan','/kasir/pengaturan',Settings]] as const;

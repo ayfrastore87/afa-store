@@ -56,8 +56,10 @@ export async function getCurrentAdmin() {
     return user?.role === "admin" && user.isActive !== false ? user : null;
 }
 
-/** Active identities allowed to use the POS. Kept separate from getCurrentAdmin
- * so general administration can never accidentally become cashier-accessible. */
+/** Active identities allowed to use the POS (active admin or active cashier).
+ * Customer / partner / inactive rows never qualify. Kept separate from
+ * getCurrentAdmin so general administration stays admin-only. This is the
+ * same rule as `isActiveKasirIdentity` in `@/lib/kasir-access`. */
 export async function getCurrentCashier() {
     const user = await getCurrentUser();
     if (!user || user.isActive === false) return null;

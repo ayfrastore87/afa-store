@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
+import { isProtectedKasirPath, KASIR_LOGIN_PATH } from "@/lib/kasir-access";
 
 export async function proxy(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,7 +60,8 @@ export async function proxy(request: NextRequest) {
     
     // Protected admin routes
     const protectedAdminRoute = pathname.startsWith("/admin") && pathname !== "/admin/login";
-    const protectedKasirRoute = pathname.startsWith("/kasir") && pathname !== "/kasir/login";
+    // "/kasir/login" is public; every other /kasir path needs a Supabase session.
+    const protectedKasirRoute = isProtectedKasirPath(pathname);
 
     // If not protecting this route, just forward the request
     if (!protectedCustomerRoute && !protectedAdminRoute && !protectedKasirRoute) {
@@ -69,7 +71,7 @@ export async function proxy(request: NextRequest) {
     // Check if user exists in Supabase session
     if (!user) {
         const loginUrl = request.nextUrl.clone();
-        loginUrl.pathname = protectedKasirRoute ? "/kasir/login" : protectedAdminRoute ? "/admin/login" : "/login";
+        loginUrl.pathname = protectedKasirRoute ? KASIR_LOGIN_PATH : protectedAdminRoute ? "/admin/login" : "/login";
         loginUrl.search = "";
         loginUrl.searchParams.set("next", pathname);
         

@@ -11,7 +11,7 @@ import { BarChart3, Boxes, CheckCircle2, Edit3, Handshake, Home, Loader2, LogOut
 import { supabase } from "@/lib/supabase";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
-import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton, AdminWebsiteButton, AdminWebsiteFooterButton } from "@/components/admin/AdminNav";
+import { AdminBreadcrumb, AdminDashboardLink, AdminHeaderWebsiteButton } from "@/components/admin/AdminNav";
 import { ReportsPanel, SettingsPanel, StockPanel, TestimonialsPanel } from "@/components/admin/AdminAdvancedPanels";
 
 type Product = {
@@ -595,7 +595,7 @@ function MobileHeader({ adminEmail, onMenu }: { adminEmail: string; onMenu: () =
 }
 
 function SidebarContent({ activeTab, onClose }: { activeTab: string; onClose?: () => void }) {
-    return <><div className="rounded-3xl border border-[#D4AF37]/35 p-5"><p className="text-sm uppercase tracking-[0.35em] text-[#D4AF37]">AFA STORE</p><h1 className="mt-3 text-3xl font-black">Admin Panel</h1></div><nav className="mt-6 flex-1 space-y-2 overflow-y-auto pr-1"><AdminDashboardLink onClick={onClose} />{tabs.filter((tab) => tab.id !== "home").map((tab) => <Link onClick={onClose} key={tab.id} href={tab.href} className={`flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition duration-200 active:scale-[0.98] ${activeTab === tab.id ? "bg-[#D4AF37] text-[#184D47] shadow-lg shadow-[#D4AF37]/20" : "hover:bg-white/10"}`}><tab.icon size={20} />{tab.label}</Link>)}<AdminWebsiteButton /></nav><div className="mt-5"><AdminWebsiteFooterButton /></div></>;
+    return <><div className="rounded-3xl border border-[#D4AF37]/35 p-5"><p className="text-sm uppercase tracking-[0.35em] text-[#D4AF37]">AFA STORE</p><h1 className="mt-3 text-3xl font-black">Admin Panel</h1></div><nav className="mt-6 flex-1 space-y-2 overflow-y-auto pr-1"><AdminDashboardLink onClick={onClose} />{tabs.filter((tab) => tab.id !== "home").map((tab) => <Link onClick={onClose} key={tab.id} href={tab.href} className={`flex min-h-12 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition duration-200 active:scale-[0.98] ${activeTab === tab.id ? "bg-[#D4AF37] text-[#184D47] shadow-lg shadow-[#D4AF37]/20" : "hover:bg-white/10"}`}><tab.icon size={20} />{tab.label}</Link>)}</nav></>;
 }
 
 function AdminSidebar({ activeTab, onClose }: { activeTab: string; onClose: () => void }) {

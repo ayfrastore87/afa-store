@@ -5,6 +5,7 @@ import type { CookieOptions } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { jwtVerify, SignJWT } from "jose";
 import type { NextResponse } from "next/server";
+import { KASIR_LOGIN_PATH } from "@/lib/kasir-access";
 
 export const AUTH_COOKIE = "afa_session";
 
@@ -252,9 +253,11 @@ export async function requireAdmin() {
     return admin;
 }
 
+/** Guard for the protected `/kasir/(protected)` route group ONLY. It must never
+ * run for `/kasir/login`, otherwise the redirect below would target itself. */
 export async function requireCashier() {
     const { getCurrentCashier: getApplicationCashier } = await import("@/lib/server-auth");
     const cashier = await getApplicationCashier();
-    if (!cashier) redirect("/kasir/login");
+    if (!cashier) redirect(KASIR_LOGIN_PATH);
     return cashier;
 }

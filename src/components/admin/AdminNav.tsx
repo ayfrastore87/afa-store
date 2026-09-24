@@ -1,10 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Globe2, Home, Store } from "lucide-react";
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "/";
+import { usePathname } from "next/navigation";
+import { Home } from "lucide-react";
 
 const breadcrumbs: Record<string, string> = {
     "/admin/products": "Produk",
@@ -44,49 +42,16 @@ export function AdminDashboardLink({ onClick }: { onClick?: () => void }) {
     );
 }
 
-export function AdminWebsiteButton({ compact = false }: { compact?: boolean }) {
-    const router = useRouter();
-
-    return (
-        <button
-            type="button"
-            onClick={() => router.push(SITE_URL)}
-            className={`group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-[#0F766E] to-[#D4AF37] p-4 font-black text-white shadow-md transition duration-300 hover:scale-[1.03] hover:shadow-[0_0_28px_rgba(212,175,55,0.55)] ${compact ? "px-3 py-3" : ""}`}
-            aria-label="Kembali ke AFA STORE"
-        >
-            <Store size={20} className="shrink-0" />
-            <span className={compact ? "hidden" : "hidden sm:inline"}>Kembali ke AFA STORE</span>
-        </button>
-    );
-}
-
-export function AdminWebsiteFooterButton() {
-    const router = useRouter();
-
-    return (
-        <button
-            type="button"
-            onClick={() => router.push(SITE_URL)}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 px-4 py-3 text-sm font-bold text-white/85 transition duration-300 hover:scale-[1.03] hover:border-[#D4AF37] hover:text-[#D4AF37]"
-        >
-            <Globe2 size={16} />
-            <span>Buka Website</span>
-        </button>
-    );
-}
-
 export function AdminHeaderWebsiteButton() {
-    const router = useRouter();
-
     return (
-        <button
-            type="button"
-            onClick={() => router.push(SITE_URL)}
+        <Link
+            href="/"
             className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 font-semibold text-white transition duration-300 hover:scale-[1.03] hover:bg-[#D4AF37] hover:text-[#184D47]"
+            aria-label="Buka homepage AFA STORE"
         >
             <Home size={18} />
             <span className="hidden sm:inline">Website</span>
-        </button>
+        </Link>
     );
 }
 

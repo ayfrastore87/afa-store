@@ -407,11 +407,11 @@ export default function KasirPOS() {
     }
 
     return (
-        <div className="kasir-pos min-h-screen bg-[radial-gradient(circle_at_top_left,#fff8df_0,#f7efd9_34%,#edf4ef_68%,#e4dcc7_100%)] pb-24 text-[#184D47]">
+        <div className="kasir-pos min-h-[100dvh] bg-[radial-gradient(circle_at_top_left,#fff8df_0,#f7efd9_34%,#edf4ef_68%,#e4dcc7_100%)] text-[#184D47]">
             <header className="sticky top-0 z-30 border-b border-[#C9A45B]/20 bg-[#F8F5EE]/90 shadow-[0_8px_28px_rgba(18,53,36,0.06)] backdrop-blur-xl">
-                <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-4 sm:px-6">
+                <div className="flex min-h-20 flex-wrap items-center gap-2 px-3 py-2 sm:px-5 lg:flex-nowrap lg:px-6">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#184D47] text-[#D4AF37]">
+                        <div className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#184D47] text-[#D4AF37] sm:grid">
                             <ShoppingCart size={22} />
                         </div>
                         <div className="min-w-0">
@@ -424,7 +424,7 @@ export default function KasirPOS() {
                     <div className="flex items-center gap-2">
                         <Link
                             href="/admin/kasir/riwayat"
-                            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-[#D4AF37] px-4 font-black text-[#184D47] transition hover:brightness-105 active:scale-95"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#D4AF37] px-3 text-sm font-black text-[#184D47] transition hover:brightness-105 active:scale-95"
                         >
                             <History size={18} />
                             <span className="hidden sm:inline">Riwayat Transaksi</span>
@@ -432,24 +432,16 @@ export default function KasirPOS() {
                         </Link>
                         <Link
                             href="/admin/kasir/monitoring"
-                            className="inline-flex h-12 items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white/80 px-4 font-bold text-[#184D47] transition hover:bg-white active:scale-95 sm:flex"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#184D47]/15 bg-white/80 px-3 text-sm font-bold text-[#184D47] transition hover:bg-white active:scale-95"
                         >
                             <Truck size={18} />
-                            <span className="hidden sm:inline">Monitoring</span>
-                        </Link>
-                        <Link
-                            href="/admin"
-                            className="inline-flex h-12 items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white/80 px-4 font-bold text-[#184D47] transition hover:bg-white active:scale-95"
-                        >
-                            <ArrowLeft size={18} />
-                            <span className="hidden sm:inline">Kembali ke Admin</span>
-                            <span className="sm:hidden">Admin</span>
+                            <span>Monitoring</span>
                         </Link>
                     </div>
                 </div>
             </header>
 
-            <main className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+            <main className="kasir-pos-main grid min-w-0 grid-cols-1 gap-4 px-3 py-4 sm:px-5 lg:gap-5 lg:px-6">
                 <section className="min-w-0">
                     <label className="mb-4 flex h-12 items-center gap-3 rounded-2xl border border-[#C9A45B]/20 bg-white/90 px-4 shadow-sm focus-within:border-[#C9A45B]">
                         <Search size={18} className="shrink-0 text-[#C9A45B]" />
@@ -485,7 +477,7 @@ export default function KasirPOS() {
                     </div>
 
                     {loading ? (
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
                             {Array.from({ length: 8 }).map((_, index) => (
                                 <div key={index} className="relative h-44 overflow-hidden rounded-[1.5rem] bg-white/70 shadow-sm">
                                     <span className="absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/80 to-transparent" />
@@ -517,7 +509,7 @@ export default function KasirPOS() {
                                         key={product.id}
                                         className="group flex flex-col overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/90 shadow-md shadow-[#184D47]/5 transition hover:-translate-y-0.5 hover:shadow-lg"
                                     >
-                                        <div className="relative h-32 overflow-hidden bg-[#f8f0dd]">
+                                        <div className="relative aspect-[4/3] overflow-hidden bg-[#f8f0dd]">
                                             {product.image ? (
                                                 <Image
                                                     src={product.image}
@@ -550,7 +542,7 @@ export default function KasirPOS() {
                                                     type="button"
                                                     onClick={() => addToCart(product)}
                                                     disabled={outOfStock || !!maxed}
-                                                    className="grid h-10 w-10 place-items-center rounded-xl bg-[#184D47] text-white transition active:scale-90 disabled:cursor-not-allowed disabled:bg-[#184D47]/30"
+                                                     className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#184D47] text-white transition active:scale-90 disabled:cursor-not-allowed disabled:bg-[#184D47]/30"
                                                     aria-label={`Tambah ${product.name} ke keranjang`}
                                                 >
                                                     <Plus size={18} />
@@ -564,7 +556,7 @@ export default function KasirPOS() {
                     )}
                 </section>
 
-                <aside className={`kasir-cart-panel lg:sticky lg:top-6 lg:h-fit ${mobileCartOpen || checkoutOpen ? "kasir-cart-open" : ""} ${checkoutOpen ? "kasir-mobile-checkout" : ""}`}>
+                <aside className={`kasir-cart-panel ${mobileCartOpen || checkoutOpen ? "kasir-cart-open" : ""} ${checkoutOpen ? "kasir-mobile-checkout" : ""}`}>
                     <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-xl shadow-[#184D47]/10">
                         <div className="flex items-center justify-between border-b border-[#184D47]/10 p-5">
                             {checkoutOpen ? <button type="button" onClick={() => setCheckoutOpen(false)} className="mr-2 rounded-xl p-2 lg:hidden" aria-label="Kembali ke keranjang"><ArrowLeft size={20} /></button> : null}
@@ -585,7 +577,7 @@ export default function KasirPOS() {
                             </div>
                         )}
 
-                        <div className="max-h-[340px] space-y-2 overflow-y-auto p-5">
+                        <div className="kasir-cart-items max-h-[340px] space-y-2 overflow-y-auto p-5">
                             {cart.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-10 text-center">
                                     <ShoppingCart size={36} className="text-[#C9A45B]" />
@@ -890,7 +882,7 @@ export default function KasirPOS() {
                     </div>
                 </aside>
             </main>
-            {cart.length > 0 && !checkoutOpen ? <button type="button" onClick={() => setMobileCartOpen(true)} className="kasir-mobile-cart-bar lg:hidden"><span><b>{totalItems} Item</b><small>Keranjang aktif</small></span><strong>{rupiah.format(orderTotal)}</strong><span className="kasir-mobile-cart-cta">Lanjutkan</span></button> : null}
+            {cart.length > 0 && !checkoutOpen ? <button type="button" onClick={() => setMobileCartOpen(true)} className="kasir-mobile-cart-bar lg:hidden"><span><b>{totalItems} Item</b><small>Lihat Keranjang</small></span><strong>{rupiah.format(orderTotal)}</strong></button> : null}
             {manualOpen ? (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
                     <div className="max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-[#F8F5EE] p-5 shadow-2xl">

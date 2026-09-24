@@ -6,6 +6,7 @@ const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const helper = read("../src/lib/custom-order.ts");
 const route = read("../src/app/api/admin/kasir/order/route.ts");
 const publicApi = read("../src/app/api/orders/public/[publicToken]/route.ts");
+const customerCta = read("../src/components/custom-order-cta.tsx");
 test("custom order foundation validates manual types and integer money", () => {
   assert.match(helper, /CUSTOM_PRODUCT.*SERVICE/);
   assert.match(helper, /Number\.isInteger\(quantity\)/);
@@ -42,4 +43,11 @@ test("sales report adds source breakdown without a second revenue aggregate", ()
   const report = read("../src/app/api/admin/sales/report/route.ts");
   assert.match(report, /groupBy\(\{ by: \["source"\]/);
   assert.match(report, /grandTotal: revenue/);
+});
+test("customer Pesan Custom sends consultation-only WhatsApp message safely", () => {
+  assert.match(customerCta, /Pesan Custom/);
+  assert.match(customerCta, /6287770000883/);
+  assert.match(customerCta, /encodeURIComponent\(message\)/);
+  assert.match(customerCta, /Budget.*opsional/);
+  assert.doesNotMatch(customerCta, /unitPrice|grandTotal|subtotal/);
 });

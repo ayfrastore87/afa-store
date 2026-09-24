@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 import { authorizeProductItems, ProductAuthorityError } from "@/lib/product-authority";
 import { formatOrderInvoice, getInvoicePrefix } from "@/lib/orders";
 import {
@@ -84,7 +84,7 @@ type KasirOrderBody = {
 type ParsedKasirItem = { kind: "PRODUCT"; id: string; qty: number } | { kind: "MANUAL"; item: ReturnType<typeof validateManualItem> };
 
 export async function POST(request: Request) {
-    const admin = await getCurrentAdmin();
+    const admin = await getCurrentCashier();
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     let body: KasirOrderBody;
@@ -267,7 +267,12 @@ export async function POST(request: Request) {
     if (orderType === "DELIVERY" && deliveryRequest) {
         try {
             const productRequests = requestItems.filter((item): item is Extract<ParsedKasirItem, { kind: "PRODUCT" }> => item.kind === "PRODUCT");
-            const quotedItems = await authorizeProductItems(productRequests.map((item) => ({ id: item.id, qty: item.qty })));
+            const quotedItems = productRequests.length
+                ? await authorizeProductItems(productRequests.map((item) => ({ id: item.id, qty: item.qty })))
+                : [];
+            if (!quotedItems.length) {
+                return NextResponse.json({ message: "Berat pengiriman diperlukan untuk pesanan custom." }, { status: 400 });
+            }
             const totalWeight = calculateTotalWeight(
                 quotedItems.map((item) => ({ id: item.id, weight: item.weight, qty: item.qty })),
             );

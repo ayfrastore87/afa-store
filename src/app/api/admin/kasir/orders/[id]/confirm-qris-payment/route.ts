@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 import { getQrisProvider, QrisProvider } from "@/lib/qris-config";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id: orderId } = await params;
-    const admin = await getCurrentAdmin();
+    const admin = await getCurrentCashier();
     if (!admin) {
         return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }

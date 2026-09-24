@@ -29,7 +29,8 @@ import KasirShipmentActions from "./KasirShipmentActions";
 // normalized delivery status (raw provider status preserved), plus the shipment
 // actions that reuse POST/GET /api/admin/orders/[id]/biteship.
 
-type SourceFilter = "SEMUA" | "TATAP_MUKA" | "WHATSAPP";
+type SourceFilter = "SEMUA" | "TATAP_MUKA" | "WHATSAPP" | "MARKETPLACE" | "OTHER";
+type PeriodFilter = "all" | "today" | "7d" | "30d";
 
 type KasirOrder = {
     id: string;
@@ -62,11 +63,14 @@ const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
     { id: "SEMUA", label: "Semua" },
     { id: "TATAP_MUKA", label: "COD" },
     { id: "WHATSAPP", label: "WhatsApp" },
+    { id: "MARKETPLACE", label: "Marketplace" },
+    { id: "OTHER", label: "Lainnya" },
 ];
 
 export default function KasirHistory() {
     const [query, setQuery] = useState("");
     const [source, setSource] = useState<SourceFilter>("SEMUA");
+    const [period, setPeriod] = useState<PeriodFilter>("all");
     const [page, setPage] = useState(1);
     const [orders, setOrders] = useState<KasirOrder[]>([]);
     const [total, setTotal] = useState(0);
@@ -81,6 +85,7 @@ export default function KasirHistory() {
             const params = new URLSearchParams();
             if (query.trim()) params.set("q", query.trim());
             if (source !== "SEMUA") params.set("source", source);
+            if (period !== "all") params.set("period", period);
             params.set("page", String(page));
             params.set("limit", "20");
 
@@ -99,7 +104,7 @@ export default function KasirHistory() {
         } finally {
             setLoading(false);
         }
-    }, [query, source, page]);
+    }, [query, source, period, page]);
 
     useEffect(() => {
         void loadOrders();
@@ -154,6 +159,11 @@ export default function KasirHistory() {
                             >
                                 {item.label}
                             </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto">
+                        {[{ id: "all", label: "Semua" }, { id: "today", label: "Hari Ini" }, { id: "7d", label: "7 Hari" }, { id: "30d", label: "30 Hari" }].map((item) => (
+                            <button key={item.id} type="button" onClick={() => { setPeriod(item.id as PeriodFilter); setPage(1); }} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${period === item.id ? "bg-[#C9A45B] text-[#123524]" : "bg-white/80 text-[#184D47]/70"}`}>{item.label}</button>
                         ))}
                     </div>
                 </div>

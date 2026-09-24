@@ -251,3 +251,10 @@ export async function requireAdmin() {
 
     return admin;
 }
+
+export async function requireCashier() {
+    const { getCurrentCashier: getApplicationCashier } = await import("@/lib/server-auth");
+    const cashier = await getApplicationCashier();
+    if (!cashier) redirect("/kasir/login");
+    return cashier;
+}

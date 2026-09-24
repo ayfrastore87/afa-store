@@ -611,9 +611,9 @@ test("20. the provider key never leaves the server", () => {
     assert.doesNotMatch(code(kasirRoute), /NEXT_PUBLIC_/);
     assert.doesNotMatch(code(deliveryPanel), /NEXT_PUBLIC_/);
     // Every kasir/admin route keeps its server-side admin authorization.
-    assert.equal((kasirRoute.match(/getCurrentAdmin\(\)/g) || []).length, 1);
-    assert.equal((kasirOrdersRoute.match(/getCurrentAdmin\(\)/g) || []).length, 1);
-    assert.equal((kasirOrdersDetailRoute.match(/getCurrentAdmin\(\)/g) || []).length, 1);
+    assert.equal((kasirRoute.match(/getCurrentCashier\(\)/g) || []).length, 1);
+    assert.equal((kasirOrdersRoute.match(/getCurrentCashier\(\)/g) || []).length, 1);
+    assert.equal((kasirOrdersDetailRoute.match(/getCurrentCashier\(\)/g) || []).length, 1);
     // The shared area + rates proxies stay server side (the browser only sends ids).
     assert.match(read("../src/app/api/shipping/areas/route.ts"), /searchBiteshipAreas\(input, type\)/);
     assert.match(read("../src/app/api/shipping/rates/route.ts"), /getBiteshipRates\(\{/);

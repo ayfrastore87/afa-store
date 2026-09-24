@@ -59,16 +59,17 @@ export async function proxy(request: NextRequest) {
     
     // Protected admin routes
     const protectedAdminRoute = pathname.startsWith("/admin") && pathname !== "/admin/login";
+    const protectedKasirRoute = pathname.startsWith("/kasir") && pathname !== "/kasir/login";
 
     // If not protecting this route, just forward the request
-    if (!protectedCustomerRoute && !protectedAdminRoute) {
+    if (!protectedCustomerRoute && !protectedAdminRoute && !protectedKasirRoute) {
         return response;
     }
 
     // Check if user exists in Supabase session
     if (!user) {
         const loginUrl = request.nextUrl.clone();
-        loginUrl.pathname = protectedAdminRoute ? "/admin/login" : "/login";
+        loginUrl.pathname = protectedKasirRoute ? "/kasir/login" : protectedAdminRoute ? "/admin/login" : "/login";
         loginUrl.search = "";
         loginUrl.searchParams.set("next", pathname);
         

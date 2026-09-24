@@ -56,6 +56,14 @@ export async function getCurrentAdmin() {
     return user?.role === "admin" && user.isActive !== false ? user : null;
 }
 
+/** Active identities allowed to use the POS. Kept separate from getCurrentAdmin
+ * so general administration can never accidentally become cashier-accessible. */
+export async function getCurrentCashier() {
+    const user = await getCurrentUser();
+    if (!user || user.isActive === false) return null;
+    return user.role === "admin" || user.role === "cashier" ? user : null;
+}
+
 export type CurrentPartner = {
     user: ApplicationUser;
     partner: Partner;

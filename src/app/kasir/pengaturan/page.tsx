@@ -1,0 +1,1 @@
+export default function PengaturanKasirPage() { return <section className="rounded-2xl border border-[#123524]/10 bg-[#F8F5EE] p-6"><h1 className="text-2xl font-black">Pengaturan</h1><p className="mt-2 text-[#123524]/65">Pengaturan akun dan perangkat kasir.</p></section>; }

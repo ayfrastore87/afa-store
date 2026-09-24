@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 import { KASIR_SOURCES } from "@/lib/kasir";
 import { createMidtransQrisCharge, getQrisActionUrl } from "@/lib/midtrans";
 
@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 // POST /api/admin/kasir/orders/[id]/qris/retry - Admin-only QRIS retry for persisted orders
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const admin = await getCurrentAdmin();
+    const admin = await getCurrentCashier();
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { id } = await params;

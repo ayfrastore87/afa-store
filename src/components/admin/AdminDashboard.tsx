@@ -143,6 +143,12 @@ const tabs = [
         href: "/admin/kasir",
     },
     {
+        id: "kasir-accounts",
+        label: "Akun Kasir",
+        icon: UserCircle,
+        href: "/admin/akun-kasir",
+    },
+    {
         id: "testimonials",
         label: "Testimoni",
         icon: MessageSquareHeart,

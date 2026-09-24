@@ -107,6 +107,8 @@ export default function KasirPOS() {
 
     const [cart, setCart] = useState<CartLine[]>([]);
     const [manualOpen, setManualOpen] = useState(false);
+    const [mobileCartOpen, setMobileCartOpen] = useState(false);
+    const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [manualType, setManualType] = useState<"CUSTOM_PRODUCT" | "SERVICE">("CUSTOM_PRODUCT");
     const [manualName, setManualName] = useState("");
     const [manualDescription, setManualDescription] = useState("");
@@ -190,6 +192,11 @@ export default function KasirPOS() {
     useEffect(() => {
         void loadCatalog();
     }, [loadCatalog]);
+
+    useEffect(() => {
+        document.documentElement.classList.toggle("kasir-checkout-open", checkoutOpen);
+        return () => document.documentElement.classList.remove("kasir-checkout-open");
+    }, [checkoutOpen]);
 
     async function submitOrder() {
         if (submitting || cart.length === 0) return;
@@ -400,7 +407,7 @@ export default function KasirPOS() {
     }
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,#fff8df_0,#f7efd9_34%,#edf4ef_68%,#e4dcc7_100%)] pb-24 text-[#184D47]">
+        <div className="kasir-pos min-h-screen bg-[radial-gradient(circle_at_top_left,#fff8df_0,#f7efd9_34%,#edf4ef_68%,#e4dcc7_100%)] pb-24 text-[#184D47]">
             <header className="sticky top-0 z-30 border-b border-[#C9A45B]/20 bg-[#F8F5EE]/90 shadow-[0_8px_28px_rgba(18,53,36,0.06)] backdrop-blur-xl">
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-4 sm:px-6">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -557,16 +564,18 @@ export default function KasirPOS() {
                     )}
                 </section>
 
-                <aside className="lg:sticky lg:top-24 lg:h-fit">
+                <aside className={`kasir-cart-panel lg:sticky lg:top-6 lg:h-fit ${mobileCartOpen || checkoutOpen ? "kasir-cart-open" : ""} ${checkoutOpen ? "kasir-mobile-checkout" : ""}`}>
                     <div className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-xl shadow-[#184D47]/10">
                         <div className="flex items-center justify-between border-b border-[#184D47]/10 p-5">
+                            {checkoutOpen ? <button type="button" onClick={() => setCheckoutOpen(false)} className="mr-2 rounded-xl p-2 lg:hidden" aria-label="Kembali ke keranjang"><ArrowLeft size={20} /></button> : null}
                             <div>
-                                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#C9A45B]">Keranjang</p>
-                                <h2 className="text-2xl font-black">Pesanan Saat Ini</h2>
+                                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#C9A45B]">{checkoutOpen ? "Checkout" : "Keranjang"}</p>
+                                <h2 className="text-2xl font-black">{checkoutOpen ? "Checkout" : "Pesanan Saat Ini"}</h2>
                             </div>
                             {totalItems > 0 && (
                                 <span className="rounded-full bg-[#184D47] px-3 py-1.5 text-sm font-black text-white">{totalItems}</span>
                             )}
+                            {!checkoutOpen && <button type="button" onClick={() => setMobileCartOpen(false)} className="ml-2 rounded-xl px-2 py-1 text-xl font-black lg:hidden" aria-label="Tutup keranjang">×</button>}
                         </div>
 
                         {!submitting && cart.length === 0 && (
@@ -639,7 +648,7 @@ export default function KasirPOS() {
                             )}
                         </div>
 
-                        <div className="space-y-4 border-t border-[#184D47]/10 p-5">
+                        <div className={`kasir-checkout-scroll space-y-4 border-t border-[#184D47]/10 p-5 ${checkoutOpen ? "kasir-checkout-content" : ""}`}>
                             {/* STEP-BY-STEP PROGRESS INDICATOR */}
                             <div className="border-b border-[#184D47]/10 pb-3">
                                 <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/60">Langkah Transaksi</p>
@@ -877,6 +886,7 @@ export default function KasirPOS() {
                     </div>
                 </aside>
             </main>
+            {cart.length > 0 && !checkoutOpen ? <button type="button" onClick={() => { setMobileCartOpen(true); setCheckoutOpen(true); }} className="kasir-mobile-cart-bar lg:hidden"><span><b>{totalItems} Item</b><small>Keranjang aktif</small></span><strong>{rupiah.format(orderTotal)}</strong><span className="kasir-mobile-cart-cta">Lanjutkan</span></button> : null}
             {manualOpen ? (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
                     <div className="max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-3xl bg-[#F8F5EE] p-5 shadow-2xl">

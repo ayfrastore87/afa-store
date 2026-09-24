@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 import { formatKasirOrder, isKasirSource, KASIR_SOURCES } from "@/lib/kasir";
 
 export const runtime = "nodejs";
@@ -15,12 +15,15 @@ export const runtime = "nodejs";
 // ---------------------------------------------------------------------------
 
 export async function GET(request: Request) {
-    const admin = await getCurrentAdmin();
+    const admin = await getCurrentCashier();
     if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") ?? "").trim();
     const sourceParam = (searchParams.get("source") ?? "").trim().toUpperCase();
+    const period = (searchParams.get("period") ?? "").trim().toLowerCase();
+    const periodDays = period === "today" ? 1 : period === "7d" ? 7 : period === "30d" ? 30 : 0;
+    const periodFrom = periodDays ? new Date(Date.now() - periodDays * 86_400_000) : null;
     if (sourceParam && !isKasirSource(sourceParam)) {
         return NextResponse.json({ message: "Filter source tidak valid." }, { status: 400 });
     }
@@ -30,6 +33,7 @@ export async function GET(request: Request) {
 
     const where: Prisma.OrderWhereInput = {
         source: { in: sourceParam ? [sourceParam] : [...KASIR_SOURCES] },
+        ...(periodFrom ? { createdAt: { gte: periodFrom } } : {}),
         ...(q
             ? {
                   OR: [

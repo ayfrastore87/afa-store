@@ -30,6 +30,14 @@ test("service-only orders do not require shipping in the existing pickup path", 
   assert.match(route, /orderType.*DEFAULT_KASIR_ORDER_TYPE/);
   assert.match(route, /orderType === "DELIVERY"/);
 });
+test("KasirPOS custom payload accepts null productId and skips empty catalog authorization", () => {
+  const kasir = read("../src/components/admin/kasir/KasirPOS.tsx");
+  assert.match(kasir, /itemType: line\.itemType, name: line\.name, description: line\.description, notes: line\.notes, quantity: line\.quantity, unitPrice: line\.price/);
+  assert.match(route, /productRequests\.length/);
+  assert.match(route, /productId: null/);
+  assert.match(route, /item\.unitPrice \* item\.quantity/);
+  assert.match(route, /kasir_manual_item_validation_failed/);
+});
 test("sales report adds source breakdown without a second revenue aggregate", () => {
   const report = read("../src/app/api/admin/sales/report/route.ts");
   assert.match(report, /groupBy\(\{ by: \["source"\]/);

@@ -126,6 +126,16 @@ export async function POST(request: Request) {
         const productId = typeof item.productId === "string" ? item.productId.trim() : "";
         if (!productId && (item.itemType === "CUSTOM_PRODUCT" || item.itemType === "SERVICE")) {
             try { requestItems.push({ kind: "MANUAL", item: validateManualItem(item) }); } catch (error) {
+                if (process.env.NODE_ENV !== "production") {
+                    console.warn("kasir_manual_item_validation_failed", {
+                        route: "/api/admin/kasir/order",
+                        itemType: typeof item.itemType === "string" ? item.itemType : "unknown",
+                        fields: ["name", "quantity", "unitPrice"].filter((field) => {
+                            const value = item[field];
+                            return field === "name" ? typeof value !== "string" || !value.trim() : typeof value !== "number" || !Number.isInteger(value);
+                        }),
+                    });
+                }
                 return NextResponse.json({ message: error instanceof Error ? error.message : "Item manual tidak valid." }, { status: 400 });
             }
             continue;
@@ -308,7 +318,9 @@ export async function POST(request: Request) {
         const created = await prisma.$transaction(async (tx) => {
             // F. authoritative products + price from database.
             const productRequests = requestItems.filter((item): item is Extract<ParsedKasirItem, { kind: "PRODUCT" }> => item.kind === "PRODUCT");
-            const items = await authorizeProductItems(productRequests.map((item) => ({ id: item.id, qty: item.qty })), tx);
+            const items = productRequests.length
+                ? await authorizeProductItems(productRequests.map((item) => ({ id: item.id, qty: item.qty })), tx)
+                : [];
             const manualItems = requestItems.filter((item): item is Extract<ParsedKasirItem, { kind: "MANUAL" }> => item.kind === "MANUAL");
             const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0) + manualItems.reduce((sum, entry) => sum + entry.item.unitPrice * entry.item.quantity, 0);
             // TOTAL = authoritative subtotal + authoritative ongkir (0 for pickup).

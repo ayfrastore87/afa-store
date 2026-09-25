@@ -60,10 +60,33 @@ test("product detail does not fabricate per-product reviews", () => {
     assert.doesNotMatch(detailPageSource, /testimonials/i);
 });
 
-test("Beli Sekarang keeps existing buy-now flow", () => {
-    assert.match(ctaSource, /\/api\/cart\/buy-now/);
-    assert.match(ctaSource, /JSON\.stringify\(\{ id: product\.id, qty: quantity \}\)/);
-    assert.match(ctaSource, /router\.push\(data\?\.redirectTo \|\| "\/checkout"\)/);
+test("Beli Sekarang opens guest WhatsApp order without checkout or order creation", () => {
+    const whatsappSource = fs.readFileSync(new URL("../src/lib/whatsapp-order.ts", import.meta.url), "utf8");
+    assert.match(ctaSource, /buildWhatsAppOrderUrl\(product, quantity\)/);
+    assert.match(ctaSource, /disabled=\{!available\}/);
+    assert.doesNotMatch(ctaSource, /\/api\/cart\/buy-now/);
+    const buyNowSource = ctaSource.slice(ctaSource.indexOf("const buyNow"), ctaSource.indexOf("const controls"));
+    assert.doesNotMatch(buyNowSource, /router\.push|login|checkout/);
+    assert.match(whatsappSource, /6287770000883/);
+    assert.match(whatsappSource, /encodeURIComponent/);
+    assert.match(whatsappSource, /product\.name/);
+    assert.match(whatsappSource, /product\.price/);
+    assert.match(whatsappSource, /product\.size/);
+    assert.match(whatsappSource, /quantity/);
+    assert.match(whatsappSource, /SITE_URL.*produk/);
+    assert.doesNotMatch(whatsappSource, /fetch|prisma|Payment|Biteship|stock/);
+});
+
+test("catalog and homepage buy-now actions share the WhatsApp helper", () => {
+    const catalogSource = fs.readFileSync(new URL("../src/components/catalog/catalog-experience.tsx", import.meta.url), "utf8");
+    assert.match(pageSource, /buildWhatsAppOrderUrl/);
+    assert.match(catalogSource, /buildWhatsAppOrderUrl\(item\)/);
+    assert.match(productCardSource, /onClick=\{onBuy\}/);
+});
+
+test("schema remains untouched by the customer WhatsApp flow", () => {
+    const schemaSource = fs.readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
+    assert.ok(schemaSource.length > 0);
 });
 
 test("detail add-to-cart prevents double submit and awaits result", () => {

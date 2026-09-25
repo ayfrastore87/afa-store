@@ -13,6 +13,7 @@ import ProductImage from "@/components/product-image";
 import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
 import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
+import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 import type { Product } from "@/lib/products";
 import {
     CATALOG_SORT_LABELS,
@@ -118,24 +119,9 @@ export default function CatalogExperience({ products, categories, totalActive, q
         [addState, addToCart, requireAuth],
     );
 
-    const buyNow = useCallback(
-        async (item: Product) => {
-            if (!(await requireAuth("/checkout"))) return;
-            try {
-                const response = await fetch("/api/cart/buy-now", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ id: item.id, qty: 1 }),
-                });
-                const data = (await response.json().catch(() => null)) as { redirectTo?: string } | null;
-                if (!response.ok) return;
-                router.push(data?.redirectTo || "/checkout");
-            } catch {
-                router.push("/login");
-            }
-        },
-        [requireAuth, router],
-    );
+    const buyNow = useCallback((item: Product) => {
+        window.open(buildWhatsAppOrderUrl(item), "_blank", "noopener,noreferrer");
+    }, []);
 
     const onWish = useCallback(
         (item: Product) => toggleWishlist({ id: item.id, name: item.name, price: item.price, image: item.image }),

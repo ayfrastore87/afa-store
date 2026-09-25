@@ -20,7 +20,7 @@ import HomeTrustBar from "@/components/home/HomeTrustBar";
 import CustomOrderCta from "@/components/custom-order-cta";
 import { CartItem, type CartToast, useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
-import { parseJsonResponse } from "@/lib/api-fetch";
+import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 import { fetchProducts, formatRupiah, type Product } from "@/lib/products";
 
@@ -90,16 +90,9 @@ export default function Home() {
       setAddState((current) => { const next = { ...current }; delete next[item.id]; return next; });
     }
   };
-  const buyNow = async (item: { id: string; name: string; slug?: string | null; price: number; image: string }) => {
-    if (!(await requireAuth("/checkout"))) return;
-    try {
-      const response = await fetch("/api/cart/buy-now", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, qty: 1 }) });
-      const data = await parseJsonResponse<{ redirectTo?: string }>(response);
-      router.push(data.redirectTo || "/checkout");
-    } catch (error) {
-      console.error("Buy now failed", error);
-      router.push("/login");
-    }
+  const buyNow = (item: { name: string; slug?: string | null; price: number }) => {
+    if (!item.slug) return;
+    window.open(buildWhatsAppOrderUrl({ name: item.name, slug: item.slug, price: item.price }), "_blank", "noopener,noreferrer");
   };
   const continueToCheckout = async () => {
     if (checkoutPending || !cart.length) return;

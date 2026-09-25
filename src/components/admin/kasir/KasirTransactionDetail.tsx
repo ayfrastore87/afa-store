@@ -277,7 +277,7 @@ export default function KasirTransactionDetail({ id }: { id: string }) {
                         Transaksi dengan ID ini tidak ditemukan atau bukan transaksi kasir.
                     </p>
                     <Link
-                        href="/admin/kasir/riwayat"
+                        href="/kasir/riwayat"
                         className="mt-6 inline-flex h-12 items-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white transition hover:brightness-110 active:scale-95"
                     >
                         <ArrowLeft size={18} />
@@ -572,7 +572,7 @@ function Shell({ id, children }: { id: string; children: React.ReactNode }) {
 
                     <div className="flex items-center gap-2">
                         <Link
-                            href="/admin/kasir/riwayat"
+                            href="/kasir/riwayat"
                             className="inline-flex h-12 items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white/80 px-4 font-bold text-[#184D47] transition hover:bg-white active:scale-95"
                         >
                             <ArrowLeft size={18} />

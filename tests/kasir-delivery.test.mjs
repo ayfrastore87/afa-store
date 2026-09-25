@@ -752,6 +752,39 @@ test("no new database column is required for kasir delivery", () => {
     assert.match(schema, /^\s+weight\s+Int\s+@default\(0\)$/m, "OrderItem.weight already exists");
 });
 
+// Kasir navigation/payment regression: the POS experience must never leave the
+// /kasir namespace, and COD confirmation must use the shared cashier guard.
+test("Kasir transaction flow stays canonical and payment confirmation is cashier-authorized", () => {
+    const pos = read("../src/components/admin/kasir/KasirPOS.tsx");
+    const detail = read("../src/components/admin/kasir/KasirTransactionDetail.tsx");
+    const paymentConfirm = read("../src/app/api/admin/orders/[id]/payment/confirm/route.ts");
+    const qrisConfirm = read("../src/app/api/admin/kasir/orders/[id]/confirm-qris-payment/route.ts");
+    const kasirHistory = read("../src/components/admin/kasir/KasirHistory.tsx");
+    const monitoring = read("../src/components/admin/kasir/KasirDeliveryMonitoring.tsx");
+    const proxy = read("../src/proxy.ts");
+
+    assert.match(pos, /router\.push\(`\/kasir\/transaksi\/\$\{payload\.orderId\}`\)/);
+    assert.doesNotMatch(pos, /router\.push\([^)]*\/admin\/kasir/);
+    assert.match(detail, /href="\/kasir\/riwayat"/);
+    assert.doesNotMatch(detail, /href="\/admin\/(?:login|kasir|orders|transaksi)/);
+    assert.doesNotMatch(kasirHistory, /href="\/admin\/(?:login|kasir|orders|transaksi)/);
+    assert.match(monitoring, /detailBasePath/);
+
+    assert.match(paymentConfirm, /getCurrentCashier/);
+    assert.doesNotMatch(paymentConfirm, /getCurrentAdmin/);
+    assert.match(paymentConfirm, /prisma\.\$transaction\(\[/);
+    assert.match(paymentConfirm, /if \(\(order\.paymentStatus \?\? ""\)\.toUpperCase\(\) === "PAID"\)/);
+    assert.match(qrisConfirm, /getCurrentCashier/);
+    assert.match(qrisConfirm, /provider !== QrisProvider\.MANUAL/);
+    assert.match(qrisConfirm, /transactionId \|\| order\.payment\.paymentType === "qris"/);
+
+    // Kasir unauthenticated page access is handled by the Kasir login boundary,
+    // not the Admin login boundary; API errors remain in-component responses.
+    assert.match(proxy, /protectedKasirRoute \? KASIR_LOGIN_PATH/);
+    assert.doesNotMatch(pos, /window\.location\s*=.*\/admin\/login/);
+    assert.doesNotMatch(detail, /window\.location\s*=.*\/admin\/login/);
+});
+
 
 
 

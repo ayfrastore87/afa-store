@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
 const CANONICAL_COD_METHODS = new Set(["TUNAI"]);
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const admin = await getCurrentAdmin();
-    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const cashier = await getCurrentCashier();
+    if (!cashier) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { id } = await params;
 

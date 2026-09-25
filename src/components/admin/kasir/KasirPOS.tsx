@@ -279,7 +279,7 @@ export default function KasirPOS() {
             }
 
             clearCart();
-            router.push(`/admin/kasir/${payload.orderId}`);
+            router.push(`/kasir/transaksi/${payload.orderId}`);
         } catch (error) {
             await Swal.fire({
                 title: "Transaksi Gagal",

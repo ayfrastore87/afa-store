@@ -9,7 +9,7 @@ type Summary = { totalActive: number; perluDiproses: number; dalamPengiriman: nu
 type Order = {
     id: string; invoice: string; customer: string; phone: string; trackingNumber: string | null;
     courier: string | null; service: string | null; biteshipStatus: string | null; shipping: number; total: number; status: string;
-    createdAt: Date; updatedAt: Date; normalizedKey: string; normalizedLabel: string;
+    createdAt: string; updatedAt: string; normalizedKey: string; normalizedLabel: string;
 };
 type ResponseData = { summary: Summary; orders: Order[]; page: number; limit: number; total: number; totalPages: number };
 
@@ -43,7 +43,12 @@ export default function KasirDeliveryMonitoring({ detailBasePath = "/admin/kasir
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    const formatDate = (d: Date) => new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
+    const formatDate = (value: string | Date | null | undefined) => {
+        if (!value) return "-";
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return "-";
+        return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
+    };
     const getStatusColor = (k: string) => STATUS_COLORS[k] || STATUS_COLORS.DEFAULT;
     const getStatusIcon = (key: string) => {
         if (key === "TERKIRIM") return <CheckCircle className="w-4 h-4" />;

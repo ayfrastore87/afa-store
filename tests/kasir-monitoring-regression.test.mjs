@@ -103,6 +103,22 @@ describe('Kasir Delivery Monitoring - Static Assertions', () => {
         console.log('[PASS] Riwayat still uses KasirHistory');
     });
     
+    it('should render serialized and nullable delivery fields defensively', () => {
+        assert.match(componentContent, /createdAt: string; updatedAt: string;/);
+        assert.match(componentContent, /value: string \| Date \| null \| undefined/);
+        assert.match(componentContent, /Number\.isNaN\(date\.getTime\(\)\)/);
+        assert.match(componentContent, /order\.courier \|\| "Kurir belum dipilih"/);
+        assert.match(componentContent, /order\.trackingNumber \|\| "Tanpa resi"/);
+        console.log('[PASS] Serialized dates and nullable delivery fields are render-safe');
+    });
+
+    it('should preserve the Kasir detail URL contract', () => {
+        assert.match(monitoringPageContent, /detailBasePath="\/kasir\/transaksi"/);
+        assert.match(componentContent, /href=\{`\$\{detailBasePath\}\/\$\{order\.id\}`\}/);
+        assert.match(routeContent, /id: true/);
+        console.log('[PASS] Detail links use /kasir/transaksi/[id]');
+    });
+
     it('should have server-side pagination', () => {
         assert(componentContent.includes('page') && componentContent.includes('limit'));
         assert(componentContent.includes('totalPages'));

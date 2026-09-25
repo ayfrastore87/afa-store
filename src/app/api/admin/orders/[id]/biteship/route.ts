@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 import {
     BITESHIP_LEGACY_COURIER_MESSAGE,
     BITESHIP_LEGACY_PHONE_MESSAGE,
@@ -72,8 +72,8 @@ function biteshipOrderView(order: {
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const admin = await getCurrentAdmin();
-    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const cashier = await getCurrentCashier();
+    if (!cashier) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { id } = await params;
 
@@ -249,8 +249,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 // provider payload never leaves this route and no internal identifier is added.
 // ---------------------------------------------------------------------------
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const admin = await getCurrentAdmin();
-    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const cashier = await getCurrentCashier();
+    if (!cashier) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { id } = await params;
 

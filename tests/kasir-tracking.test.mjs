@@ -240,11 +240,14 @@ test("13. internal Biteship ids and secrets never appear on the receipt", () => 
     assert.doesNotMatch(code(detail), /destinationAreaId|shippingQuoteRef|biteshipOrderId/);
 });
 
-// 14. The refresh endpoint is admin-only.
-test("14. the tracking refresh endpoint requires admin authentication", () => {
-    assert.match(getHandler, /const admin = await getCurrentAdmin\(\);/);
-    assert.match(getHandler, /if \(!admin\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
-    assert.equal((biteshipRoute.match(/getCurrentAdmin\(\)/g) || []).length, 2, "both handlers stay guarded");
+// 14. Both shipment operations use the canonical Kasir authorization.
+test("14. shipment create and tracking refresh allow active admin/cashier only", () => {
+    assert.match(biteshipRoute, /import \{ getCurrentCashier \} from "@\/lib\/server-auth";/);
+    assert.match(biteshipRoute, /const cashier = await getCurrentCashier\(\);/);
+    assert.match(getHandler, /const cashier = await getCurrentCashier\(\);/);
+    assert.equal((biteshipRoute.match(/getCurrentCashier\(\)/g) || []).length, 2, "both handlers use the Kasir guard");
+    assert.doesNotMatch(biteshipRoute, /getCurrentAdmin\(\)/, "the shipment route is not admin-only");
+    assert.match(biteshipRoute, /if \(!cashier\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
     assert.match(shipmentActions, /\/api\/admin\/orders\/\$\{orderId\}\/biteship/);
 });
 

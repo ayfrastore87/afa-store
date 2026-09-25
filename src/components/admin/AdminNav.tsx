@@ -7,6 +7,7 @@ import { Home } from "lucide-react";
 const breadcrumbs: Record<string, string> = {
     "/admin/products": "Produk",
     "/admin/products/new": "Tambah Produk",
+    "/admin/categories": "Kategori Produk",
     "/admin/orders": "Pesanan",
     "/admin/account": "Akun",
     "/admin/stock": "Stok Barang",

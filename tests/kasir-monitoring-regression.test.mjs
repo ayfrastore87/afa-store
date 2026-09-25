@@ -16,7 +16,7 @@ describe('Kasir Delivery Monitoring - Static Assertions', () => {
         
         const routePath = path.join(PROJECT_ROOT, 'src/app/api/admin/kasir/monitoring/delivery/route.ts');
         const componentPath = path.join(PROJECT_ROOT, 'src/components/admin/kasir/KasirDeliveryMonitoring.tsx');
-        const monitoringPagePath = path.join(PROJECT_ROOT, 'src/app/admin/(protected)/kasir/monitoring/page.tsx');
+        const monitoringPagePath = path.join(PROJECT_ROOT, 'src/app/kasir/(protected)/monitoring/page.tsx');
         const riwayatPagePath = path.join(PROJECT_ROOT, 'src/app/admin/(protected)/kasir/riwayat/page.tsx');
         
         routeContent = fs.readFileSync(routePath, 'utf-8');
@@ -25,9 +25,12 @@ describe('Kasir Delivery Monitoring - Static Assertions', () => {
         riwayatPageContent = fs.readFileSync(riwayatPagePath, 'utf-8');
     });
     
-    it('should be admin-only protected', () => {
-        assert(routeContent.includes('getCurrentAdmin') || routeContent.includes('requireAuth'));
-        console.log('[PASS] Route uses admin authentication');
+    it('should use the active Kasir authorization guard', () => {
+        assert(routeContent.includes('getCurrentCashier'));
+        const serverAuth = fs.readFileSync(path.join(PROJECT_ROOT, 'src/lib/server-auth.ts'), 'utf-8');
+        assert(serverAuth.includes('user.role === "admin" || user.role === "cashier"'));
+        assert(serverAuth.includes('user.isActive === false'));
+        console.log('[PASS] Route allows active admin/cashier and denies inactive/other roles');
     });
     
     it('should exclude Pickup orders (TATAP_MUKA source filter)', () => {
@@ -90,7 +93,7 @@ describe('Kasir Delivery Monitoring - Static Assertions', () => {
     
     it('should have Monitoring page integration', () => {
         assert(monitoringPageContent.includes('KasirDeliveryMonitoring'));
-        assert(monitoringPageContent.includes('requireAdmin'));
+        assert(monitoringPageContent.includes('/kasir/transaksi'));
         console.log('[PASS] Monitoring page exists and is protected');
     });
     

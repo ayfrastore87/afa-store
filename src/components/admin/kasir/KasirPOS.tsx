@@ -433,7 +433,7 @@ export default function KasirPOS() {
                             <span className="sm:hidden">Riwayat</span>
                         </Link>
                         <Link
-                            href="/admin/kasir/monitoring"
+                            href="/kasir/monitoring"
                             className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#184D47]/15 bg-white/80 px-3 text-sm font-bold text-[#184D47] transition hover:bg-white active:scale-95"
                         >
                             <Truck size={18} />

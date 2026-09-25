@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentAdmin } from "@/lib/server-auth";
+import { getCurrentCashier } from "@/lib/server-auth";
 import { normalizeKasirDeliveryStatus } from "@/lib/kasir-delivery";
 
 export const runtime = "nodejs";
@@ -33,8 +33,8 @@ type MonitoringOrder = {
 };
 
 export async function GET(request: Request) {
-    const admin = await getCurrentAdmin();
-    if (!admin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const cashier = await getCurrentCashier();
+    if (!cashier) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") ?? "").trim().toLowerCase();
@@ -42,15 +42,21 @@ export async function GET(request: Request) {
     const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 20) || 20));
 
+    // Kasir delivery is persisted through the existing source plus delivery footprint.
+    // Keep this one predicate as the scope for both list and every summary count.
     const deliveryWhere: Prisma.OrderWhereInput = {
-        AND: [
-            { source: { in: ["TATAP_MUKA", "WHATSAPP"] } },
-            { OR: [
-                { address: { not: "" } },
-                { courier: { not: null } },
-                { service: { not: null } },
-                { destinationAreaId: { not: null } }
-            ]}
+        source: { in: ["TATAP_MUKA", "WHATSAPP"] },
+        OR: [
+            { address: { not: "" } },
+            { shipping: { gt: 0 } },
+            { courier: { not: null } },
+            { service: { not: null } },
+            { shippingQuoteRef: { not: null } },
+            { destinationAreaId: { not: null } },
+            { originAreaId: { not: null } },
+            { destinationLatitude: { not: null } },
+            { destinationLongitude: { not: null } },
+            { biteshipOrderId: { not: null } },
         ],
     };
 
@@ -140,22 +146,13 @@ export async function GET(request: Request) {
     const summary: MonitoringSummary = {
         totalActive: allDeliveryCount,
         perluDiproses: await prisma.order.count({ 
-            where: { 
-                source: { in: ["TATAP_MUKA", "WHATSAPP"] }, 
-                AND: [{ OR: [{ address: { not: "" } }, { courier: { not: null } }, { service: { not: null } }, { destinationAreaId: { not: null } }] }, { biteshipOrderId: null }] 
-            } 
+            where: { AND: [deliveryWhere, { biteshipOrderId: null }] }
         }),
         dalamPengiriman: await prisma.order.count({ 
-            where: { 
-                source: { in: ["TATAP_MUKA", "WHATSAPP"] }, 
-                AND: [{ OR: [{ address: { not: "" } }, { courier: { not: null } }, { service: { not: null } }, { destinationAreaId: { not: null } }] }, { OR: [{ biteshipStatus: { contains: "in_transit", mode: "insensitive" } }, { biteshipStatus: { contains: "dropping_off", mode: "insensitive" } }, { biteshipStatus: { contains: "intransit", mode: "insensitive" } }, { biteshipStatus: { contains: "droppingoff", mode: "insensitive" } }] }] 
-            } 
+            where: { AND: [deliveryWhere, { OR: [{ biteshipStatus: { contains: "in_transit", mode: "insensitive" } }, { biteshipStatus: { contains: "dropping_off", mode: "insensitive" } }, { biteshipStatus: { contains: "intransit", mode: "insensitive" } }, { biteshipStatus: { contains: "droppingoff", mode: "insensitive" } }] }] }
         }),
         perluPerhatian: await prisma.order.count({ 
-            where: { 
-                source: { in: ["TATAP_MUKA", "WHATSAPP"] }, 
-                AND: [{ OR: [{ address: { not: "" } }, { courier: { not: null } }, { service: { not: null } }, { destinationAreaId: { not: null } }] }, { OR: [{ biteshipStatus: { contains: "cancelled", mode: "insensitive" } }, { biteshipStatus: { contains: "canceled", mode: "insensitive" } }, { biteshipStatus: { contains: "rejected", mode: "insensitive" } }, { biteshipStatus: { contains: "returned", mode: "insensitive" } }, { biteshipStatus: { contains: "on_hold", mode: "insensitive" } }, { biteshipStatus: { contains: "courier_not_found", mode: "insensitive" } }, { biteshipStatus: { contains: "disposed", mode: "insensitive" } }] }] 
-            } 
+            where: { AND: [deliveryWhere, { OR: [{ biteshipStatus: { contains: "cancelled", mode: "insensitive" } }, { biteshipStatus: { contains: "canceled", mode: "insensitive" } }, { biteshipStatus: { contains: "rejected", mode: "insensitive" } }, { biteshipStatus: { contains: "returned", mode: "insensitive" } }, { biteshipStatus: { contains: "on_hold", mode: "insensitive" } }, { biteshipStatus: { contains: "courier_not_found", mode: "insensitive" } }, { biteshipStatus: { contains: "disposed", mode: "insensitive" } }] }] }
         })
     };
 

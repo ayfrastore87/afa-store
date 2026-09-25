@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Truck, Search, CheckCircle, AlertTriangle, Package } from "lucide-react";
 import { formatRupiah } from "./kasir-shared";
 
 type Summary = { totalActive: number; perluDiproses: number; dalamPengiriman: number; perluPerhatian: number };
 type Order = {
-    id: string; customer: string; phone: string; trackingNumber: string | null;
+    id: string; invoice: string; customer: string; phone: string; trackingNumber: string | null;
     courier: string | null; service: string | null; biteshipStatus: string | null; shipping: number; total: number; status: string;
     createdAt: Date; updatedAt: Date; normalizedKey: string; normalizedLabel: string;
 };
@@ -19,7 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
     DITAHAN: "bg-yellow-100 text-yellow-800", TIDAK_DIKENAL: "bg-purple-100 text-purple-800", DEFAULT: "bg-gray-100 text-gray-800",
 };
 
-export default function KasirDeliveryMonitoring() {
+export default function KasirDeliveryMonitoring({ detailBasePath = "/admin/kasir/orders" }: { detailBasePath?: string }) {
     const [summary, setSummary] = useState<Summary>({ totalActive: 0, perluDiproses: 0, dalamPengiriman: 0, perluPerhatian: 0 });
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export default function KasirDeliveryMonitoring() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Truck className="w-6 h-6" />Monitoring Pengiriman</h2>
+                <div><h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Truck className="w-6 h-6" />Monitoring Pengiriman</h2><p className="mt-1 text-sm text-gray-600">Pantau status pesanan yang dikirim ke pelanggan.</p></div>
                 <div className="text-sm text-gray-600">Total Pesanan Kirim Aktif: <span className="font-semibold">{summary.totalActive}</span></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -84,12 +85,15 @@ export default function KasirDeliveryMonitoring() {
                 </div>
                 {orders.length === 0 ? (<div className="p-12 text-center text-gray-500"><Package className="w-12 h-12 mx-auto mb-3 text-gray-400" /><p>Tidak ada pesanan yang ditemukan</p></div>) : (
                     <>
-                        <div className="overflow-x-auto">
+                        <div className="space-y-3 md:hidden">
+                            {orders.map((order) => <Link key={order.id} href={`${detailBasePath}/${order.id}`} className="block rounded-xl border border-gray-200 bg-white p-4 shadow-sm active:scale-[.99]"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-gray-900">{order.invoice}</p><p className="text-sm text-gray-700">{order.customer}</p></div><span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(order.normalizedKey)}`}>{getStatusIcon(order.normalizedKey)}{order.normalizedLabel}</span></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600"><span>{order.courier || "Kurir belum dipilih"}{order.service ? ` • ${order.service}` : ""}</span><span className="text-right">{order.trackingNumber || "Tanpa resi"}</span><span>{order.phone}</span><span className="text-right">{formatDate(order.updatedAt)}</span></div></Link>)}
+                        </div>
+                        <div className="hidden overflow-x-auto md:block">
                             <table className="w-full"><thead className="bg-gray-50 border-b border-gray-200"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Pelanggan</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">No. HP / WA</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Resi</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Ongkir</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Diupdate</th></tr></thead>
                             <tbody className="divide-y divide-gray-200">
                                 {orders.map((order) => (
                                     <tr key={order.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 whitespace-nowrap text-gray-900">{order.customer}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-gray-900"><Link className="font-semibold hover:underline" href={`${detailBasePath}/${order.id}`}>{order.customer}</Link><div className="text-xs text-gray-500">{order.invoice}</div></td>
                                         <td className="px-4 py-3 whitespace-nowrap text-gray-700">{order.phone}</td>
                                         <td className="px-4 py-3"><div className="max-w-xs truncate text-gray-700" title={order.trackingNumber || ""}>{order.trackingNumber || "-"}</div></td>
                                         <td className="px-4 py-3 whitespace-nowrap text-gray-900 font-medium">{formatRupiah(order.shipping)}</td>

@@ -81,6 +81,32 @@ const globals = read("../src/app/globals.css");
 const schema = read("../prisma/schema.prisma");
 const checkoutPage = read("../src/app/checkout/page.tsx");
 
+// Kasir location picker regression source (viewport overlay + existing shipping flow).
+
+test("Kasir picker is a body portal viewport overlay with scroll cleanup and known Cilegon fallback", () => {
+    assert.match(picker, /createPortal/);
+    assert.match(picker, /document\.body/);
+    assert.match(picker, /fixed inset-0 z-\[1000\]/);
+    assert.match(picker, /h-\[100dvh\] w-screen/);
+    assert.match(picker, /document\.body\.style\.overflow = "hidden"/);
+    assert.match(picker, /document\.body\.style\.overflow = previousOverflow/);
+    assert.match(picker, /latitude: -6\.0021, longitude: 106\.012345678/);
+    assert.doesNotMatch(picker, /latitude: -6\.2, longitude: 106\.816666/);
+    assert.match(picker, /onConfirm\(center\)/);
+});
+
+test("Kasir confirmation remains coordinates -> reverse geocode -> Biteship areas -> live rates", () => {
+    assert.match(deliveryPanel, /latitude: coords\.latitude/);
+    assert.match(deliveryPanel, /longitude: coords\.longitude/);
+    assert.match(deliveryPanel, /reverseGeocodeAndFill\(coords\)/);
+    assert.match(deliveryPanel, /fetch\(`\/api\/shipping\/areas\?input=/);
+    assert.match(deliveryPanel, /fetch\("\/api\/shipping\/rates"/);
+    assert.match(deliveryPanel, /destinationAreaId: draft\.areaId/);
+    assert.doesNotMatch(code(deliveryPanel), /place_id.*destinationAreaId|destinationAreaId.*place_id/);
+    assert.doesNotMatch(code(deliveryPanel), /shipping:\s*\d{3,}/);
+});
+
+
 const DELIVERY_SHAPE = {
     latitude: -6.0021,
     longitude: 106.012345678,

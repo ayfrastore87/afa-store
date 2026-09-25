@@ -16,6 +16,7 @@
 //   * nothing is confirmed until the cashier presses "GUNAKAN LOKASI INI".
 // ---------------------------------------------------------------------------
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Loader2, LocateFixed } from "lucide-react";
 
@@ -24,7 +25,9 @@ import { CheckoutLocationMap, type CheckoutMapStatus } from "@/components/checko
 import { CheckoutLocationSearch } from "@/components/checkout/location-search";
 import type { LocationSearchResult } from "@/lib/geocoding-normalize";
 
-const DEFAULT_MAP_CENTER: DeliveryCoordinates = { latitude: -6.2, longitude: 106.816666 };
+// Existing AFA/Kasir regression fixtures identify the store area in Cilegon.
+// Keep the fallback local to that known project location; never fall back to Jakarta.
+const DEFAULT_MAP_CENTER: DeliveryCoordinates = { latitude: -6.0021, longitude: 106.012345678 };
 const DEFAULT_MAP_ZOOM = 16;
 const CONFIRMED_MAP_ZOOM = 17;
 
@@ -55,6 +58,15 @@ export default function KasirLocationPicker({
 
     // Re-center on every open: the confirmed pin wins, otherwise the default center.
     // Missing coordinates are NEVER fabricated from address text.
+    useEffect(() => {
+        if (!open || typeof document === "undefined") return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [open]);
+
     useEffect(() => {
         if (!open) return;
         if (typeof initialLatitude === "number" && typeof initialLongitude === "number") {
@@ -116,8 +128,8 @@ export default function KasirLocationPicker({
         );
     };
 
-    return (
-        <div className="fixed inset-0 z-[100] flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#F8F5EE]" style={{ minHeight: "100vh" }}>
+    return createPortal(
+        <div className="fixed inset-0 z-[1000] flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#F8F5EE]" style={{ minHeight: "100vh" }} role="dialog" aria-modal="true" aria-label="Pilih lokasi pengiriman">
             <div className="shrink-0 border-b border-[#184D47]/10 bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
                 <div className="flex items-center gap-3">
                     <button type="button" onClick={onCancel} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#184D47]/15 text-[#184D47]" aria-label="Kembali">
@@ -126,6 +138,7 @@ export default function KasirLocationPicker({
                     <div className="min-w-0">
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#C9A45B]">Alamat Pengiriman</p>
                         <h2 className="truncate text-lg font-black text-[#184D47]">Pilih Lokasi Pengiriman</h2>
+                         <p className="text-xs font-semibold text-[#184D47]/60">Geser peta atau cari alamat untuk menentukan titik pengiriman.</p>
                     </div>
                 </div>
                 <div className="mt-3 space-y-2">
@@ -173,7 +186,7 @@ export default function KasirLocationPicker({
                     />
                 </div>
 
-                <div className="flex flex-col gap-2 border-t border-[#184D47]/10 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 border-t border-[#184D47]/10 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs font-semibold text-[#184D47]/60">
                         Pastikan pin tepat di titik pengiriman, lalu tekan tombol di samping.
                     </p>
@@ -194,6 +207,7 @@ export default function KasirLocationPicker({
                         </button>
                     </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

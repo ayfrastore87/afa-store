@@ -1,10 +1,22 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getCurrentCashier } from "@/lib/server-auth";
 import { KASIR_LOGIN_PATH, resolveKasirRoute } from "@/lib/kasir-access";
+import { KASIR_APP_NAME, KASIR_MANIFEST_PATH } from "@/lib/kasir-pwa";
 import KasirLoginForm from "@/components/kasir/KasirLoginForm";
 
 export const dynamic = "force-dynamic";
+
+// Same "AFA KASIR" PWA identity as the protected group: an installed kasir app
+// that launches logged-out lands here and must still be recognised as AFA KASIR.
+export const metadata: Metadata = {
+    title: `Masuk | ${KASIR_APP_NAME}`,
+    applicationName: KASIR_APP_NAME,
+    manifest: KASIR_MANIFEST_PATH,
+    appleWebApp: { capable: true, title: KASIR_APP_NAME, statusBarStyle: "black-translucent" },
+    robots: { index: false, follow: false },
+};
 
 // PUBLIC page: it lives outside the `(protected)` route group on purpose so the
 // cashier guard layout never runs here. Only an active cashier/admin is sent

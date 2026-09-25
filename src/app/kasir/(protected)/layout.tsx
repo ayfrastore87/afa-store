@@ -1,8 +1,22 @@
+import type { Metadata } from "next";
 import { requireCashier } from "@/lib/auth";
 import Link from "next/link";
 import { ClipboardList, FileText, History, Menu, Settings, ShoppingCart, LogOut } from "lucide-react";
+import { KASIR_APP_DESCRIPTION, KASIR_APP_NAME, KASIR_MANIFEST_PATH } from "@/lib/kasir-pwa";
 
 export const dynamic = "force-dynamic";
+
+// PWA identity for the kasir only. Next merges this with the root metadata, so
+// the customer site keeps /manifest.webmanifest while every kasir page links the
+// "AFA KASIR" manifest (separate installable app, see src/lib/kasir-pwa.ts).
+export const metadata: Metadata = {
+    title: { default: KASIR_APP_NAME, template: `%s | ${KASIR_APP_NAME}` },
+    description: KASIR_APP_DESCRIPTION,
+    applicationName: KASIR_APP_NAME,
+    manifest: KASIR_MANIFEST_PATH,
+    appleWebApp: { capable: true, title: KASIR_APP_NAME, statusBarStyle: "black-translucent" },
+    robots: { index: false, follow: false },
+};
 
 // Authoritative server-side guard for every protected /kasir route.
 // This layout belongs to the `(protected)` route group so it NEVER wraps

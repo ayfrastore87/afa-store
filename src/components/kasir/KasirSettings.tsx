@@ -23,6 +23,7 @@ import {
     Check,
     CircleDot,
     CreditCard,
+    Download,
     Globe,
     Info,
     Loader2,
@@ -51,6 +52,8 @@ import {
     type ThermalPaperWidth,
 } from "@/lib/thermal-printer/thermal-print-service";
 import { PAYMENT_METHODS } from "@/components/admin/kasir/kasir-shared";
+import KasirInstallPrompt from "@/components/kasir/KasirInstallPrompt";
+import { KASIR_APP_NAME } from "@/lib/kasir-pwa";
 
 // Same default as KasirPrinterPanel (DEFAULT_PAPER_WIDTH = 58). Only the UI
 // preference is persisted; the key is scoped to the kasir device.
@@ -357,13 +360,20 @@ export default function KasirSettings({ cashier }: { cashier: CashierIdentity })
                     </dl>
                 </article>
 
+                {/* APLIKASI KASIR (PWA install) */}
+                <article className="kasir-settings-card">
+                    <CardTitle icon={Download} title="Aplikasi Kasir" />
+                    <p className="kasir-settings-label">Pasang di Perangkat</p>
+                    <KasirInstallPrompt />
+                </article>
+
                 {/* STATUS SISTEM */}
                 <article className="kasir-settings-card">
                     <CardTitle icon={Info} title="Status Sistem" />
                     <StatusRow label="Kasir" value="Aktif" tone="ok" />
                     <StatusRow label="Printer" value={connected ? "Terhubung" : "Belum terhubung"} tone={connected ? "ok" : "muted"} />
                     <StatusRow label="QRIS" value="Tersedia" tone="ok" />
-                    <StatusRow label="Aplikasi" value="AFA STORE POS" tone="plain" />
+                    <StatusRow label="Aplikasi" value={KASIR_APP_NAME} tone="plain" />
                 </article>
 
                 {/* STRUK & TOKO */}

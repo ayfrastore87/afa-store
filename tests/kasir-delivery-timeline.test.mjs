@@ -432,9 +432,12 @@ test("29. history stays compact and never renders the full timeline", () => {
     assert.match(history, /kasirOrderTypeLabel\(order\.orderType\)/);
     assert.match(history, /deliveryStatusBadgeClass\(order\.delivery\.status\.key\)/);
     assert.match(history, /Resi \{order\.delivery\.trackingId\}/);
-    assert.match(history, /\{order\.delivery\?\.courier \? \(/);
-    // Pickup rows render no delivery block at all, and no card carries the timeline.
+    assert.match(history, /\{order\.delivery\.courier \? /);
+    // Pickup rows render no delivery block at all (the single OrderKind cell is guarded by order.delivery
+    // and reused by both the desktop table and the mobile card), and no card carries the timeline.
     assert.match(history, /\{order\.delivery \? \(/);
+    assert.ok((history.match(/<OrderKind order=\{o\}\/>/g) || []).length >= 2, "desktop table and mobile card both render the compact kind cell");
+    assert.doesNotMatch(code(history), /order\.delivery\.timeline/);
     assert.doesNotMatch(code(history), /KasirDeliveryTimeline|KASIR_DELIVERY_TIMELINE/);
 });
 

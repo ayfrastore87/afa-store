@@ -545,8 +545,14 @@ test("16. the 58mm print stylesheet is intact and long delivery addresses wrap",
 
 // 17. Transaction history can reprint the latest persisted receipt.
 test("17. a reprint always uses the latest persisted order, not stale client state", () => {
-    assert.match(history, /Cetak Ulang Struk/);
-    assert.match(history, /href={`\/admin\/kasir\/\$\{order\.id\}`}/);
+    // History never prints on its own: every row links to the Kasir detail route, which owns the reprint button.
+    assert.doesNotMatch(code(history), /Cetak Ulang Struk|CETAK ULANG STRUK|window\.print/i);
+    assert.match(history, /href={`\/kasir\/transaksi\/\$\{o\.id\}`}/);
+    // No UI link to the admin detail page (the /api/admin/kasir/orders data endpoint is still allowed).
+    assert.doesNotMatch(code(history), /href=\{?[`"']\/admin\/kasir\//);
+    assert.match(read("../src/app/kasir/(protected)/transaksi/[id]/page.tsx"), /<KasirTransactionDetail id=\{id\} \/>/);
+    assert.match(detail, /CETAK ULANG STRUK/);
+    assert.match(detail, /<KasirReceipt order=\{order\} cashierName=\{cashierName\} \/>/);
     // The detail page (which owns the print button) always re-reads the order from the server.
     assert.match(detail, /fetch\(`\/api\/admin\/kasir\/orders\/\$\{id\}`, \{/);
     assert.match(detail, /cache: "no-store",/);
@@ -599,7 +605,7 @@ test("19. a resi / tracking id appears only when the integration really has one"
     assert.match(escpos, /formatColumns\("No\. Resi \/ Tracking", delivery\.trackingId, width\)/);
     assert.match(receipt, /\{delivery\.trackingId \? <Row label="No\. Resi \/ Tracking" value=\{delivery\.trackingId\} \/> : null\}/);
     assert.match(detail, /value=\{delivery\.trackingId \|\| "Belum tersedia"\}/);
-    assert.match(history, /\{order\.delivery\?\.trackingId \?/);
+    assert.match(history, /\{order\.delivery\.trackingId \? <small[^>]*>Resi \{order\.delivery\.trackingId\}<\/small> : null\}/);
     // No tracking URL is ever fabricated.
     assert.doesNotMatch(code(detail), /biteship\.com|trackingUrl/);
 });

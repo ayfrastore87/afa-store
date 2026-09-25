@@ -8,8 +8,10 @@ import Swal from "sweetalert2";
 import {
     AlertCircle,
     ArrowLeft,
+    ArrowRight,
     Banknote,
     Check,
+    CheckCircle2,
     History,
     Loader2,
     Minus,
@@ -570,26 +572,25 @@ export default function KasirPOS() {
                             {!checkoutOpen && <button type="button" onClick={() => setMobileCartOpen(false)} className="ml-2 rounded-xl px-2 py-1 text-xl font-black lg:hidden" aria-label="Tutup keranjang">×</button>}
                         </div>
 
-                        {!submitting && cart.length === 0 && (
-                            <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-800">
-                                <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                                <span>Tambahkan produk untuk mulai transaksi.</span>
+                        {cart.length === 0 ? (
+                            /* EMPTY STATE — no checkout form, no totals, no payment: only this block renders. */
+                            <div className="kasir-cart-empty">
+                                <span className="kasir-cart-empty-icon" aria-hidden="true">
+                                    <ShoppingCart size={26} strokeWidth={1.8} />
+                                </span>
+                                <p className="kasir-cart-empty-title">Keranjang masih kosong</p>
+                                <p className="kasir-cart-empty-text">Tambahkan produk dari katalog untuk memulai transaksi.</p>
                             </div>
-                        )}
-
+                        ) : (
+                        <>
+                        <div className={`kasir-checkout-body ${checkoutOpen ? "kasir-checkout-content" : ""}`}>
                         <div className="kasir-cart-items space-y-3 p-5">
-                            {cart.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-10 text-center">
-                                    <ShoppingCart size={36} className="text-[#C9A45B]" />
-                                    <p className="mt-3 font-black">Keranjang kosong</p>
-                                    <p className="text-sm text-[#184D47]/60">Tambahkan produk dari katalog di sebelah kiri.</p>
-                                </div>
-                            ) : (
+                            {
                                 cart.map((line, index) => (
-                                    <div key={line.productId ?? `manual-${index}`} className="kasir-cart-item flex min-w-0 items-center gap-3 rounded-2xl bg-[#f8f6f0] p-3">
+                                    <div key={line.productId ?? `manual-${index}`} className="kasir-cart-item flex min-w-0 items-start gap-3 rounded-2xl bg-[#f8f6f0] p-3">
                                         <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[#f8f0dd]">
                                             {line.image ? (
-                                                <Image src={line.image} alt={line.name} fill sizes="48px" className="object-cover" unoptimized />
+                                                <Image src={line.image} alt={line.name} fill sizes="56px" className="object-cover" unoptimized />
                                             ) : (
                                                 <div className="grid h-full place-items-center text-[#C9A45B]"><PackageSearch size={18} /></div>
                                             )}
@@ -598,49 +599,51 @@ export default function KasirPOS() {
                                             <p className="kasir-cart-item-name line-clamp-2 text-sm font-black leading-snug">{line.name}</p>
                                             {line.size && <p className="text-[11px] text-[#184D47]/50">Ukuran {line.size}</p>}
                                             <p className="text-xs font-bold text-[#0F4C45]">{formatRupiah(line.price * line.quantity)}</p>
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <div className="kasir-quantity-control flex shrink-0 items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuantity(line.productId, line.quantity - 1)}
+                                                        className="grid h-10 w-10 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90"
+                                                        aria-label="Kurangi"
+                                                    >
+                                                        <Minus size={14} />
+                                                    </button>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        max={Math.max(1, line.stock)}
+                                                        value={line.quantity}
+                                                        onChange={(event) => setQuantity(line.productId, Number(event.target.value))}
+                                                        className="h-10 w-12 rounded-lg border border-[#184D47]/10 bg-white text-center text-sm font-black outline-none"
+                                                        aria-label="Jumlah"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setQuantity(line.productId, line.quantity + 1)}
+                                                        disabled={line.quantity >= Math.max(1, line.stock)}
+                                                        className="grid h-10 w-10 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90 disabled:opacity-40"
+                                                        aria-label="Tambah"
+                                                    >
+                                                        <Plus size={14} />
+                                                    </button>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeLine(line.productId)}
+                                                    className="ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600 transition active:scale-90"
+                                                    aria-label="Hapus"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="kasir-quantity-control flex shrink-0 items-center gap-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => setQuantity(line.productId, line.quantity - 1)}
-                                                className="grid h-9 w-9 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90"
-                                                aria-label="Kurangi"
-                                            >
-                                                <Minus size={14} />
-                                            </button>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                max={Math.max(1, line.stock)}
-                                                value={line.quantity}
-                                                onChange={(event) => setQuantity(line.productId, Number(event.target.value))}
-                                                className="h-9 w-11 rounded-lg border border-[#184D47]/10 bg-white text-center text-sm font-black outline-none"
-                                                aria-label="Jumlah"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setQuantity(line.productId, line.quantity + 1)}
-                                                disabled={line.quantity >= Math.max(1, line.stock)}
-                                                className="grid h-9 w-9 place-items-center rounded-lg bg-white text-[#184D47] shadow-sm active:scale-90 disabled:opacity-40"
-                                                aria-label="Tambah"
-                                            >
-                                                <Plus size={14} />
-                                            </button>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeLine(line.productId)}
-                                            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600 transition active:scale-90"
-                                            aria-label="Hapus"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
                                     </div>
                                 ))
-                            )}
+                            }
                         </div>
 
-                        <div className={`kasir-checkout-scroll space-y-4 border-t border-[#184D47]/10 p-5 ${checkoutOpen ? "kasir-checkout-content" : ""}`}>
+                        <div className="kasir-checkout-scroll space-y-4 border-t border-[#184D47]/10 p-5">
                             {/* STEP-BY-STEP PROGRESS INDICATOR */}
                             <div className="border-b border-[#184D47]/10 pb-3">
                                 <p className="mb-2 text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/60">Langkah Transaksi</p>
@@ -812,6 +815,15 @@ export default function KasirPOS() {
                             )}
 
                             {/* Penerima/pelanggan inputs live in the PENERIMA section above. */}
+                        </div>
+                        </div>
+
+                        {/* STICKY CHECKOUT FOOTER — presentation only. Total = existing orderTotal; CTA = existing step flow / submitOrder(). */}
+                        <div className="kasir-checkout-footer">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs font-black uppercase tracking-[0.18em] text-[#184D47]/60">Total</span>
+                                <span className="text-xl font-black text-[#0F4C45]">{rupiah.format(orderTotal)}</span>
+                            </div>
 
                             {/* STEP NAVIGATION BUTTONS */}
                             {currentStep < (orderType === "PICKUP" ? 2 : 5) ? (
@@ -831,7 +843,7 @@ export default function KasirPOS() {
                                         }
                                     }}
                                     disabled={!canNextStep(currentStep, orderType, deliveryReadiness, deliveryDraft) || submitting}
-                                    className="flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="kasir-checkout-cta"
                                     title={
                                         cart.length === 0
                                             ? "Tambahkan produk terlebih dahulu"
@@ -844,7 +856,13 @@ export default function KasirPOS() {
                                                         : "Selesaikan transaksi sekali klik"
                                     }
                                 >
-                                    Lanjutkan
+                                    {submitting ? (
+                                        <><Loader2 size={18} className="animate-spin" /> Memproses...</>
+                                    ) : checkoutOpen && allRequirementsMet() ? (
+                                        <><CheckCircle2 size={18} /> Buat Pesanan • {rupiah.format(orderTotal)}</>
+                                    ) : (
+                                        <>Lanjutkan Checkout <ArrowRight size={18} /></>
+                                    )}
                                 </button>
                             ) : (
                                 // FINAL SUBMIT BUTTON after payment (step 5)
@@ -852,7 +870,7 @@ export default function KasirPOS() {
                                     type="button"
                                     onClick={() => void submitOrder()}
                                     disabled={submitting || totalItems === 0 || (orderType === "DELIVERY" && !deliveryReadiness.ready)}
-                                    className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#184D47] px-5 font-black text-white shadow-lg shadow-[#184D47]/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="kasir-checkout-cta"
                                     title={
                                         totalItems === 0
                                             ? "Tambahkan produk terlebih dahulu"
@@ -861,8 +879,8 @@ export default function KasirPOS() {
                                                 : "Selesaikan transaksi"
                                     }
                                 >
-                                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <ShoppingCart size={18} />}
-                                    {submitting ? "Memproses..." : "Proses Transaksi"}
+                                    {submitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                                    {submitting ? "Memproses..." : `Buat Pesanan • ${rupiah.format(orderTotal)}`}
                                 </button>
                             )}
 
@@ -872,13 +890,15 @@ export default function KasirPOS() {
                                     type="button"
                                     onClick={() => setCurrentStep(prev => prev - 1)}
                                     disabled={submitting}
-                                    className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white text-sm font-bold text-[#184D47] transition hover:bg-[#184D47]/5"
+                                    className="kasir-checkout-back"
                                 >
                                     <ArrowLeft size={16} />
                                     Kembali
                                 </button>
                             )}
                         </div>
+                        </>
+                        )}
                     </div>
                 </aside>
             </main>

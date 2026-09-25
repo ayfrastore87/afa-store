@@ -185,15 +185,20 @@ test("9. transaction detail shows the latest persisted shipment state", () => {
 // 10. Riwayat Transaksi shows the shipment info for delivery orders only.
 test("10. history shows the delivery status without cluttering pickup rows", () => {
     assert.match(history, /deliveryStatusBadgeClass\(order\.delivery\.status\.key\)/);
+    // One guarded delivery block (OrderKind) is shared by the desktop table row and the mobile card.
+    assert.match(history, /\{order\.delivery \? \(/);
     assert.ok(
-        (history.match(/\{order\.delivery \? \(/g) || []).length >= 2,
-        "desktop and mobile delivery blocks are both guarded",
+        (history.match(/<OrderKind order=\{o\}\/>/g) || []).length >= 2,
+        "desktop and mobile rows both render the guarded delivery block",
     );
     assert.match(history, /\{order\.delivery\.service \? ` • \$\{order\.delivery\.service\}` : ""\}/);
-    assert.match(history, /\{order\.delivery\?\.trackingId \?/);
+    assert.match(history, /\{order\.delivery\.trackingId \? /);
     assert.match(history, /Resi \{order\.delivery\.trackingId\}/);
-    // The delivery information sits in the JENIS PESANAN cell, next to "Kirim".
+    // The delivery information sits in the JENIS cell, next to "Kirim" / "Ambil Sendiri".
+    assert.match(history, /"JENIS"/);
     assert.match(history, /kasirOrderTypeLabel\(order\.orderType\)/);
+    // Rows open the Kasir detail route (not the admin one).
+    assert.match(history, /href={`\/kasir\/transaksi\/\$\{o\.id\}`}/);
 });
 
 // 11. Both print paths use the latest persisted tracking/status.

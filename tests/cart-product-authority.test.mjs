@@ -64,7 +64,7 @@ test("client tampering cannot replace authoritative product fields", () => {
 
 test("buy-now uses id/qty and rejects productId/quantity contract", () => {
     assert.match(buyNowSource, /parseProductRequestItem\(await request\.json\(\)\)/);
-    assert.match(ctaSource, /JSON\.stringify\(\{ id: product\.id, qty: quantity \}\)/);
+    assert.match(ctaSource, /buildWhatsAppOrderUrl\(product, quantity\)/);
     assert.doesNotMatch(ctaSource, /productId: product\.id/);
 });
 

@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart, ShoppingCart, Trash2 } from "lucide-react";
 import { useCart } from "@/context/cart-context";
 import { useWishlist, type WishlistItem } from "@/context/wishlist-context";
-import { loginPath } from "@/lib/client-auth";
+import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 import { formatRupiah } from "@/lib/products";
 
 function WishlistToast({ message }: { message: string }) {
@@ -18,6 +19,12 @@ export default function WishlistPage() {
     const router = useRouter();
     const { addToCart } = useCart();
     const { wishlist, removeFromWishlist, toast } = useWishlist();
+
+    useEffect(() => {
+        void hasAuthenticatedUser().then((authenticated) => {
+            if (!authenticated) router.replace(loginPath("/wishlist"));
+        });
+    }, [router]);
 
     const add = async (item: WishlistItem) => {
         const added = await addToCart(item);

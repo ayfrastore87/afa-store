@@ -1,17 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { useCart } from "@/context/cart-context";
-import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
+import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
 import { formatRupiah } from "@/lib/products";
 import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 
 type Props = { product: { id: string; name: string; slug: string; price: number; image: string | null }; stock: number };
 
 export default function ProductDetailCta({ product, stock }: Props) {
-    const router = useRouter();
     const { addToCart } = useCart();
     const [quantity, setQuantity] = useState(1);
     const [message, setMessage] = useState("");
@@ -21,7 +19,7 @@ export default function ProductDetailCta({ product, stock }: Props) {
 
     const addProduct = async () => {
         if (!available || adding) return;
-        if (!(await hasAuthenticatedUser())) { router.push(loginPath(`/produk/${product.slug}`)); return; }
+        if (!(await confirmCustomerAuth("cart", `/produk/${product.slug}`))) return;
         setAdding(true);
         setMessage("");
         try {

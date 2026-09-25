@@ -8,6 +8,7 @@ import {
     useMemo,
     useState,
 } from "react";
+import { hasAuthenticatedUser } from "@/lib/client-auth";
 
 export type WishlistItem = {
     id: string;
@@ -20,66 +21,54 @@ type WishlistContextValue = {
     wishlist: WishlistItem[];
     wishlistCount: number;
     toast: string;
-    addToWishlist: (item: WishlistItem) => void;
-    removeFromWishlist: (id: string) => void;
-    toggleWishlist: (item: WishlistItem) => void;
+    addToWishlist: (item: WishlistItem) => Promise<void>;
+    removeFromWishlist: (id: string) => Promise<void>;
+    toggleWishlist: (item: WishlistItem) => Promise<void>;
     isWishlisted: (id: string) => boolean;
-    clearWishlist: () => void;
+    clearWishlist: () => Promise<void>;
 };
 
-const WISHLIST_KEY = "afa-wishlist";
 const WishlistContext = createContext<WishlistContextValue | null>(null);
-
-function isWishlistItem(value: unknown): value is WishlistItem {
-    if (typeof value !== "object" || value === null) {
-        return false;
-    }
-
-    const item = value as Partial<WishlistItem>;
-
-    return (
-        typeof item.id === "string" &&
-        typeof item.name === "string" &&
-        typeof item.price === "number" &&
-        typeof item.image === "string"
-    );
-}
-
-function readWishlistFromStorage(): WishlistItem[] {
-    if (typeof window === "undefined") {
-        return [];
-    }
-
-    try {
-        const saved = window.localStorage.getItem(WISHLIST_KEY);
-
-        if (!saved) {
-            return [];
-        }
-
-        const parsed: unknown = JSON.parse(saved);
-
-        return Array.isArray(parsed) ? parsed.filter(isWishlistItem) : [];
-    } catch {
-        return [];
-    }
-}
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
     const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [toast, setToast] = useState("");
 
     const showToast = useCallback((message: string) => {
         setToast(message);
     }, []);
 
+    const requireAuth = useCallback(async () => {
+        if (await hasAuthenticatedUser()) return true;
+        showToast("Silakan Login/Daftar terlebih dahulu untuk menggunakan wishlist.");
+        return false;
+    }, [showToast]);
+
     useEffect(() => {
-        setWishlist(readWishlistFromStorage());
+        let active = true;
+        void hasAuthenticatedUser().then((authenticated) => {
+            if (!active) return;
+            setIsAuthenticated(authenticated);
+            if (authenticated) {
+                try {
+                    const saved = window.localStorage.getItem("afa-wishlist");
+                    if (saved) setWishlist(JSON.parse(saved) as WishlistItem[]);
+                } catch {
+                    setWishlist([]);
+                }
+            } else {
+                setWishlist([]);
+                try { window.localStorage.removeItem("afa-wishlist"); } catch { /* ignore unavailable storage */ }
+            }
+        });
+        return () => { active = false; };
     }, []);
 
     useEffect(() => {
-        window.localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
-    }, [wishlist]);
+        if (!isAuthenticated) return;
+        try { window.localStorage.setItem("afa-wishlist", JSON.stringify(wishlist)); } catch { /* ignore unavailable storage */ }
+    }, [isAuthenticated, wishlist]);
 
     useEffect(() => {
         if (!toast) {
@@ -91,49 +80,46 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         return () => window.clearTimeout(timer);
     }, [toast]);
 
-    const addToWishlist = useCallback((item: WishlistItem) => {
+    const addToWishlist = useCallback(async (item: WishlistItem) => {
+        if (!(await requireAuth())) return;
         setWishlist((items) => {
-            if (items.some((wishItem) => wishItem.id === item.id)) {
-                return items;
-            }
-
+            if (items.some((wishItem) => wishItem.id === item.id)) return items;
             showToast("Berhasil ditambahkan ke wishlist.");
             return [...items, item];
         });
-    }, [showToast]);
+    }, [requireAuth, showToast]);
 
-    const removeFromWishlist = useCallback((id: string) => {
+    const removeFromWishlist = useCallback(async (id: string) => {
+        if (!(await requireAuth())) return;
         setWishlist((items) => {
-            if (!items.some((item) => item.id === id)) {
-                return items;
-            }
-
+            if (!items.some((item) => item.id === id)) return items;
             showToast("Berhasil dihapus dari wishlist.");
             return items.filter((item) => item.id !== id);
         });
-    }, [showToast]);
+    }, [requireAuth, showToast]);
 
-    const toggleWishlist = useCallback((item: WishlistItem) => {
+    const toggleWishlist = useCallback(async (item: WishlistItem) => {
+        if (!(await requireAuth())) return;
         setWishlist((items) => {
             if (items.some((wishItem) => wishItem.id === item.id)) {
                 showToast("Berhasil dihapus dari wishlist.");
                 return items.filter((wishItem) => wishItem.id !== item.id);
             }
-
             showToast("Berhasil ditambahkan ke wishlist.");
             return [...items, item];
         });
-    }, [showToast]);
+    }, [requireAuth, showToast]);
 
     const isWishlisted = useCallback(
         (id: string) => wishlist.some((item) => item.id === id),
         [wishlist]
     );
 
-    const clearWishlist = useCallback(() => {
+    const clearWishlist = useCallback(async () => {
+        if (!(await requireAuth())) return;
         setWishlist([]);
         showToast("Berhasil dihapus dari wishlist.");
-    }, [showToast]);
+    }, [requireAuth, showToast]);
 
     const value = useMemo(
         () => ({

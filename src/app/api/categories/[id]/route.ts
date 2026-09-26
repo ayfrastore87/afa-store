@@ -2,10 +2,19 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
 
+const imageUrlValue = (value: unknown) => {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value !== "string" || value.length > 2048) return undefined;
+    try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:" ? value.trim() : undefined;
+    } catch { return undefined; }
+};
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
     if (!(await getCurrentAdmin())) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
     const { id } = await context.params;
-    const body = await request.json().catch(() => ({})) as { name?: unknown; slug?: unknown };
+    const body = await request.json().catch(() => ({})) as { name?: unknown; slug?: unknown; imageUrl?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) return NextResponse.json({ success: false, error: "Nama kategori wajib diisi." }, { status: 400 });
     const existing = await prisma.category.findUnique({ where: { id }, select: { id: true, slug: true } });
@@ -13,7 +22,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const slug = typeof body.slug === "string" && body.slug.trim() ? body.slug.trim() : existing.slug;
     const duplicate = await prisma.category.findFirst({ where: { OR: [{ name }, { slug }], NOT: { id } }, select: { id: true } });
     if (duplicate) return NextResponse.json({ success: false, error: "Kategori sudah tersedia." }, { status: 409 });
-    const category = await prisma.category.update({ where: { id }, data: { name, slug } });
+    const imageUrl = imageUrlValue(body.imageUrl);
+    if (imageUrl === undefined) return NextResponse.json({ success: false, error: "URL gambar kategori tidak valid." }, { status: 400 });
+    const category = await prisma.category.update({ where: { id }, data: { name, slug, imageUrl } });
     return NextResponse.json({ success: true, data: category });
 }
 

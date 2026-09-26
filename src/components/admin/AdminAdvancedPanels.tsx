@@ -153,7 +153,7 @@ export function StockPanel() {
 
     const load = useCallback(async () => {
         const [productRes, historyRes] = await Promise.all([
-            supabase.from("products").select("*").order("createdAt", { ascending: false }),
+            supabase.from("products").select("*").eq("isActive", true).order("createdAt", { ascending: false }),
             supabase.from("stock_history").select("*").order("created_at", { ascending: false }).limit(80),
         ]);
         if (productRes.error) {

@@ -30,6 +30,7 @@ export default function Home() {
   const [userName, setUserName] = useState<string | null>(null);
   const [query, setQuery] = useState(""), [filter, setFilter] = useState("Semua"), [sort, setSort] = useState("featured");
   const [products, setProducts] = useState<Product[]>([]), [productsLoading, setProductsLoading] = useState(true), [productsError, setProductsError] = useState("");
+  const [categories, setCategories] = useState<{ id: string; name: string; imageUrl: string | null }[]>([]);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [addState, setAddState] = useState<Record<string, "adding" | "added">>({});
@@ -65,9 +66,9 @@ export default function Home() {
       grouped.set(category, [...(grouped.get(category) ?? []), product]);
     });
     const priority = (name: string) => name.toLowerCase() === "bawang goreng" ? 0 : name.toLowerCase() === "parcel" ? 1 : 2;
-    return [...grouped.entries()].map(([name, items]) => ({ name, items }))
+    return categories.map((category) => ({ name: category.name, imageUrl: category.imageUrl, items: grouped.get(category.name) ?? [] }))
       .sort((a, b) => priority(a.name) - priority(b.name) || a.name.localeCompare(b.name, "id"));
-  }, [products]);
+  }, [categories, products]);
   const requireAuth = async (next: string, kind: "wishlist" | "cart" = "cart") => {
     if (await hasAuthenticatedUser()) return true;
     return confirmCustomerAuth(kind, next);
@@ -130,6 +131,7 @@ export default function Home() {
 
   useEffect(() => {
     loadProducts();
+    void fetch("/api/categories", { cache: "no-store" }).then(response => response.json()).then((body: { data?: { id: string; name: string; imageUrl: string | null }[] }) => setCategories(body.data ?? [])).catch(() => setCategories([]));
   }, [loadProducts]);
 
   useEffect(() => {

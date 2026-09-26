@@ -1861,6 +1861,139 @@ html[data-theme="dark"] body .admin-shell {
     radial-gradient(ellipse 50% 45% at 100% 100%, rgba(46,139,87,.10), transparent 70%) !important;
   color: var(--night-text, #F8F5EE);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Protected admin night mode. The selector is scoped to the route wrapper so */
+/* public Light Mode pages and product photos are never affected.             */
+/* -------------------------------------------------------------------------- */
+.admin-theme-toggle {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 80;
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(201,164,91,.38);
+  border-radius: 999px;
+  background: rgba(248,245,238,.92);
+  padding: 0 12px;
+  color: #A7833A;
+  font-size: .75rem;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(18,53,36,.12);
+  backdrop-filter: blur(12px);
+}
+@media (max-width: 480px) {
+  .admin-theme-toggle { top: 10px; right: 10px; min-height: 34px; width: 34px; padding: 0; }
+  .admin-theme-toggle span { display: none; }
+}
+
+html[data-theme="dark"] .admin-route-shell {
+  min-height: 100vh;
+  background: var(--night-bg);
+  color: var(--night-text);
+}
+
+html[data-theme="dark"] .admin-route-shell .admin-theme-toggle {
+  border-color: rgba(212,175,55,.42);
+  background: var(--night-surface-elevated);
+  color: var(--night-gold);
+}
+
+html[data-theme="dark"] .admin-route-shell :where(
+  [class~="bg-white"], [class~="bg-white/90"], [class~="bg-white/80"],
+  [class~="bg-white/70"], [class~="bg-white/50"], [class~="bg-gray-50"],
+  [class~="bg-slate-50"]
+) {
+  background-color: var(--night-surface) !important;
+  color: var(--night-text);
+}
+
+html[data-theme="dark"] .admin-route-shell :where(
+  [class*="border-gray"], [class*="border-slate"], [class*="border-white"]
+) {
+  border-color: rgba(212,175,55,.20) !important;
+}
+
+html[data-theme="dark"] .admin-route-shell :where(input, select, textarea, [role="combobox"]) {
+  background-color: var(--night-input) !important;
+  border-color: rgba(212,175,55,.20) !important;
+  color: var(--night-text) !important;
+  caret-color: var(--night-gold);
+}
+
+html[data-theme="dark"] .admin-route-shell :where(input, select, textarea, [role="combobox"])::placeholder {
+  color: var(--night-placeholder, #929B94) !important;
+}
+
+html[data-theme="dark"] .admin-route-shell :where(input, select, textarea, [role="combobox"]):focus {
+  border-color: var(--night-gold) !important;
+  box-shadow: 0 0 0 3px rgba(212,175,55,.14) !important;
+}
+
+html[data-theme="dark"] .admin-route-shell select option {
+  background: var(--night-surface-elevated);
+  color: var(--night-text);
+}
+
+html[data-theme="dark"] .admin-route-shell input:-webkit-autofill,
+html[data-theme="dark"] .admin-route-shell input:-webkit-autofill:hover,
+html[data-theme="dark"] .admin-route-shell input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--night-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--night-input) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+html[data-theme="dark"] .admin-route-shell :where(table) { background: var(--night-surface); color: var(--night-text); }
+html[data-theme="dark"] .admin-route-shell :where(thead, th) { background: var(--night-surface-elevated); color: var(--night-text-secondary); }
+html[data-theme="dark"] .admin-route-shell :where(tr:hover) { background: var(--night-surface-hover); }
+html[data-theme="dark"] .admin-route-shell :where(dialog, [role="dialog"], [data-radix-popper-content-wrapper] > *) {
+  background-color: var(--night-surface) !important;
+  border-color: rgba(212,175,55,.20) !important;
+  color: var(--night-text);
+}
+
+html[data-theme="dark"] .admin-route-shell .studio-page {
+  background: var(--night-bg);
+  color: var(--night-text);
+}
+html[data-theme="dark"] .admin-route-shell .studio-card,
+html[data-theme="dark"] .admin-route-shell .media-modal > div {
+  background: var(--night-surface);
+  border-color: rgba(212,175,55,.20);
+  color: var(--night-text);
+  box-shadow: 0 18px 50px rgba(0,0,0,.30);
+}
+html[data-theme="dark"] .admin-route-shell .studio-heading h1,
+html[data-theme="dark"] .admin-route-shell .studio-card > header h2,
+html[data-theme="dark"] .admin-route-shell .parcel-builder h3 { color: var(--night-text); }
+html[data-theme="dark"] .admin-route-shell .studio-heading a,
+html[data-theme="dark"] .admin-route-shell .studio-field small,
+html[data-theme="dark"] .admin-route-shell .helper,
+html[data-theme="dark"] .admin-route-shell .parcel-builder p,
+html[data-theme="dark"] .admin-route-shell .photo-studio dt { color: var(--night-text-muted); }
+html[data-theme="dark"] .admin-route-shell .studio-field input,
+html[data-theme="dark"] .admin-route-shell .studio-field select,
+html[data-theme="dark"] .admin-route-shell .studio-field textarea,
+html[data-theme="dark"] .admin-route-shell .parcel-builder input {
+  background: var(--night-input);
+  color: var(--night-text);
+}
+html[data-theme="dark"] .admin-route-shell .parcel-builder,
+html[data-theme="dark"] .admin-route-shell .canva,
+html[data-theme="dark"] .admin-route-shell .photo-frame { background: var(--night-surface-elevated); }
+html[data-theme="dark"] .admin-route-shell .parcel-builder > span { background: var(--night-input); }
+html[data-theme="dark"] .admin-route-shell .photo-actions button,
+html[data-theme="dark"] .admin-route-shell .studio-cancel,
+html[data-theme="dark"] .admin-route-shell .tools button {
+  background: var(--night-input);
+  border-color: rgba(212,175,55,.25);
+  color: var(--night-text);
+}
+html[data-theme="dark"] .admin-route-shell .photo-empty { color: var(--night-gold-soft); border-color: rgba(212,175,55,.45); }
 html[data-theme="dark"] body .admin-shell .admin-card,
 html[data-theme="dark"] body .admin-shell .admin-stat {
   background: var(--night-surface-elevated, #123524) !important;

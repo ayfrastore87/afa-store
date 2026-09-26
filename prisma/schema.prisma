@@ -55,6 +55,7 @@ model Category {
   id       String    @id
   name     String
   slug     String
+  imageUrl String?
   products Product[]
 
   @@map("categories")

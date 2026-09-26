@@ -55,11 +55,9 @@ export default async function CatalogPage({
     const where = buildWhere(query);
     const orderBy = orderByMap[query.sort];
 
-    // Categories (real DB rows) + their live active-product counts and a
-    // representative image taken from an actual active product image. No new
-    // schema fields, no fabricated categories, no fake counts.
+    // Categories own their visual independently from Product images.
     const [categoryRows, activeForCategories] = await Promise.all([
-        prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, slug: true } }),
+        prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, slug: true, imageUrl: true } }),
         prisma.product.findMany({
             where: { isActive: true },
             orderBy: { createdAt: "desc" },
@@ -68,13 +66,9 @@ export default async function CatalogPage({
     ]);
 
     const countByCategory = new Map<string, number>();
-    const imageByCategory = new Map<string, string>();
     for (const product of activeForCategories) {
         if (!product.categoryId) continue;
         countByCategory.set(product.categoryId, (countByCategory.get(product.categoryId) ?? 0) + 1);
-        if (product.image && product.image.trim() && !imageByCategory.has(product.categoryId)) {
-            imageByCategory.set(product.categoryId, product.image);
-        }
     }
 
     const categories: CatalogCategory[] = categoryRows
@@ -83,9 +77,8 @@ export default async function CatalogPage({
             name: category.name,
             slug: category.slug,
             count: countByCategory.get(category.id) ?? 0,
-            image: imageByCategory.get(category.id) ?? null,
+            image: category.imageUrl,
         }))
-        .filter((category) => category.count > 0);
 
     const totalActive = activeForCategories.length;
 

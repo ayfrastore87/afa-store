@@ -280,7 +280,7 @@ export default function AdminPage() {
     const loadData = useCallback(async () => {
         setLoading(true);
         const [productRes, orderRes, categoryRes, courierRes] = await Promise.all([
-            supabase.from("products").select("*").order("createdAt", { ascending: false }),
+            supabase.from("products").select("*").eq("isActive", true).order("createdAt", { ascending: false }),
             supabase.from("orders").select("*, items:order_items(name, quantity, productId)").order("createdAt", { ascending: false }),
             fetch("/api/categories").then((response) => response.json() as Promise<{ data?: { id: string; name: string }[] }>),
             supabase.from("settings").select("value").eq("key", "couriers").maybeSingle(),

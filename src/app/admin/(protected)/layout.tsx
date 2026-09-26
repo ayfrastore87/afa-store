@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
+import AdminThemeToggle from "@/components/admin/AdminThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -12,5 +13,10 @@ export default async function ProtectedAdminLayout({
     // users are redirected to /admin/login before any admin HTML is rendered.
     await requireAdmin();
 
-    return <>{children}</>;
+    return (
+        <div className="admin-route-shell">
+            <AdminThemeToggle />
+            {children}
+        </div>
+    );
 }

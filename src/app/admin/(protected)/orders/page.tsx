@@ -1,3 +1,7 @@
-import AdminPage from "../page";
+import { OrderCenter } from "@/components/admin/orders/OrderCenter";
 
-export default AdminPage;
+export const dynamic = "force-dynamic";
+
+export default function AdminOrdersPage() {
+     return <OrderCenter />;
+}

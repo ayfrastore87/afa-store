@@ -25,6 +25,7 @@ model User {
   passwordResetTokens   PasswordResetToken[]
   partner               Partner?
   partnerVisits         PartnerVisit[]
+  salesProfile          SalesPerson?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
@@ -84,6 +85,8 @@ model Product {
   partnerStocks         PartnerStock[]
   partnerStockMovements PartnerStockMovement[]
   partnerSaleItems      PartnerSaleItem[]
+  consignmentStocks     ConsignmentStock[]
+  salesVisitItems       SalesVisitItem[]
   createdAt             DateTime
 
   @@map("products")
@@ -521,4 +524,150 @@ model PartnerVisit {
 
   @@index([partnerId, createdAt])
   @@map("partner_visits")
+}
+
+// ---------------------------------------------------------------------------
+// SALES & TITIP JUAL (consignment). Additive module — never touches Order,
+// OrderItem, Kasir, Partner or checkout. All money values are Int Rupiah,
+// matching the existing Order/PartnerSale convention.
+// ---------------------------------------------------------------------------
+
+// A field sales operator. Authenticated through the existing Supabase auth +
+// public.users mapping (role "sales"), same pattern as cashier accounts.
+model SalesPerson {
+  id        String             @id @default(cuid())
+  userId    String?            @unique
+  user      User?              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  name      String
+  phone     String?
+  isActive  Boolean            @default(true)
+  stores    ConsignmentStore[]
+  visits    SalesVisit[]
+  payments  StorePayment[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@map("sales_people")
+}
+
+// A warung/toko that carries AFA STORE goods on consignment. No user account.
+model ConsignmentStore {
+  id              String             @id @default(cuid())
+  name            String
+  ownerName       String?
+  phone           String?
+  address         String?
+  latitude        Float?
+  longitude       Float?
+  mapsUrl         String?
+  notes           String?
+  isActive        Boolean            @default(true)
+  assignedSalesId String?
+  assignedSales   SalesPerson?       @relation(fields: [assignedSalesId], references: [id], onDelete: SetNull)
+  stocks          ConsignmentStock[]
+  visits          SalesVisit[]
+  payments        StorePayment[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([assignedSalesId, isActive])
+  @@map("consignment_stores")
+}
+
+// Running consignment position of one product at one store. quantity* columns
+// are lifetime accumulators; currentStock is the authoritative on-shelf count,
+// only ever mutated inside the visit transaction with conditional guards.
+model ConsignmentStock {
+  id               String           @id @default(cuid())
+  storeId          String
+  productId        String
+  store            ConsignmentStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product          Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantitySupplied Int              @default(0)
+  quantitySold     Int              @default(0)
+  quantityReturned Int              @default(0)
+  quantityDamaged  Int              @default(0)
+  currentStock     Int              @default(0)
+  unitPrice        Int
+  suppliedAt       DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([storeId, productId])
+  @@index([productId])
+  @@map("consignment_stocks")
+}
+
+// One sales visit to one store. Money totals are recomputed server-side from
+// the items; client totals are never trusted. VOID instead of delete.
+model SalesVisit {
+  id             String           @id @default(cuid())
+  storeId        String
+  salesId        String
+  idempotencyKey String?          @unique
+  store          ConsignmentStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  sales          SalesPerson      @relation(fields: [salesId], references: [id], onDelete: Restrict)
+  visitedAt      DateTime         @default(now())
+  latitude       Float?
+  longitude      Float?
+  notes          String?
+  photoUrl       String?
+  totalSold      Int              @default(0)
+  totalSupplied  Int              @default(0)
+  salesAmount    Int              @default(0)
+  status         String           @default("COMPLETED")
+  items          SalesVisitItem[]
+  payments       StorePayment[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([storeId, visitedAt])
+  @@index([salesId, visitedAt])
+  @@map("sales_visits")
+}
+
+// Per-product stock movement inside one visit. closingStock is always the
+// server-side formula result: opening + supplied - sold - returned - damaged.
+model SalesVisitItem {
+  id               String     @id @default(cuid())
+  visitId          String
+  productId        String?
+  visit            SalesVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  product          Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName      String
+  openingStock     Int
+  quantitySupplied Int        @default(0)
+  quantitySold     Int        @default(0)
+  quantityReturned Int        @default(0)
+  quantityDamaged  Int        @default(0)
+  closingStock     Int
+  unitPrice        Int
+  salesAmount      Int
+
+  @@index([visitId])
+  @@map("sales_visit_items")
+}
+
+// A settlement/payment received from a store. Receivable = sum of VALID visit
+// salesAmount - sum of VALID payments; computed server-side, never stored.
+model StorePayment {
+  id            String           @id @default(cuid())
+  storeId       String
+  salesId       String
+  visitId       String?
+  store         ConsignmentStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  sales         SalesPerson      @relation(fields: [salesId], references: [id], onDelete: Restrict)
+  visit         SalesVisit?      @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  amount        Int
+  paymentMethod String           @default("CASH")
+  paymentDate   DateTime         @default(now())
+  reference     String?
+  notes         String?
+  status        String           @default("VALID")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([storeId, paymentDate])
+  @@index([salesId, paymentDate])
+  @@map("store_payments")
 }

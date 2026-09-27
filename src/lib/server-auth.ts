@@ -2,7 +2,7 @@ import "server-only";
 
 import { getCurrentUser as getSupabaseUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { Partner } from "@prisma/client";
+import type { Partner, SalesPerson } from "@prisma/client";
 
 type ApplicationUser = {
     id: string;
@@ -85,6 +85,32 @@ export async function getCurrentPartner(): Promise<CurrentPartner | null> {
     } catch (error) {
         console.error("Partner lookup failed", {
             category: "partner_lookup",
+            name: error instanceof Error ? error.name : "DatabaseError",
+        });
+        return null;
+    }
+}
+
+export type CurrentSalesPerson = {
+    user: ApplicationUser;
+    sales: SalesPerson;
+};
+
+// Sales (titip jual) authorization is derived server-side from the ACTIVE
+// application user with role exactly "sales" AND an ACTIVE SalesPerson row.
+// Admin / cashier / customer / partner / inactive rows never qualify, so field
+// sales access can never leak into (or out of) other role surfaces.
+export async function getCurrentSalesPerson(): Promise<CurrentSalesPerson | null> {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "sales" || user.isActive === false) return null;
+
+    try {
+        const sales = await prisma.salesPerson.findUnique({ where: { userId: user.id } });
+        if (!sales || sales.isActive === false) return null;
+        return { user, sales };
+    } catch (error) {
+        console.error("Sales person lookup failed", {
+            category: "sales_person_lookup",
             name: error instanceof Error ? error.name : "DatabaseError",
         });
         return null;

@@ -261,3 +261,14 @@ export async function requireCashier() {
     if (!cashier) redirect(KASIR_LOGIN_PATH);
     return cashier;
 }
+
+/** Guard for the protected `/sales/(protected)` route group ONLY (Sales &
+ * Titip Jual). It must never run for `/sales/login` (same self-redirect rule
+ * as the kasir guard). Only an ACTIVE user with role "sales" plus an ACTIVE
+ * SalesPerson row passes; everyone else lands on the sales login page. */
+export async function requireSales() {
+    const { getCurrentSalesPerson } = await import("@/lib/server-auth");
+    const sales = await getCurrentSalesPerson();
+    if (!sales) redirect("/sales/login");
+    return sales;
+}

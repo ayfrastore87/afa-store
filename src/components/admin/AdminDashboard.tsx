@@ -9,6 +9,7 @@ import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { BarChart3, Boxes, Edit3, Handshake, Home, Loader2, LogOut, PackagePlus, PlusCircle, Receipt, Settings, ShoppingBag, Trash2, Users, UserCircle } from "lucide-react";
+import { Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
 import { uploadProductImage } from "@/lib/product-image-upload-client";
@@ -162,6 +163,12 @@ const tabs = [
         href: "/admin/mitra",
     },
     {
+        id: "titip-jual",
+        label: "Sales & Titip Jual",
+        icon: Store,
+        href: "/admin/titip-jual",
+    },
+    {
         id: "customers",
         label: "Pelanggan",
         icon: Users,
@@ -202,6 +209,10 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
     "/admin/testimonials": "testimonials",
     "/admin/testimoni": "testimonials",
     "/admin/mitra": "mitra",
+    "/admin/titip-jual": "titip-jual",
+    "/admin/titip-jual/sales": "titip-jual",
+    "/admin/titip-jual/laporan": "titip-jual",
+    "/admin/sales/map": "titip-jual",
     "/admin/reports": "reports",
     "/admin/laporan": "reports",
     "/admin/settings": "settings",

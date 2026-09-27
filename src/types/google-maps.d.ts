@@ -53,7 +53,24 @@ interface GoogleMapsMap {
     getZoom(): number | null;
     /** Reconfigures a live map (used to re-apply the gesture policy on a media change). */
     setOptions?(options: GoogleMapsMapOptions): void;
+    /** Fits the viewport to a bounds (admin consignment store map). Optional: core-only surface. */
+    fitBounds?(bounds: GoogleMapsLatLngBounds): void;
     addListener(event: string, handler: (...args: unknown[]) => void): GoogleMapsEventListener;
+}
+
+/** Marker instance surface used by the admin consignment map (info windows on click). */
+interface GoogleMapsMarker {
+    addListener?(event: string, handler: (...args: unknown[]) => void): GoogleMapsEventListener;
+}
+
+interface GoogleMapsLatLngBounds {
+    extend(point: GoogleLatLngLiteral): void;
+}
+
+interface GoogleMapsInfoWindow {
+    setContent(content: string): void;
+    open(options: { map: GoogleMapsMap; anchor?: unknown }): void;
+    close(): void;
 }
 
 interface GoogleGeocodeRequest {
@@ -130,7 +147,11 @@ interface GoogleMapsPlacesLibrary {
 interface GoogleMapsApi {
     maps: {
         Map: new (element: HTMLElement, options?: GoogleMapsMapOptions) => GoogleMapsMap;
-        Marker?: new (options: { map: GoogleMapsMap; position: { lat: number; lng: number }; title?: string }) => unknown;
+        Marker?: new (options: { map: GoogleMapsMap; position: { lat: number; lng: number }; title?: string }) => GoogleMapsMarker;
+        /** Optional: used by the admin consignment map to fit all store markers. */
+        LatLngBounds?: new () => GoogleMapsLatLngBounds;
+        /** Optional: store info popups on the admin consignment map. */
+        InfoWindow?: new () => GoogleMapsInfoWindow;
         /**
          * Optional on purpose: the class arrives with the `geocoding` library, so `google.maps`
          * can exist without it. Consumers await the loader's `loadGoogleMapsGeocoder()` instead

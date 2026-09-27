@@ -110,6 +110,14 @@ html[data-theme="dark"] .kasir-cart-empty-text { color: var(--night-text-muted);
 html[data-theme="dark"] .kasir-cart-item { background: var(--night-input) !important; }
 html[data-theme="dark"] .kasir-cart-item img { filter: none !important; }
 
+/* Sales & Titip Jual shell: additive night-mode only (mirrors the kasir block).
+   Layout/logic live in src/app/sales and src/components/sales. */
+html[data-theme="dark"] .sales-shell { background: var(--night-bg) !important; color: var(--night-text) !important; }
+html[data-theme="dark"] .sales-header { background: var(--night-surface) !important; border-color: rgba(212,175,55,.18) !important; color: var(--night-text); }
+html[data-theme="dark"] .sales-avatar { background: var(--night-surface-elevated) !important; color: var(--night-gold, #D4AF37) !important; }
+html[data-theme="dark"] .sales-card { background: var(--night-surface-elevated) !important; border-color: rgba(212,175,55,.18) !important; color: var(--night-text) !important; }
+html[data-theme="dark"] .sales-bottom-nav { background: var(--night-surface) !important; border-color: rgba(212,175,55,.18) !important; color: var(--night-text); }
+
 /* Kasir settings (/kasir/pengaturan): presentation only. Printer/theme/logout reuse existing engines. */
 .kasir-settings { max-width: 1280px; margin: 0 auto; padding: 22px 16px calc(96px + env(safe-area-inset-bottom)); color: var(--dark-text); }
 .kasir-settings-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; margin-bottom: 18px; }

@@ -62,16 +62,20 @@ export async function proxy(request: NextRequest) {
     const protectedAdminRoute = pathname.startsWith("/admin") && pathname !== "/admin/login";
     // "/kasir/login" is public; every other /kasir path needs a Supabase session.
     const protectedKasirRoute = isProtectedKasirPath(pathname);
+    // "/sales/login" is public; every other /sales path needs a Supabase session.
+    // Role/SalesPerson checks stay in the server layout guard (requireSales).
+    const protectedSalesRoute =
+        (pathname === "/sales" || pathname.startsWith("/sales/")) && pathname !== "/sales/login";
 
     // If not protecting this route, just forward the request
-    if (!protectedCustomerRoute && !protectedAdminRoute && !protectedKasirRoute) {
+    if (!protectedCustomerRoute && !protectedAdminRoute && !protectedKasirRoute && !protectedSalesRoute) {
         return response;
     }
 
     // Check if user exists in Supabase session
     if (!user) {
         const loginUrl = request.nextUrl.clone();
-        loginUrl.pathname = protectedKasirRoute ? KASIR_LOGIN_PATH : protectedAdminRoute ? "/admin/login" : "/login";
+        loginUrl.pathname = protectedKasirRoute ? KASIR_LOGIN_PATH : protectedSalesRoute ? "/sales/login" : protectedAdminRoute ? "/admin/login" : "/login";
         loginUrl.search = "";
         loginUrl.searchParams.set("next", pathname);
         

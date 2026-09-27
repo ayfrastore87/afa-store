@@ -17,6 +17,10 @@ runtimeUrl.searchParams.delete("sslmode");
 
 const adapter = new PrismaPg({
     connectionString: runtimeUrl.toString(),
+    max: 1,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
+    allowExitOnIdle: true,
     ssl: {
         ca,
         rejectUnauthorized: true,

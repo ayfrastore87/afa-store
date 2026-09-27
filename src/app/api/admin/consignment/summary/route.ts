@@ -44,6 +44,7 @@ export async function GET(request: Request) {
     const range = resolveRange(period, searchParams.get("from"), searchParams.get("to"));
     const visitedAt = Object.keys(range).length ? range : undefined;
 
+    try {
     const [activeStores, stockAgg, periodVisits, periodReturns, periodPayments, allSales, allPaid, todaySold, monthSold] = await Promise.all([
         prisma.consignmentStore.count({ where: { isActive: true } }),
         prisma.consignmentStock.aggregate({ _sum: { currentStock: true } }),
@@ -87,4 +88,12 @@ export async function GET(request: Request) {
         damaged: periodReturns._sum.quantityDamaged ?? 0,
         receivable: computeReceivable(allSales._sum.salesAmount ?? 0, allPaid._sum.amount ?? 0),
     });
+    } catch (error) {
+        console.error("consignment_query_failed", {
+            route: "/api/admin/consignment/summary",
+            code: error && typeof error === "object" && "code" in error ? error.code : undefined,
+            category: error instanceof Error ? error.name : "unknown",
+        });
+        return NextResponse.json({ message: "Terjadi kesalahan server." }, { status: 500 });
+    }
 }

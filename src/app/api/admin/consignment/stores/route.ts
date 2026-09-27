@@ -29,6 +29,7 @@ export async function GET(request: Request) {
     const search = (searchParams.get("search") ?? "").trim();
     const withCoordinates = searchParams.get("withCoordinates") === "1";
 
+    try {
     const stores = await prisma.consignmentStore.findMany({
         where: {
             ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
@@ -75,6 +76,14 @@ export async function GET(request: Request) {
             };
         }),
     });
+    } catch (error) {
+        console.error("consignment_query_failed", {
+            route: "/api/admin/consignment/stores",
+            code: error && typeof error === "object" && "code" in error ? error.code : undefined,
+            category: error instanceof Error ? error.name : "unknown",
+        });
+        return NextResponse.json({ message: "Terjadi kesalahan server." }, { status: 500 });
+    }
 }
 
 export async function POST(request: Request) {

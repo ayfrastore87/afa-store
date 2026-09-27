@@ -24,6 +24,7 @@ const createSchema = z.object({
 export async function GET() {
     if (!(await getCurrentAdmin())) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
+    try {
     const salespeople = await prisma.salesPerson.findMany({
         orderBy: { name: "asc" },
         select: {
@@ -69,6 +70,14 @@ export async function GET() {
             totalSettlement: paymentMap.get(sales.id)?._sum.amount ?? 0,
         })),
     });
+    } catch (error) {
+        console.error("consignment_query_failed", {
+            route: "/api/admin/consignment/salespeople",
+            code: error && typeof error === "object" && "code" in error ? error.code : undefined,
+            category: error instanceof Error ? error.name : "unknown",
+        });
+        return NextResponse.json({ message: "Terjadi kesalahan server." }, { status: 500 });
+    }
 }
 
 export async function POST(request: Request) {

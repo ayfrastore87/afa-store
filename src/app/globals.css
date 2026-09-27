@@ -2029,3 +2029,144 @@ html[data-theme="dark"] body .admin-shell .skeleton { background: linear-gradien
   .admin-stat, .admin-action, .admin-nav-item { transition: none !important; }
   .admin-stat:hover, .admin-action:hover { transform: none !important; }
 }
+
+/* ==========================================================================
+   Admin Dashboard — Mobile-compact layout  ≤640 px
+   Spec: 2-col KPI grid, compact stat cards, 3-col quick-actions (icon-top),
+         compact low-stock alert accent, compact account card.
+   All selectors are scoped to .admin-shell so light-mode public pages are
+   never affected. Night-mode variants reuse existing token rules above.
+   ========================================================================== */
+
+/* ── KPI grid: lock to 2-col on mobile (already grid-cols-2 in JSX) ── */
+@media (max-width: 640px) {
+  .admin-shell .admin-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  /* Compact KPI cards */
+  .admin-shell .admin-kpi-grid .admin-stat {
+    min-height: 100px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+  .admin-shell .admin-kpi-grid .admin-stat .admin-stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+  .admin-shell .admin-kpi-grid .admin-stat .admin-stat-value {
+    font-size: 22px;
+    margin-top: 2px;
+  }
+  .admin-shell .admin-kpi-grid .admin-stat .admin-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+  .admin-shell .admin-kpi-grid .admin-stat .admin-stat-hint {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  /* Ghost icon hidden on mobile (saves horizontal space) */
+  .admin-shell .admin-kpi-grid .admin-stat .admin-stat-ghost {
+    display: none !important;
+  }
+  /* Inner row: tighter gap on small cards */
+  .admin-shell .admin-kpi-grid .admin-stat [class*="flex items-start"] {
+    gap: 10px;
+    padding-right: 0;
+  }
+
+  /* Coral "low-stock" tile: prominent left-border accent */
+  .admin-shell .admin-kpi-grid [data-tone="coral"] {
+    border-left: 4px solid var(--stat-accent, #F0736A);
+  }
+  /* Blue "pending" tile: prominent left-border accent */
+  .admin-shell .admin-kpi-grid [data-tone="blue"] {
+    border-left: 4px solid var(--stat-accent, #4C8DF5);
+  }
+
+  /* ── Quick-actions: 3-col icon-top layout ── */
+  .admin-shell .admin-quick-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  /* Compact tile height */
+  .admin-shell .admin-quick-grid .admin-action {
+    min-height: 82px;
+    padding: 10px 8px;
+    border-radius: 14px;
+    gap: 6px;
+    /* Stack icon + label vertically */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  /* Icon-top: body becomes column */
+  .admin-shell .admin-quick-grid .admin-action .admin-action-body {
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+  }
+  .admin-shell .admin-quick-grid .admin-action .admin-action-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    flex-shrink: 0;
+  }
+  /* Smaller label text */
+  .admin-shell .admin-quick-grid .admin-action .admin-action-label {
+    font-size: 11px;
+    padding-top: 0;
+    line-height: 1.2;
+    text-align: center;
+    word-break: break-word;
+  }
+  /* Hide arrow on mobile compact tiles */
+  .admin-shell .admin-quick-grid .admin-action .admin-action-arrow {
+    display: none;
+  }
+
+  /* ── Account card: single-column compact ── */
+  .admin-shell .admin-account > div {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .admin-shell .admin-account .admin-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+  .admin-shell .admin-account .admin-account-email {
+    font-size: 12px;
+  }
+  /* Clock row: compact top-border on mobile */
+  .admin-shell .admin-account .admin-clock {
+    border-top: 1px solid rgba(24,77,71,.10);
+    border-left: none;
+    padding-top: 10px;
+    padding-left: 0;
+  }
+
+  /* ── Mobile header: compact height ── */
+  .admin-shell > header.lg\:hidden {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  /* ── Quick Card padding ── */
+  .admin-shell .admin-quick.\!p-4 {
+    padding: 12px !important;
+  }
+}
+
+/* ── Night-mode overrides for new mobile classes ── */
+html[data-theme="dark"] body .admin-shell .admin-kpi-grid [data-tone="coral"] {
+  border-left-color: rgba(240,115,106,.70);
+}
+html[data-theme="dark"] body .admin-shell .admin-kpi-grid [data-tone="blue"] {
+  border-left-color: rgba(76,141,245,.70);
+}

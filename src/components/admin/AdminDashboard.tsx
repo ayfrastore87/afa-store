@@ -700,7 +700,7 @@ function HomePanel({ summary, adminEmail }: { summary: { products: number; stock
 
     return (
         <div className="admin-stack flex flex-col gap-4 xl:gap-[18px]">
-            <section className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-[18px]" aria-label="Statistik toko">
+            <section className="admin-kpi-grid grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-[18px]" aria-label="Statistik toko" data-kpi-grid="true">
                 {items.map((item, index) => (
                     <motion.article key={item.label} initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: index * 0.04 }} data-tone={item.tone} className="admin-card admin-stat relative min-h-[126px] min-w-0 overflow-hidden rounded-[22px] border border-white/70 bg-white p-4 shadow-xl shadow-[#184D47]/8 xl:min-h-[132px] xl:px-5 xl:py-[18px]">
                         <span aria-hidden="true" className="admin-stat-wave" />
@@ -723,12 +723,12 @@ function HomePanel({ summary, adminEmail }: { summary: { products: number; stock
                     <div><p className="admin-label text-[11px] font-bold uppercase tracking-[0.3em] text-[#B8902F]">Quick Action</p><h3 className="admin-section-title text-[22px] font-black leading-tight xl:text-2xl">Aksi Cepat</h3></div>
                     <span className="admin-pill inline-flex items-center gap-2 rounded-full bg-[#0F4C45]/8 px-3.5 py-2 text-xs font-bold text-[#184D47]"><span aria-hidden="true" className="admin-dot h-2 w-2 rounded-full bg-[#2E8B57]" />Realtime</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-2.5 xl:gap-3.5">
+                <div className="admin-quick-grid grid grid-cols-3 gap-[10px] sm:grid-cols-3 lg:grid-cols-6 lg:gap-2.5 xl:gap-3.5">
                     {actions.map((action) => (
                         <Link key={action.label} href={action.href} data-tone={action.tone} className="admin-action group relative flex min-h-[104px] flex-col justify-between gap-2.5 overflow-hidden rounded-[18px] p-3.5 font-bold text-[#184D47] shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.97]">
-                            <div className="flex items-start gap-3">
+                            <div className="admin-action-body flex items-start gap-3">
                                 <span className="admin-action-icon grid h-10 w-10 shrink-0 place-items-center rounded-[12px] text-white shadow-md"><action.icon size={19} /></span>
-                                <span className="pt-0.5 text-[14px] leading-tight lg:text-[13px] xl:text-[14px]">{action.label}</span>
+                                <span className="admin-action-label pt-0.5 text-[14px] leading-tight lg:text-[13px] xl:text-[14px]">{action.label}</span>
                             </div>
                             <span aria-hidden="true" className="admin-action-arrow ml-auto grid h-7 w-7 place-items-center rounded-full bg-white/70 text-[#184D47] transition duration-300 group-hover:translate-x-0.5"><ArrowRight size={15} /></span>
                         </Link>

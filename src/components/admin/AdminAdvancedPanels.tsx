@@ -26,7 +26,7 @@ function toast(title: string, icon: "success" | "error" | "info" = "success") {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-    return <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className={`rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-xl shadow-[#184D47]/10 ${className}`}>{children}</motion.div>;
+    return <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className={`admin-advanced-card rounded-[1.75rem] border border-white/70 bg-white/90 p-5 shadow-xl shadow-[#184D47]/10 ${className}`}>{children}</motion.div>;
 }
 
 function exportCsv(filename: string, rows: Record<string, string | number | null | undefined>[]) {

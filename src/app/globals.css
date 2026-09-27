@@ -22,6 +22,7 @@
   --night-text: #F2EDE3;
   --night-text-secondary: #D8D2C5;
   --night-text-muted: #AAA394;
+  --night-placeholder: #929B94;
   --night-gold: #D4AF37;
   --night-gold-soft: #C9A45B;
 }
@@ -272,7 +273,7 @@ body[data-theme="dark"] {
   --surface-elevated: var(--night-surface-elevated);
   --surface-input: var(--night-input);
   --text-secondary: var(--night-text-secondary);
-  --text-placeholder: var(--night-text-muted);
+  --text-placeholder: var(--night-placeholder);
   background:
     radial-gradient(circle at 15% 10%, rgba(201, 164, 91, 0.10), transparent 28rem),
     linear-gradient(135deg, #061A13, #0A241A 52%, #0D2B20);
@@ -1983,6 +1984,36 @@ html[data-theme="dark"] body .admin-shell .admin-action {
   color: var(--night-text, #F8F5EE) !important;
 }
 html[data-theme="dark"] body .admin-shell .admin-action::after { opacity: .28; }
+
+/* Admin advanced panels include a few legacy light-mode utility classes.
+   Keep their light presentation intact and remap only the dark surface. */
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card {
+  background: var(--night-surface) !important;
+  border-color: rgba(212,175,55,.20) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card h1,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card h2,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card h3,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card h4,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card strong,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card td {
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card p,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card label,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card th {
+  color: var(--night-text-secondary) !important;
+}
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card :where(.bg-white, .bg-white\/90, .bg-white\/80) {
+  background-color: var(--night-input) !important;
+  color: var(--night-text) !important;
+}
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card .text-\[\#184D47\]\/60,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card .text-\[\#184D47\]\/70,
+html[data-theme="dark"] .admin-route-shell .admin-advanced-card .text-\[\#184D47\]\/50 {
+  color: var(--night-text-secondary) !important;
+}
 html[data-theme="dark"] body .admin-shell .admin-action-arrow { background: rgba(212,175,55,.14) !important; color: var(--night-gold, #D4AF37) !important; }
 html[data-theme="dark"] body .admin-shell .admin-pill { background: rgba(212,175,55,.12) !important; color: var(--night-text, #F8F5EE) !important; }
 html[data-theme="dark"] body .admin-shell .admin-clock { border-color: rgba(212,175,55,.18) !important; }

@@ -36,7 +36,10 @@ test("real Supabase public category URLs are accepted by Next Image and passed t
     assert.match(productImage, /new URL\(src\)/);
     assert.match(productImage, /url\.protocol === "http:" \|\| url\.protocol === "https:"/);
     assert.match(component, /ProductImage src=\{group\.imageUrl\}/);
-    assert.match(component, /object-cover/);
+    assert.match(component, /object-contain/);
+    assert.match(component, /p-1\.5 sm:p-2/);
+    assert.doesNotMatch(component, /object-cover/);
+    assert.doesNotMatch(component, /scale-105|scale-\[1\.02\]|transform.*scale/);
     assert.ok(source.startsWith("https://jaivvnxpbdiksuqzewdd.supabase.co/storage/v1/object/public/categories/"));
 });
 
@@ -58,6 +61,9 @@ test("category navigation uses compact responsive circular frames and preserves 
     assert.match(component, /border-\[#D4AF37\]\/30/);
     assert.match(component, /shadow-\[0_8px_20px/);
     assert.match(component, /hover:-translate-y-1/);
-    assert.match(component, /object-cover/);
+    assert.match(component, /object-contain/);
+    assert.match(component, /p-1\.5 sm:p-2/);
+    assert.doesNotMatch(component, /object-cover/);
+    assert.doesNotMatch(component, /scale-105|scale-\[1\.02\]|transform.*scale/);
     assert.doesNotMatch(component, /invert|grayscale|brightness-\[/);
 });

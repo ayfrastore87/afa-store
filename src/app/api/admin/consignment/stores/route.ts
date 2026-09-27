@@ -41,6 +41,7 @@ export async function GET(request: Request) {
             name: true,
             address: true,
             phone: true,
+            photoUrl: true,
             latitude: true,
             longitude: true,
             isActive: true,
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
             stocks: { select: { currentStock: true } },
             visits: {
                 where: { status: VISIT_STATUS_COMPLETED },
-                select: { salesAmount: true, totalSold: true, visitedAt: true },
+                select: { salesAmount: true, totalSold: true, visitedAt: true, status: true },
                 orderBy: { visitedAt: "desc" },
             },
             payments: { where: { status: PAYMENT_STATUS_VALID }, select: { amount: true } },
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
                 name: store.name,
                 address: store.address,
                 phone: store.phone,
+                photoUrl: store.photoUrl,
                 latitude: store.latitude,
                 longitude: store.longitude,
                 isActive: store.isActive,
@@ -73,6 +75,7 @@ export async function GET(request: Request) {
                 totalSold: store.visits.reduce((sum, visit) => sum + visit.totalSold, 0),
                 receivable: computeReceivable(totalSales, totalPaid),
                 lastVisitAt: store.visits[0]?.visitedAt ?? null,
+                visited: store.visits.length > 0,
             };
         }),
     });

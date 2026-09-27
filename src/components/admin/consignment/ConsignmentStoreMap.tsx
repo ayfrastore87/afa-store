@@ -1,127 +1,58 @@
 "use client";
-
-// Admin — full-page map of consignment stores that have coordinates. Uses the
-// singleton loadGoogleMaps()/getGoogleMapsApi() pair (never a second loader or
-// hardcoded key). Info windows show stock, receivable and assigned sales.
-
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Map as MapIcon } from "lucide-react";
-
-import { formatRupiah } from "@/components/sales/sales-shared";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
 import { getGoogleMapsApi, loadGoogleMaps } from "@/lib/google-maps-loader";
 
-type StoreMarker = {
-    id: string;
-    name: string;
-    address: string | null;
-    latitude: number | null;
-    longitude: number | null;
-    isActive: boolean;
-    salesName: string | null;
-    totalStock: number;
-    receivable: number;
-};
-
-function escapeHtml(value: string) {
-    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+type Store = { id: string; name: string; address: string | null; latitude: number | null; longitude: number | null; salesName: string | null; salesId: string | null; totalStock: number; photoUrl: string | null; visited: boolean; lastVisitAt: string | null };
+type MappedStore = Store & { latitude: number; longitude: number };
+type Filter = "all" | "sales" | "visited" | "unvisited" | "stock" | "empty";
+const esc = (value: string) => value.replace(/[&<>\"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] ?? c));
+const valid = (s: Store): s is MappedStore => s.latitude !== null && s.longitude !== null && Number.isFinite(s.latitude) && Number.isFinite(s.longitude) && Math.abs(s.latitude) <= 90 && Math.abs(s.longitude) <= 180;
 
 export function ConsignmentStoreMap() {
-    const [stores, setStores] = useState<StoreMarker[] | null>(null);
+    const [stores, setStores] = useState<Store[] | null>(null);
+    const [filter, setFilter] = useState<Filter>("all");
+    const [sales, setSales] = useState("");
     const [error, setError] = useState("");
-    const [mapError, setMapError] = useState("");
-    const mapRef = useRef<HTMLDivElement | null>(null);
-
+    const mapRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         let disposed = false;
-        fetch("/api/admin/consignment/stores?withCoordinates=1", { headers: { Accept: "application/json" }, cache: "no-store" })
-            .then(async (response) => {
-                const payload = await response.json().catch(() => null);
-                if (!response.ok) throw new Error(payload?.message || "Data toko gagal dimuat.");
-                if (!disposed) setStores((payload as { stores: StoreMarker[] }).stores);
-            })
-            .catch((err) => { if (!disposed) setError(getUserFacingMessage(err, "Data toko gagal dimuat.")); });
+        fetch("/api/admin/consignment/stores", { cache: "no-store" }).then(async r => { const p = await r.json(); if (!r.ok) throw new Error(p.message); if (!disposed) setStores(p.stores); }).catch(e => { if (!disposed) setError(getUserFacingMessage(e, "Data toko gagal dimuat.")); });
         return () => { disposed = true; };
     }, []);
-
+    const filtered = useMemo(() => (stores ?? []).filter(s => filter === "sales" ? s.salesId === sales : filter === "visited" ? s.visited : filter === "unvisited" ? !s.visited : filter === "stock" ? s.totalStock > 0 : filter === "empty" ? s.totalStock === 0 : true), [stores, filter, sales]);
     useEffect(() => {
-        if (!stores || stores.length === 0 || !mapRef.current) return;
+        const points = filtered.filter(valid);
+        if (!points.length || !mapRef.current) return;
         let disposed = false;
         const node = mapRef.current;
-        loadGoogleMaps()
-            .then(() => {
-                const api = getGoogleMapsApi();
-                if (disposed || !node || !api) return;
-                const points = stores.filter((store) => store.latitude !== null && store.longitude !== null);
-                if (points.length === 0) return;
-                const first = { lat: points[0].latitude as number, lng: points[0].longitude as number };
-                const map = new api.maps.Map(node, {
-                    center: first,
-                    zoom: 12,
-                    fullscreenControl: true,
-                    streetViewControl: false,
-                    mapTypeControl: false,
-                    gestureHandling: "greedy",
-                    clickableIcons: false,
+        loadGoogleMaps().then(() => {
+            const api = getGoogleMapsApi();
+            if (disposed || !api) return;
+            const map = new api.maps.Map(node, { center: { lat: points[0].latitude, lng: points[0].longitude }, zoom: 12 });
+            const bounds = api.maps.LatLngBounds ? new api.maps.LatLngBounds() : null;
+            const info = api.maps.InfoWindow ? new api.maps.InfoWindow() : null;
+            points.forEach(s => {
+                const position = { lat: s.latitude, lng: s.longitude };
+                bounds?.extend(position);
+                if (!api.maps.Marker) return;
+                const marker = new api.maps.Marker({ map, position, title: s.name });
+                if (typeof marker.addListener !== "function") return;
+                marker.addListener("click", () => {
+                    if (!info) return;
+                    const last = s.lastVisitAt ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(new Date(s.lastVisitAt)) : "Belum pernah";
+                    info.setContent(`<div style="min-width:220px"><strong>${esc(s.name)}</strong><div>${esc(s.address ?? "Alamat belum diisi")}</div><div>Sales: ${esc(s.salesName ?? "Belum ditugaskan")}</div><div>${s.visited ? "Sudah dikunjungi" : "Belum dikunjungi"}</div><div>Kunjungan terakhir: ${esc(last)}</div><div>Status stok: ${s.totalStock > 0 ? `${s.totalStock} pcs` : "Stok kosong"}</div>${s.photoUrl?.startsWith("https://") ? `<img src="${esc(s.photoUrl)}" alt="Foto toko" style="width:100%;height:90px;object-fit:cover"/>` : ""}<div><a href="https://www.google.com/maps/search/?api=1&query=${s.latitude},${s.longitude}" target="_blank" rel="noreferrer">Buka Google Maps</a> · <a href="/admin/titip-jual/toko/${encodeURIComponent(s.id)}">Detail Toko</a></div></div>`);
+                    info.open({ map, anchor: marker });
                 });
-                const bounds = api.maps.LatLngBounds ? new api.maps.LatLngBounds() : null;
-                const infoWindow = api.maps.InfoWindow ? new api.maps.InfoWindow() : null;
-                for (const store of points) {
-                    const position = { lat: store.latitude as number, lng: store.longitude as number };
-                    bounds?.extend(position);
-                    if (!api.maps.Marker) continue;
-                    const marker = new api.maps.Marker({ map, position, title: store.name });
-                    if (infoWindow && typeof marker.addListener === "function") {
-                        marker.addListener("click", () => {
-                            infoWindow.setContent(
-                                `<div style="font-family:inherit;min-width:180px">` +
-                                `<strong>${escapeHtml(store.name)}</strong>` +
-                                (store.address ? `<div style="font-size:12px;color:#555">${escapeHtml(store.address)}</div>` : "") +
-                                `<div style="margin-top:6px;font-size:13px">Stok titipan: <b>${store.totalStock} pcs</b></div>` +
-                                `<div style="font-size:13px">Piutang: <b>${escapeHtml(formatRupiah(store.receivable))}</b></div>` +
-                                `<div style="font-size:13px">Sales: <b>${escapeHtml(store.salesName ?? "Belum ditugaskan")}</b></div>` +
-                                `</div>`,
-                            );
-                            infoWindow.open({ map, anchor: marker });
-                        });
-                    }
-                }
-                if (bounds && points.length > 1 && typeof map.fitBounds === "function") map.fitBounds(bounds);
-            })
-            .catch((err) => { if (!disposed) setMapError(getUserFacingMessage(err, "Peta gagal dimuat.")); });
+            });
+            if (bounds && points.length > 1 && typeof map.fitBounds === "function") map.fitBounds(bounds);
+        }).catch(e => { if (!disposed) setError(getUserFacingMessage(e, "Peta gagal dimuat.")); });
         return () => { disposed = true; };
-    }, [stores]);
-
-    return (
-        <main className="min-h-screen bg-[#f7f4ec] px-4 py-8 text-[#17241d]">
-            <div className="mx-auto max-w-6xl">
-                <Link href="/admin/titip-jual" className="text-sm font-bold text-[#184C3A]">← Kembali ke Titip Jual</Link>
-
-                <header className="mt-4">
-                    <h1 className="flex items-center gap-2 text-2xl font-black text-[#123d2d]"><MapIcon size={22} className="text-[#D4AF37]" /> Peta Toko Titip Jual</h1>
-                    <p className="text-sm text-[#17241d]/60">Semua toko titipan dengan koordinat. Klik penanda untuk stok, piutang, dan sales.</p>
-                </header>
-
-                {error && <p className="mt-4 rounded-2xl border border-red-200 bg-white p-4 text-sm font-semibold text-red-700">{error}</p>}
-                {mapError && <p className="mt-4 rounded-2xl border border-red-200 bg-white p-4 text-sm font-semibold text-red-700">{mapError}</p>}
-
-                {!stores ? (
-                    <div className="mt-6 grid min-h-40 place-items-center"><Loader2 className="animate-spin text-[#184C3A]" /></div>
-                ) : stores.length === 0 ? (
-                    <p className="mt-6 rounded-2xl border border-dashed border-[#ded9cc] bg-white/60 p-10 text-center text-sm font-semibold text-[#17241d]/55">
-                        Belum ada toko dengan koordinat. Tambahkan latitude/longitude pada detail toko.
-                    </p>
-                ) : (
-                    <div
-                        ref={mapRef}
-                        role="application"
-                        aria-label="Peta semua toko titip jual"
-                        className="mt-5 h-[70vh] min-h-[420px] w-full overflow-hidden rounded-2xl border border-[#ded9cc] bg-[#f0ece0] shadow-sm"
-                    />
-                )}
-            </div>
-        </main>
-    );
+    }, [filtered]);
+    const mapped = stores?.filter(valid).length ?? 0;
+    const missing = stores?.filter(s => !valid(s)) ?? [];
+    const summaries = [["Total Toko", stores?.length ?? 0], ["Terpetakan", mapped], ["Belum Ada Lokasi", missing.length], ["Sudah Dikunjungi", stores?.filter(s => s.visited).length ?? 0], ["Belum Dikunjungi", stores?.filter(s => !s.visited).length ?? 0], ["Toko Dengan Stok", stores?.filter(s => s.totalStock > 0).length ?? 0]] as const;
+    return <main className="min-h-screen bg-[#f7f4ec] px-4 py-8 text-[#17241d]"><div className="mx-auto max-w-6xl"><Link href="/admin/titip-jual" className="font-bold text-[#184C3A]">← Kembali</Link><h1 className="mt-4 flex items-center gap-2 text-2xl font-black"><MapIcon /> Peta Sebaran Toko</h1>{error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}<div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-6">{summaries.map(([label, value]) => <div key={label} className="rounded-xl bg-white p-3"><p className="text-xs opacity-60">{label}</p><b>{value}</b></div>)}</div><div className="mt-4 flex flex-wrap gap-2"><select value={filter} onChange={e => setFilter(e.target.value as Filter)} className="rounded-xl border bg-white p-3"><option value="all">Semua</option><option value="sales">Sales</option><option value="visited">Sudah Dikunjungi</option><option value="unvisited">Belum Dikunjungi</option><option value="stock">Ada Stok</option><option value="empty">Stok Kosong</option></select>{filter === "sales" && <select value={sales} onChange={e => setSales(e.target.value)} className="rounded-xl border bg-white p-3"><option value="">Pilih Sales</option>{Array.from(new Map((stores ?? []).filter(s => s.salesId).map(s => [s.salesId!, s.salesName])).entries()).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>}</div>{!stores ? <Loader2 className="mt-8 animate-spin" /> : <><div ref={mapRef} className="mt-4 h-[65vh] min-h-[420px] rounded-2xl bg-[#eee9dc]" role="application" aria-label="Peta sebaran toko" />{filtered.filter(valid).length === 0 && <p className="mt-2 text-sm">Tidak ada toko terpetakan untuk filter ini.</p>}<section className="mt-5 rounded-2xl bg-white p-4"><h2 className="font-black">Toko Belum Memiliki Titik Lokasi ({missing.length})</h2><ul className="mt-2 list-disc pl-5 text-sm">{missing.map(s => <li key={s.id}>{s.name} · {s.salesName ?? "Belum ditugaskan"}</li>)}</ul></section></>}</div></main>;
 }

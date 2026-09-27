@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentSalesPerson } from "@/lib/server-auth";
@@ -85,4 +86,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         }),
         visits: store.visits,
     });
+}
+
+const locationSchema = z.object({
+    latitude: z.number().finite().min(-90).max(90),
+    longitude: z.number().finite().min(-180).max(180),
+}).strict();
+
+// Store coordinates are current store metadata, never a SalesVisit location.
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const current = await getCurrentSalesPerson();
+    if (!current) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const { id } = await params;
+    const parsed = locationSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ message: "Lokasi toko tidak valid." }, { status: 400 });
+    const store = await prisma.consignmentStore.findFirst({ where: { id, assignedSalesId: current.sales.id, isActive: true }, select: { id: true } });
+    if (!store) return NextResponse.json({ message: "Toko tidak ditemukan." }, { status: 404 });
+    const updated = await prisma.consignmentStore.update({ where: { id }, data: { latitude: parsed.data.latitude, longitude: parsed.data.longitude, mapsUrl: `https://www.google.com/maps/search/?api=1&query=${parsed.data.latitude},${parsed.data.longitude}` }, select: { id: true, latitude: true, longitude: true } });
+    return NextResponse.json({ store: updated });
 }

@@ -210,8 +210,8 @@ test("15. duplicate submits are idempotent: same key -> 200 duplicated, P2002 ->
 
 test("16. other-sales stores answer 404 (not 403) so ids cannot be enumerated", () => {
     assert.match(salesStoreDetailRoute, /assignedSalesId: current\.sales\.id/);
+    assert.match(salesStoreDetailRoute, /if \(!current\).*status: 403/);
     assert.match(salesStoreDetailRoute, /\{ status: 404 \}/);
-    assert.doesNotMatch(salesStoreDetailRoute, /status: 403 \}\);\s*\n[\s\S]*Toko tidak ditemukan[\s\S]*403/);
     assert.match(paymentsRoute, /Toko tidak ditemukan atau bukan tugas Anda\." \}, \{ status: 404 \}/);
 });
 

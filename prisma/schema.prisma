@@ -561,6 +561,7 @@ model ConsignmentStore {
   longitude       Float?
   mapsUrl         String?
   notes           String?
+  photoUrl        String?
   isActive        Boolean            @default(true)
   assignedSalesId String?
   assignedSales   SalesPerson?       @relation(fields: [assignedSalesId], references: [id], onDelete: SetNull)

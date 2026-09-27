@@ -14,6 +14,7 @@ import { CheckCircle2, ChevronLeft, Loader2, Minus, Plus, Store, MapPin, Camera 
 import { formatRupiah } from "./sales-shared";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
 import { optimizeSalesVisitImage } from "@/lib/sales-visit-image";
+import { SalesStoreRegistration } from "./SalesStoreRegistration";
 
 type StoreOption = { id: string; name: string; address: string | null; totalStock: number };
 
@@ -85,6 +86,7 @@ export function SalesVisitFlow() {
     const [photoUrl, setPhotoUrl] = useState<string | null>(null);
     const [photoPath, setPhotoPath] = useState<string | null>(null);
     const [photoStatus, setPhotoStatus] = useState("");
+    const [registeringStore, setRegisteringStore] = useState(false);
     // One idempotency key per confirmation screen: retrying after a network
     // error reuses it, so the server records the visit at most once.
     const idempotencyKeyRef = useRef<string>("");
@@ -280,11 +282,13 @@ export function SalesVisitFlow() {
             {step === "store" && (
                 <div className="space-y-3">
                     <p className="text-sm font-bold text-[#123524]/60">Pilih toko yang dikunjungi:</p>
+                    {!registeringStore && <button type="button" onClick={() => setRegisteringStore(true)} className="min-h-14 w-full rounded-2xl border-2 border-dashed border-[#D4AF37] bg-[#fffaf0] font-black text-[#184D47]">+ DAFTARKAN TOKO BARU</button>}
+                    {registeringStore && <SalesStoreRegistration onCreated={async (store) => { const response = await fetch("/api/sales/stores", { headers: { Accept: "application/json" }, cache: "no-store" }); const payload = await response.json().catch(() => null); if (!response.ok) { setError(payload?.message || "Toko berhasil dibuat, tetapi daftar toko gagal dimuat. Muat ulang lalu pilih toko tersebut."); return; } const refreshed = (payload as { stores: StoreOption[] }).stores; setStores(refreshed); setRegisteringStore(false); const created = refreshed.find((item) => item.id === store.id); if (created) selectStore(created.id, created.name); else setError("Toko berhasil dibuat, tetapi belum terlihat pada daftar toko. Coba muat ulang."); }} />}
                     {!stores && <div className="grid min-h-32 place-items-center"><Loader2 className="animate-spin text-[#184D47]" /></div>}
                     {stores?.length === 0 && (
                         <div className="sales-card grid place-items-center gap-2 rounded-2xl bg-white p-8 text-center">
                             <Store className="text-[#D4AF37]" />
-                            <p className="text-sm font-semibold text-[#123524]/55">Belum ada toko yang ditugaskan.</p>
+                            <p className="text-sm font-semibold text-[#123524]/55">Belum ada toko yang terdaftar untuk Anda. Jika sedang berada di toko baru, daftarkan toko langsung dari lokasi kunjungan.</p>
                         </div>
                     )}
                     {stores?.map((store) => (

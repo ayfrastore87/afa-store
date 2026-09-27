@@ -10,6 +10,7 @@ import { BarChart3, Loader2, Map, MapPin, Plus, Store, Users, Wallet } from "luc
 
 import { formatDateShort, formatRupiah } from "@/components/sales/sales-shared";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
+import { LocationCaptureControl, type CapturedLocation } from "@/components/maps/LocationCaptureControl";
 
 type Summary = {
     period: string;
@@ -48,7 +49,7 @@ const PERIODS = [
     ["month", "Bulan Ini"],
 ] as const;
 
-const emptyStoreForm = { name: "", ownerName: "", phone: "", address: "", latitude: "", longitude: "", assignedSalesId: "" };
+const emptyStoreForm = { name: "", ownerName: "", phone: "", address: "", assignedSalesId: "" };
 
 export function ConsignmentAdminPanel() {
     const [period, setPeriod] = useState<(typeof PERIODS)[number][0]>("today");
@@ -60,6 +61,7 @@ export function ConsignmentAdminPanel() {
     const [form, setForm] = useState(emptyStoreForm);
     const [formError, setFormError] = useState("");
     const [saving, setSaving] = useState(false);
+    const [location, setLocation] = useState<CapturedLocation | null>(null);
 
     const loadStores = useCallback(() => {
         fetch("/api/admin/consignment/stores", { headers: { Accept: "application/json" }, cache: "no-store" })
@@ -100,11 +102,6 @@ export function ConsignmentAdminPanel() {
         setSaving(true);
         setFormError("");
         try {
-            const latitude = form.latitude.trim() === "" ? null : Number(form.latitude);
-            const longitude = form.longitude.trim() === "" ? null : Number(form.longitude);
-            if ((latitude !== null && Number.isNaN(latitude)) || (longitude !== null && Number.isNaN(longitude))) {
-                throw new Error("Koordinat harus berupa angka.");
-            }
             const response = await fetch("/api/admin/consignment/stores", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -113,14 +110,16 @@ export function ConsignmentAdminPanel() {
                     ownerName: form.ownerName || undefined,
                     phone: form.phone || undefined,
                     address: form.address || undefined,
-                    latitude,
-                    longitude,
+                    latitude: location?.latitude ?? null,
+                    longitude: location?.longitude ?? null,
+                    mapsUrl: location ? `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}` : undefined,
                     assignedSalesId: form.assignedSalesId || null,
                 }),
             });
             const payload = await response.json().catch(() => null);
             if (!response.ok) throw new Error(payload?.message || "Toko gagal disimpan.");
             setForm(emptyStoreForm);
+            setLocation(null);
             setFormOpen(false);
             loadStores();
         } catch (err) {
@@ -214,12 +213,7 @@ export function ConsignmentAdminPanel() {
                             <label className="text-sm font-bold md:col-span-2">Alamat
                                 <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="mt-1 h-11 w-full rounded-xl border border-[#ded9cc] px-3 font-semibold" />
                             </label>
-                            <label className="text-sm font-bold">Latitude
-                                <input value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} placeholder="-6.2" className="mt-1 h-11 w-full rounded-xl border border-[#ded9cc] px-3 font-semibold" />
-                            </label>
-                            <label className="text-sm font-bold">Longitude
-                                <input value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} placeholder="106.8" className="mt-1 h-11 w-full rounded-xl border border-[#ded9cc] px-3 font-semibold" />
-                            </label>
+                            <div className="md:col-span-2"><LocationCaptureControl value={location} onChange={setLocation} /></div>
                             {formError && <p className="text-sm font-semibold text-red-600 md:col-span-2">{formError}</p>}
                             <button disabled={saving} className="min-h-11 rounded-xl bg-[#184C3A] font-black text-white disabled:opacity-60 md:col-span-2">
                                 {saving ? "Menyimpan..." : "SIMPAN TOKO"}

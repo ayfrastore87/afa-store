@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
-import AdminThemeToggle from "@/components/admin/AdminThemeToggle";
+import ProtectedAdminChrome from "@/components/admin/ProtectedAdminChrome";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +14,6 @@ export default async function ProtectedAdminLayout({
     await requireAdmin();
 
     return (
-        <div className="admin-route-shell">
-            <AdminThemeToggle />
-            {children}
-        </div>
+        <ProtectedAdminChrome>{children}</ProtectedAdminChrome>
     );
 }

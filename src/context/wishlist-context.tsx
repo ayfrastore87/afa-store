@@ -8,6 +8,7 @@ import {
     useMemo,
     useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import { hasAuthenticatedUser } from "@/lib/client-auth";
 
 export type WishlistItem = {
@@ -31,6 +32,8 @@ type WishlistContextValue = {
 const WishlistContext = createContext<WishlistContextValue | null>(null);
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
+    const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
     const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [toast, setToast] = useState("");
@@ -46,6 +49,11 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
     }, [showToast]);
 
     useEffect(() => {
+        if (isAdminRoute) {
+            setIsAuthenticated(false);
+            setWishlist([]);
+            return;
+        }
         let active = true;
         void hasAuthenticatedUser().then((authenticated) => {
             if (!active) return;
@@ -63,7 +71,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
             }
         });
         return () => { active = false; };
-    }, []);
+    }, [isAdminRoute]);
 
     useEffect(() => {
         if (!isAuthenticated) return;

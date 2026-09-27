@@ -9,6 +9,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import { parseJsonResponse } from "@/lib/api-fetch";
 import { calculateSubtotal, calculateTotalItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
@@ -73,6 +74,8 @@ async function requestCart(path = "/api/cart", init?: RequestInit): Promise<Cart
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
+    const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -136,8 +139,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     useEffect(() => {
+        // Customer cart state is not relevant to the admin surface. In particular,
+        // do not probe the customer-only cart endpoint with an admin session.
+        if (isAdminRoute) {
+            setCart([]);
+            setIsAuthenticated(false);
+            setLoading(false);
+            return;
+        }
         void refreshCart();
-    }, [refreshCart]);
+    }, [isAdminRoute, refreshCart]);
 
     const persistQty = useCallback((id: string, qty: number) => {
         const version = beginMutation(id, qty);

@@ -25,10 +25,15 @@ export default function CategoriesPage() {
 
     async function submit(event: FormEvent) {
         event.preventDefault(); setError(""); setBusy(true);
-        const response = await fetch(editing ? `/api/categories/${editing.id}` : "/api/categories", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, imageUrl, ...(editing ? { slug: editing.slug } : {}) }) });
-        const body = await response.json() as { error?: string };
-        if (!response.ok) setError(body.error ?? "Kategori gagal disimpan."); else { setName(""); setImageUrl(null); setEditing(null); await load(); }
-        setBusy(false);
+        try {
+            const response = await fetch(editing ? `/api/categories/${editing.id}` : "/api/categories", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, ...(imageUrl ? { imageUrl } : {}), ...(editing ? { slug: editing.slug } : {}) }) });
+            const body = await response.json() as { error?: string };
+            if (!response.ok) setError(body.error ?? "Kategori gagal disimpan."); else { setName(""); setImageUrl(null); setEditing(null); await load(); }
+        } catch {
+            setError("Kategori gagal disimpan. Periksa koneksi lalu coba lagi.");
+        } finally {
+            setBusy(false);
+        }
     }
 
     async function remove(category: Category) {

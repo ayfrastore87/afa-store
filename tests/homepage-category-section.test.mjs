@@ -47,10 +47,17 @@ test("fallback is limited to empty/invalid sources or a real image error, and sr
     assert.match(productImage, /useEffect\(\(\) => \{\s*setImageSrc\(safeImageSource\(src\)\);\s*setLoading\(true\);\s*\}, \[src\]\)/);
 });
 
-test("category cards use responsive image cards and preserve original image rendering in night mode", () => {
-    assert.match(component, /grid-cols-2/);
-    assert.match(component, /sm:grid-cols-3/);
-    assert.match(component, /lg:grid-cols-4/);
+test("category navigation uses compact responsive circular frames and preserves original image rendering in night mode", () => {
+    assert.match(component, /aspect-square/);
+    assert.match(component, /rounded-full/);
+    assert.match(component, /w-\[96px\]/);
+    assert.match(component, /sm:w-\[120px\]/);
+    assert.match(component, /lg:w-\[145px\]/);
+    assert.match(component, /max-w-\[900px\]/);
+    assert.match(component, /flex flex-wrap/);
+    assert.match(component, /border-\[#D4AF37\]\/30/);
+    assert.match(component, /shadow-\[0_8px_20px/);
+    assert.match(component, /hover:-translate-y-1/);
     assert.match(component, /object-cover/);
     assert.doesNotMatch(component, /invert|grayscale|brightness-\[/);
 });

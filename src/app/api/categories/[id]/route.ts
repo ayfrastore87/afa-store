@@ -22,9 +22,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const slug = typeof body.slug === "string" && body.slug.trim() ? body.slug.trim() : existing.slug;
     const duplicate = await prisma.category.findFirst({ where: { OR: [{ name }, { slug }], NOT: { id } }, select: { id: true } });
     if (duplicate) return NextResponse.json({ success: false, error: "Kategori sudah tersedia." }, { status: 409 });
-    const imageUrl = imageUrlValue(body.imageUrl);
-    if (imageUrl === undefined) return NextResponse.json({ success: false, error: "URL gambar kategori tidak valid." }, { status: 400 });
-    const category = await prisma.category.update({ where: { id }, data: { name, slug, imageUrl } });
+    const data: { name: string; slug: string; imageUrl?: string | null } = { name, slug };
+    if (Object.prototype.hasOwnProperty.call(body, "imageUrl")) {
+        const imageUrl = imageUrlValue(body.imageUrl);
+        if (imageUrl === undefined) return NextResponse.json({ success: false, error: "URL gambar kategori tidak valid." }, { status: 400 });
+        data.imageUrl = imageUrl;
+    }
+    const category = await prisma.category.update({ where: { id }, data });
     return NextResponse.json({ success: true, data: category });
 }
 

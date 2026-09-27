@@ -34,7 +34,7 @@ test("duplicate, empty-name, and in-use delete protections exist", () => {
     assert.match(itemRoute, /_count: \{ select: \{ products: true \} \}/);
 });
 test("admin UI supports create/edit/delete and reads the shared API", () => {
-    assert.match(page, /fetch\("\/api\/categories"\)/);
+    assert.match(page, /fetch\("\/api\/categories"/);
     assert.match(page, /Tambah Kategori/);
     assert.match(page, /window\.confirm/);
     assert.match(page, /_count\?\.products/);
@@ -49,4 +49,42 @@ test("products and catalog retain categoryId and Category.slug architecture", ()
 test("no schema migration or active category field was added", () => {
     assert.match(schema, /model Category/);
     assert.doesNotMatch(schema, /model Category[\s\S]*active\s+Boolean/);
+});
+test("category image uploads use storage URLs and edits preserve an existing image when omitted", () => {
+    const uploadClient = read("../src/lib/category-image-upload-client.ts");
+    const uploadRoute = read("../src/app/api/admin/categories/image/route.ts");
+    assert.match(uploadClient, /\/api\/admin\/categories\/image/);
+    assert.match(uploadRoute, /storage\.from\(BUCKET\)\.upload/);
+    assert.match(uploadRoute, /getPublicUrl\(path\)/);
+    assert.match(itemRoute, /hasOwnProperty\.call\(body, "imageUrl"\)/);
+    assert.match(itemRoute, /data\.imageUrl = imageUrl/);
+});
+
+test("category image upload is admin-only, signature-checked, and capped at 500 KB", () => {
+    const uploadRoute = read("../src/app/api/admin/categories/image/route.ts");
+    assert.match(uploadRoute, /getCurrentAdmin\(\)/);
+    assert.match(uploadRoute, /512000/);
+    assert.match(uploadRoute, /hasImageSignature/);
+    assert.match(uploadRoute, /image\/jpeg/);
+    assert.match(uploadRoute, /image\/png/);
+    assert.match(uploadRoute, /image\/webp/);
+    assert.match(uploadRoute, /upsert: false/);
+    assert.doesNotMatch(uploadRoute, /base64|SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("category uploader optimizes to centered 600px WebP before upload", () => {
+    const client = read("../src/lib/category-image-upload-client.ts");
+    const pageSource = read("../src/app/admin/(protected)/categories/page.tsx");
+    assert.match(client, /CATEGORY_IMAGE_SIZE = 600/);
+    assert.match(client, /image\/webp/);
+    assert.match(client, /512000/);
+    assert.match(client, /drawImage/);
+    assert.match(client, /quality of \[0\.85/);
+    assert.match(pageSource, /onDrop/);
+    assert.match(pageSource, /Memproses Gambar/);
+    assert.match(pageSource, /Mengunggah/);
+    assert.match(pageSource, /Simpan Kategori/);
+    assert.match(pageSource, /Ganti Gambar/);
+    assert.match(pageSource, /Belum ada gambar/);
+    assert.doesNotMatch(pageSource, /â†/);
 });

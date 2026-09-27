@@ -271,6 +271,7 @@
                      orderId={selectedOrderId}
                      isOpen={detailOpen}
                      onClose={() => setDetailOpen(false)}
+                      onArchived={() => setOrders((current) => current.filter((order) => order.id !== selectedOrderId))}
                  />
              )}
          </div>

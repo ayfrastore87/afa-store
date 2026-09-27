@@ -43,6 +43,9 @@
      paymentStatus?: string
  ): Prisma.OrderWhereInput {
      const where: Prisma.OrderWhereInput = {};
+      // Archived orders are hidden from operational lists by default. Reports
+      // intentionally do not use this helper, so historical totals remain stable.
+      where.deletedAt = null;
 
      if (search && search.trim()) {
          const q = search.trim();

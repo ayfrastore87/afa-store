@@ -2,6 +2,7 @@
 
  import { useEffect, useState } from "react";
  import { X, Loader2, AlertCircle } from "lucide-react";
+import Swal from "sweetalert2";
  import { OrderStatusBadge } from "./OrderStatusBadge";
  import { formatDate, formatRupiah } from "@/components/admin/kasir/kasir-shared";
 
@@ -45,12 +46,56 @@
      orderId: string;
      isOpen: boolean;
      onClose: () => void;
+    onArchived: () => void;
  }
 
- export function OrderDetail({ orderId, isOpen, onClose }: OrderDetailProps) {
+export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetailProps) {
      const [order, setOrder] = useState<OrderDetailData | null>(null);
      const [loading, setLoading] = useState(false);
      const [error, setError] = useState("");
+    const [archiving, setArchiving] = useState(false);
+
+    async function archiveOrder() {
+        if (archiving) return;
+        setArchiving(true);
+        try {
+            const result = await Swal.fire({
+                title: "Hapus pesanan?",
+                text: "Pesanan akan dihapus dari daftar aktif, tetapi riwayat transaksi tetap tersimpan untuk laporan.",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: "Hapus Pesanan",
+                cancelButtonText: "Batal",
+                confirmButtonColor: "#b91c1c",
+                cancelButtonColor: "#6b7280",
+                showLoaderOnConfirm: true,
+                allowOutsideClick: () => !Swal.isLoading(),
+                preConfirm: async () => {
+                    const response = await fetch(`/api/admin/orders/${orderId}`, { method: "DELETE" });
+                    const payload = await response.json().catch(() => null) as { message?: string } | null;
+                    if (!response.ok) {
+                        Swal.showValidationMessage(payload?.message || "Pesanan gagal diarsipkan");
+                        return undefined;
+                    }
+                    return payload;
+                },
+            });
+
+            if (!result.isConfirmed) return;
+            await Swal.fire({
+                title: "Pesanan berhasil diarsipkan",
+                icon: "success",
+                timer: 1800,
+                showConfirmButton: false,
+            });
+            onArchived();
+            onClose();
+        } catch (archiveError) {
+            setError(archiveError instanceof Error ? archiveError.message : "Pesanan gagal diarsipkan");
+        } finally {
+            setArchiving(false);
+        }
+    }
 
      useEffect(() => {
          if (!isOpen) return;
@@ -94,7 +139,15 @@
                          </button>
                      </div>
 
-                     {/* Content */}
+                      {order && (
+                          <div className="border-b border-gray-200 px-6 py-3 dark:border-gray-700">
+                              <button type="button" onClick={archiveOrder} disabled={archiving} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                                  {archiving ? "Mengarsipkan..." : "Hapus Pesanan"}
+                              </button>
+                          </div>
+                      )}
+
+                      {/* Content */}
                      <div className="px-6 py-4">
                          {loading && (
                              <div className="flex h-40 items-center justify-center">

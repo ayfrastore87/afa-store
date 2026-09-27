@@ -32,6 +32,7 @@ export async function GET(request: Request) {
     const limit = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 10) || 20));
 
     const where: Prisma.OrderWhereInput = {
+        deletedAt: null,
         source: { in: sourceParam ? [sourceParam] : [...KASIR_SOURCES] },
         ...(periodFrom ? { createdAt: { gte: periodFrom } } : {}),
         ...(q

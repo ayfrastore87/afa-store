@@ -125,6 +125,13 @@ export async function PATCH(request: Request) {
     const existing = await prisma.salesPerson.findUnique({ where: { id: body.id }, select: { id: true, userId: true } });
     if (!existing) return NextResponse.json({ message: "Sales tidak ditemukan." }, { status: 404 });
 
+    if (body.isActive === false) {
+        const assigned = await prisma.consignmentStore.count({ where: { assignedSalesId: existing.id, isActive: true } });
+        if (assigned > 0) {
+            return NextResponse.json({ message: "Pindahkan toko aktif terlebih dahulu sebelum menonaktifkan sales." }, { status: 409 });
+        }
+    }
+
     const sales = await prisma.$transaction(async (tx) => {
         if (existing.userId) {
             await tx.user.update({ where: { id: existing.userId }, data: { isActive: body.isActive as boolean } });

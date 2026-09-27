@@ -182,6 +182,7 @@ model Order {
   payment             Payment?
   checkoutIdempotency CheckoutIdempotency?
   publicToken         String?              @unique
+  deletedAt           DateTime?
 
   @@map("orders")
 }

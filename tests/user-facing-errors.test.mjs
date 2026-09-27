@@ -98,9 +98,11 @@ test("admin dashboard sanitizes payload-driven toasts", () => {
 });
 
 test("product detail buy-now sanitizes the API error field instead of echoing it", () => {
-    // The buy-now response body `error` is consumed only through safeApiMessage.
-    assert.match(productDetailCta, /safeApiMessage\(data\)/);
+    // Product detail delegates API error handling to the cart consumer and only renders
+    // fixed messages itself; raw response fields must never be echoed by this component.
+    assert.match(helper, /export function getUserFacingMessage/);
     assert.doesNotMatch(productDetailCta, /data\?\.error/);
+    assert.doesNotMatch(productDetailCta, /data\.message|error\.message/);
 });
 
 test("checkout order route returns concise Bahasa Indonesia instead of English/technical detail", () => {

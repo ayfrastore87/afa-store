@@ -10,6 +10,7 @@ const studio = read("../src/app/admin/(protected)/products/new/ProductCreationSt
 const studioCss = read("../src/app/admin/(protected)/products/new/studio.css");
 const legacy = read("../src/components/admin/AdminDashboard.tsx");
 const productRoute = read("../src/app/api/products/route.ts");
+const imageCrop = read("../src/lib/product-image-crop.ts");
 
 test("product create uses Supabase admin authorization with the required 401/403 contract", () => {
     assert.match(productRoute, /import \{ getCurrentAdmin, getCurrentUser \} from "@\/lib\/auth"/);
@@ -90,19 +91,23 @@ test("camera and gallery inputs are separate and camera requests the environment
 
 test("compression, WebP target, previews, crop, rotation, reset and deletion remain", () => {
     assert.match(studio, /const TARGET = 950_000/);
-    assert.match(studio, /canvas\.toBlob\(resolve, "image\/webp"/);
+    assert.match(studio, /canvas\.toBlob\(resolve, PRODUCT_IMAGE_TYPE,/);
+    assert.match(studio, /PRODUCT_IMAGE_TYPE/);
+    assert.match(imageCrop, /export const PRODUCT_IMAGE_TYPE\s*=\s*"image\/webp"/);
     assert.match(studio, /photo\.file\.size > 1024 \* 1024/);
     for (const marker of ["photo-frame", "product-preview", "Crop", "Putar kiri", "Putar kanan", "Reset editor", "Hapus foto produk"]) assert.match(studio, new RegExp(marker));
 });
 
 test("crop editor uses pointer interaction, square handles, bounds and cancel snapshot", () => {
     assert.match(studio, /onPointerMove=\{moveCrop\}/);
-    assert.match(studio, /onPointerDown=\{e => updateCrop\(e, "move"\)\}/);
+    assert.match(studio, /onPointerDown=\{updateCrop\}/);
+    assert.match(studio, /onPointerUp=\{endCrop\}/);
+    assert.match(studio, /onPointerCancel=\{endCrop\}/);
     assert.match(studio, /setPointerCapture\(event\.pointerId\)/);
-    assert.match(studio, /const min = 0\.2/);
-    assert.match(studio, /Math\.max\(0, Math\.min\(1 - next\.size/);
-    assert.match(studio, /Geser sudut crop kiri atas/);
-    assert.match(studio, /Geser sudut crop kanan bawah/);
+    assert.match(studio, /MAX_ZOOM = 3/);
+    assert.match(studio, /clamp\(.*-maxPanX, maxPanX\)/);
+    assert.match(studio, /crop\?\.panX \?\? 0/);
+    assert.match(studio, /crop\?\.panY \?\? 0/);
     assert.match(studioCss, /\.crop-preview[^}]*touch-action:none/);
     assert.match(studio, /setCropBeforeEdit\(initial\)/);
     assert.match(studio, /setCrop\(cropBeforeEdit\); setCropOpen\(false\)/);

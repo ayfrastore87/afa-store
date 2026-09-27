@@ -375,9 +375,10 @@ test("25. the refresh path can never create a shipment or reach POST /v1/orders"
     // The claim marker is only READ as a guard; the refresh never writes one.
     assert.match(getCode, /order\.biteshipOrderId\.startsWith\(CLAIM_PREFIX\)/);
     assert.doesNotMatch(getCode, /biteshipOrderId: `\$\{CLAIM_PREFIX\}/);
-    // It still synchronizes the EXISTING provider order, for an admin only.
+    // It still synchronizes the EXISTING provider order through the shared cashier/admin guard.
     assert.match(getCode, /const remote = await retrieveBiteshipOrder\(order\.biteshipOrderId\);/);
-    assert.match(getCode, /getCurrentAdmin\(\)/);
+    assert.match(getCode, /const cashier = await getCurrentCashier\(\);/);
+    assert.match(getCode, /if \(!cashier\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
 });
 
 // ---------------------------------------------------------------------------
@@ -404,8 +405,8 @@ test("26. no unverifiable Biteship webhook endpoint was added", () => {
 
 test("27. the only Biteship mutation entry point stays admin-guarded and claimed", () => {
     assert.match(biteshipRoute, /export async function POST\(/);
-    assert.match(code(biteshipRoute), /const admin = await getCurrentAdmin\(\);/);
-    assert.match(code(biteshipRoute), /if \(!admin\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
+    assert.match(code(biteshipRoute), /const cashier = await getCurrentCashier\(\);/);
+    assert.match(code(biteshipRoute), /if \(!cashier\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
     // Compare-and-set claim preserved verbatim (existing shipment idempotency stays intact).
     assert.match(biteshipRoute, /const CLAIM_PREFIX = "claim:";/);
     assert.match(biteshipRoute, /const claim = `\$\{CLAIM_PREFIX\}\$\{order\.id\}`;/);

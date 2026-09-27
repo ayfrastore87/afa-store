@@ -203,15 +203,19 @@ test("11. cashier history never polls Biteship", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. Admin authorization is still mandatory on both routes
+// 12. Authorization is still mandatory on both routes
 // ---------------------------------------------------------------------------
 
 test("12. optimized POS routes use the shared cashier/admin guard while shipment remains admin-only", () => {
-    assert.match(code(getHandler), /const admin = await getCurrentAdmin\(\);/);
-    assert.match(code(getHandler), /if \(!admin\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
+    assert.match(code(getHandler), /const cashier = await getCurrentCashier\(\);/);
+    assert.match(code(getHandler), /if \(!cashier\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
     assert.match(code(detailRoute), /const admin = await getCurrentCashier\(\);/);
     // One verification per request — never cached across users, never skipped.
-    assert.equal((code(biteshipRoute).match(/getCurrentAdmin\(\)/g) || []).length, 2, "one lookup per handler");
+    for (const handler of ["POST", "GET"]) {
+        const source = code(biteshipRoute).slice(code(biteshipRoute).indexOf(`export async function ${handler}(`));
+        assert.match(source, /const cashier = await getCurrentCashier\(\);/);
+        assert.match(source, /if \(!cashier\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
+    }
     assert.equal((code(detailRoute).match(/getCurrentCashier\(\)/g) || []).length, 1, "one lookup per request");
     for (const source of [kasirLib, shared, biteshipRoute]) {
         assert.doesNotMatch(code(source), /globalThis\.__admin|adminCache|cachedAdmin/i);
@@ -222,7 +226,7 @@ test("13. cashier authorization is role-scoped and inactive users are denied", (
     const serverAuth = read("../src/lib/server-auth.ts");
     assert.match(serverAuth, /user\.role === "admin" \|\| user\.role === "cashier"/);
     assert.match(serverAuth, /user\.isActive === false/);
-    assert.match(code(getHandler), /getCurrentAdmin\(\)/);
+    assert.match(code(getHandler), /getCurrentCashier\(\)/);
     assert.match(code(detailRoute), /getCurrentCashier\(\)/);
 });
 

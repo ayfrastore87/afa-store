@@ -446,9 +446,12 @@ test("13. shipping creation keeps the existing idempotent, admin-only workflow",
     for (const handler of ["POST", "GET"]) {
         assert.match(biteshipRoute, new RegExp(`export async function ${handler}\\(`));
     }
-    // Admin authorization on BOTH handlers; the browser never calls Biteship itself.
-    assert.equal((biteshipRoute.match(/getCurrentAdmin\(\)/g) || []).length, 2);
-    assert.equal((biteshipRoute.match(/status: 403/g) || []).length, 2);
+    // Shared cashier/admin authorization on BOTH handlers; the browser never calls Biteship itself.
+    for (const handler of ["POST", "GET"]) {
+        const source = biteshipRoute.slice(biteshipRoute.indexOf(`export async function ${handler}(`));
+        assert.match(source, /const cashier = await getCurrentCashier\(\);/);
+        assert.match(source, /if \(!cashier\) return NextResponse\.json\(\{ message: "Forbidden" \}, \{ status: 403 \}\);/);
+    }
     assert.match(shipmentActions, /method: kind === "create" \? "POST" : "GET"/);
     assert.doesNotMatch(code(shipmentActions), /BITESHIP_API_KEY|api\.biteship/);
     // The refresh path only reads an EXISTING provider order and never creates one.

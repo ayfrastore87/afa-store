@@ -72,6 +72,34 @@ test("category image upload is admin-only, signature-checked, and capped at 500 
     assert.doesNotMatch(uploadRoute, /base64|SUPABASE_SERVICE_ROLE_KEY/);
 });
 
+test("category image upload classifies configuration and storage failures without weakening auth", () => {
+    const uploadRoute = read("../src/app/api/admin/categories/image/route.ts");
+    const adminClient = read("../src/lib/supabase-admin.ts");
+    assert.match(uploadRoute, /getCurrentAdmin\(\)/);
+    assert.match(uploadRoute, /return NextResponse\.json\(\{ error: user \? "Forbidden" : "Unauthorized" \}/);
+    assert.match(uploadRoute, /storageFailure/);
+    assert.match(uploadRoute, /category === "configuration"/);
+    assert.match(uploadRoute, /bucket_not_found/);
+    assert.match(uploadRoute, /storage_permission/);
+    assert.match(uploadRoute, /\[category-image-upload\]/);
+    assert.match(uploadRoute, /status = category === "configuration" \? 500/);
+    assert.match(uploadRoute, /status = category === "configuration" \? 500 : category === "bucket_not_found" \? 503 : 502/);
+    assert.match(adminClient, /process\.env\.NEXT_PUBLIC_SUPABASE_URL/);
+    assert.match(adminClient, /process\.env\.SUPABASE_SERVICE_ROLE_KEY/);
+    assert.match(adminClient, /hasUrl: Boolean\(url\)/);
+    assert.match(adminClient, /hasServiceRoleKey: Boolean\(serviceRoleKey\)/);
+    assert.doesNotMatch(uploadRoute, /console\.log\([^)]*serviceRoleKey/);
+});
+
+test("category image upload uses the categories bucket and returns the derived public URL", () => {
+    const uploadRoute = read("../src/app/api/admin/categories/image/route.ts");
+    assert.match(uploadRoute, /const BUCKET = "categories"/);
+    assert.match(uploadRoute, /storage\.from\(BUCKET\)\.upload/);
+    assert.match(uploadRoute, /getPublicUrl\(path\)/);
+    assert.match(uploadRoute, /return NextResponse\.json\(\{ url: data\.publicUrl, path \}/);
+    assert.doesNotMatch(uploadRoute, /from\("products"\)|from\("sales-visits"\)/);
+});
+
 test("category uploader optimizes to centered 600px WebP before upload", () => {
     const client = read("../src/lib/category-image-upload-client.ts");
     const pageSource = read("../src/app/admin/(protected)/categories/page.tsx");

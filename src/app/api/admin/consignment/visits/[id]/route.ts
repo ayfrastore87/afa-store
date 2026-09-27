@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getCurrentAdmin } from "@/lib/server-auth";
+export const runtime = "nodejs";
+export async function GET(_r: Request,{params}:{params:Promise<{id:string}>}) { if (!(await getCurrentAdmin())) return NextResponse.json({message:"Forbidden"},{status:403}); const {id}=await params; const visit=await prisma.salesVisit.findUnique({where:{id},select:{id:true,visitedAt:true,latitude:true,longitude:true,locationAccuracy:true,locationCapturedAt:true,photoUrl:true,notes:true,salesAmount:true,store:{select:{name:true}},sales:{select:{name:true}},items:true,payments:{select:{amount:true,paymentMethod:true,reference:true,notes:true}}}}); if(!visit)return NextResponse.json({message:"Kunjungan tidak ditemukan."},{status:404}); return NextResponse.json({visit}); }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentSalesPerson } from "@/lib/server-auth";
@@ -39,12 +40,17 @@ const visitSchema = z.object({
         .object({
             amount: z.number().int().min(1).max(MAX_CONSIGNMENT_PAYMENT),
             method: z.string().trim(),
+            reference: z.string().trim().max(150).optional(),
+            notes: z.string().trim().max(500).optional(),
         })
         .nullable()
         .optional(),
     notes: z.string().trim().max(500).optional(),
-    latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional(),
+    latitude: z.number().finite().min(-90).max(90).optional(),
+    longitude: z.number().finite().min(-180).max(180).optional(),
+    locationAccuracy: z.number().finite().min(0).max(100000).optional(),
+    locationCapturedAt: z.string().datetime({ offset: true }).optional(),
+    photoPath: z.string().regex(/^sales-visits\/[a-zA-Z0-9_-]+\/[a-f0-9-]+\.webp$/).optional(),
     idempotencyKey: z.string().trim().max(128).optional(),
 });
 
@@ -68,6 +74,9 @@ export async function GET(request: Request) {
             status: true,
             store: { select: { id: true, name: true } },
             payments: { where: { status: PAYMENT_STATUS_VALID }, select: { amount: true, paymentMethod: true } },
+            latitude: true,
+            longitude: true,
+            photoUrl: true,
         },
     });
 
@@ -81,6 +90,9 @@ export async function GET(request: Request) {
             totalSupplied: visit.totalSupplied,
             salesAmount: visit.salesAmount,
             paidAmount: visit.payments.reduce((sum, payment) => sum + payment.amount, 0),
+            remainingReceivable: Math.max(0, visit.salesAmount - visit.payments.reduce((sum, payment) => sum + payment.amount, 0)),
+            hasLocation: visit.latitude !== null && visit.longitude !== null,
+            photoUrl: visit.photoUrl,
             status: visit.status,
         })),
     });
@@ -97,7 +109,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: parsed.error.issues[0]?.message || "Data kunjungan tidak valid." }, { status: 400 });
     }
 
-    const { storeId, payment, notes, latitude, longitude } = parsed.data;
+    const { storeId, payment, notes, latitude, longitude, locationAccuracy, locationCapturedAt, photoPath } = parsed.data;
     const idempotencyKey = normalizeIdempotencyKey(parsed.data.idempotencyKey);
 
     if (payment && !isConsignmentPaymentMethod(payment.method)) {
@@ -129,6 +141,13 @@ export async function POST(request: Request) {
     }
 
     try {
+        let photoUrl: string | null = null;
+        if (photoPath) {
+            if (!photoPath.startsWith(`sales-visits/${salesId}/`)) return NextResponse.json({ message: "Foto bukan milik Anda." }, { status: 403 });
+            const supabase = createSupabaseAdminClient();
+            const { data } = supabase.storage.from("sales-visits").getPublicUrl(photoPath);
+            photoUrl = data.publicUrl;
+        }
         const created = await prisma.$transaction(async (tx) => {
             // Ownership check INSIDE the transaction: only an active store that
             // is assigned to this sales person can receive a visit.
@@ -229,6 +248,9 @@ export async function POST(request: Request) {
                     visitedAt: now,
                     latitude: latitude ?? null,
                     longitude: longitude ?? null,
+                    locationAccuracy: locationAccuracy ?? null,
+                    locationCapturedAt: locationCapturedAt ? new Date(locationCapturedAt) : null,
+                    photoUrl,
                     notes: notes || null,
                     totalSold: totals.totalSold,
                     totalSupplied: totals.totalSupplied,
@@ -260,6 +282,8 @@ export async function POST(request: Request) {
                         visitId: visit.id,
                         amount: payment.amount,
                         paymentMethod: payment.method,
+                        reference: payment.reference || null,
+                        notes: payment.notes || null,
                         paymentDate: now,
                         status: PAYMENT_STATUS_VALID,
                     },
@@ -282,6 +306,9 @@ export async function POST(request: Request) {
             category: "sales_visit_create",
             name: error instanceof Error ? error.name : "UnknownError",
         });
+        if (parsed.success && parsed.data.photoPath) {
+            try { await createSupabaseAdminClient().storage.from("sales-visits").remove([parsed.data.photoPath]); } catch (cleanupError) { console.error("sales_visit_photo_cleanup_failed", { name: cleanupError instanceof Error ? cleanupError.name : "UnknownError" }); }
+        }
         return NextResponse.json({ message: "Kunjungan gagal disimpan. Silakan coba lagi." }, { status: 500 });
     }
 }

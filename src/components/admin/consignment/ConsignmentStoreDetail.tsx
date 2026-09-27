@@ -272,6 +272,7 @@ export function ConsignmentStoreDetail({ storeId }: { storeId: string }) {
                                         <p className="mt-1 text-[#17241d]/70">
                                             Terjual {visit.totalSold} pcs · Supply {visit.totalSupplied} pcs · {formatRupiah(visit.salesAmount)} (dibayar {formatRupiah(visit.paidAmount)})
                                         </p>
+                                        <Link href={`/admin/titip-jual/kunjungan/${visit.id}`} className="mt-2 inline-block font-black text-[#184C3A] hover:underline">Lihat Detail</Link>
                                     </li>
                                 ))}
                             </ul>

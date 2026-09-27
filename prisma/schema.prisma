@@ -610,6 +610,8 @@ model SalesVisit {
   visitedAt      DateTime         @default(now())
   latitude       Float?
   longitude      Float?
+  locationAccuracy   Float?
+  locationCapturedAt DateTime?
   notes          String?
   photoUrl       String?
   totalSold      Int              @default(0)

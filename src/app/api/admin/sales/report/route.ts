@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
 import { periodStart, REPORT_PERIODS, type ReportPeriod } from "@/lib/admin-report";
 import { wibStartOfDay } from "@/lib/wib";
+import { getRevenue } from "@/lib/revenue";
 
 export const runtime = "nodejs";
 
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
     const where: Prisma.OrderWhereInput = from ? { createdAt: { gte: from } } : {};
 
     try {
-        const [orderAgg, itemAgg, groupRows, itemsForTop, customerIds, methodRows, chartRows, recentRows, sourceRows] =
+        const [orderAgg, itemAgg, groupRows, itemsForTop, customerIds, methodRows, chartRows, recentRows, sourceRows, revenueResult] =
             await Promise.all([
                 prisma.order.aggregate({
                     where,
@@ -138,10 +139,11 @@ export async function GET(request: Request) {
                     take: 50,
                 }),
                 prisma.order.groupBy({ by: ["source"], where, _count: { _all: true }, _sum: { total: true } }),
+                getRevenue(period),
             ]);
 
         const transactionCount = orderAgg._count._all;
-        const revenue = orderAgg._sum.total ?? 0;
+        const revenue = revenueResult.totalRevenue;
         const itemsSold = itemAgg._sum.quantity ?? 0;
 
         const grouped: Record<string, number> = { Selesai: 0, Diproses: 0, Dibatalkan: 0 };
@@ -200,6 +202,14 @@ export async function GET(request: Request) {
                 completed: grouped.Selesai,
                 pending: grouped.Diproses,
                 cancelled: grouped.Dibatalkan,
+            },
+            revenue: {
+                customer: revenueResult.customerRevenue,
+                cashier: revenueResult.cashierRevenue,
+                sales: revenueResult.salesRevenue,
+                total: revenueResult.totalRevenue,
+                salesCashReceived: revenueResult.salesCashReceived,
+                salesReceivable: revenueResult.salesReceivable,
             },
             topProducts,
             customers: { total: customerUserIds.length, newCount, returningCount },

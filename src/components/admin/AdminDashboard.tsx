@@ -287,14 +287,16 @@ export default function AdminPage() {
     const [couriers, setCouriers] = useState<string[]>(DEFAULT_COURIERS);
     // New state for tracking pending stock adjustments per product
     const [pendingProductIds, setPendingProductIds] = useState<Set<string>>(new Set());
+    const [monthlyRevenue, setMonthlyRevenue] = useState(0);
 
     const loadData = useCallback(async () => {
         setLoading(true);
-        const [productRes, orderRes, categoryRes, courierRes] = await Promise.all([
+        const [productRes, orderRes, categoryRes, courierRes, revenueRes] = await Promise.all([
             supabase.from("products").select("*").eq("isActive", true).order("createdAt", { ascending: false }),
             supabase.from("orders").select("*, items:order_items(name, quantity, productId)").order("createdAt", { ascending: false }),
             fetch("/api/categories").then((response) => response.json() as Promise<{ data?: { id: string; name: string }[] }>),
             supabase.from("settings").select("value").eq("key", "couriers").maybeSingle(),
+            fetch("/api/admin/sales/report?period=bulan", { cache: "no-store" }).then((response) => response.json()).catch(() => ({})),
         ]);
 
         if (productRes.error) {
@@ -309,6 +311,7 @@ export default function AdminPage() {
         setOrders((orderRes.data ?? []) as Order[]);
         setCategories(categoryRes.data ?? []);
         if (!courierRes.error) setCouriers(parseCouriers(courierRes.data?.value));
+        setMonthlyRevenue(Number(revenueRes?.revenue?.total ?? 0));
         setLoading(false);
     }, []);
 
@@ -361,11 +364,11 @@ export default function AdminPage() {
             products: products.length,
             stock: products.reduce((sum, product) => sum + Number(product.stock || 0), 0),
             orders: orders.length,
-            revenueToday: orders.filter((order) => order.createdAt?.slice(0, 10) === today).reduce((sum, order) => sum + Number(order.total || 0), 0),
+            revenueToday: monthlyRevenue,
             lowStock: products.filter((product) => Number(product.stock || 0) > 0 && Number(product.stock || 0) <= 10).length,
             pending: orders.filter((order) => ["Menunggu", "Pending", "pending", "Belum Bayar"].includes(order.status)).length,
         };
-    }, [orders, products]);
+    }, [monthlyRevenue, orders, products]);
 
     function updateForm(field: keyof ProductForm, value: string | boolean) {
         setForm((current) => ({ ...current, [field]: value, ...(field === "name" ? { slug: slugify(String(value)) } : {}) }));

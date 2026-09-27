@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, ChevronLeft, ChevronRight, Heart, LayoutGrid, Search, ShoppingCart, SlidersHorizontal, Star, User, X } from "lucide-react";
+import { ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Heart, LayoutGrid, Search, ShoppingCart, SlidersHorizontal, Star, User, X } from "lucide-react";
 import { CatalogProductCard } from "@/components/catalog/catalog-product-card";
 import ThemeToggle from "@/components/theme-toggle";
 import FloatingWhatsApp from "@/components/floating-whatsapp";
@@ -498,42 +498,19 @@ function PageArrow({ direction, disabled, href, large }: { direction: "prev" | "
     );
 }
 function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogCategory[]; activeSlug: string; query: CatalogQuery }) {
-    const scrollerRef = useRef<HTMLDivElement | null>(null);
-    const [overflowing, setOverflowing] = useState(false);
-
-    useEffect(() => {
-        const element = scrollerRef.current;
-        if (!element) return;
-        const check = () => setOverflowing(element.scrollWidth > element.clientWidth + 4);
-        check();
-        window.addEventListener("resize", check);
-        return () => window.removeEventListener("resize", check);
-    }, [categories.length]);
-
-    const scrollBy = (amount: number) => scrollerRef.current?.scrollBy({ left: amount, behavior: "smooth" });
-
     return (
-        <section aria-labelledby="kategori-pilihan" className="catalog-category-section scroll-mt-[76px] overflow-visible rounded-2xl border border-[#C9A45B]/15 bg-white p-4 shadow-[0_8px_24px_rgba(18,53,36,0.04)] sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
+        <section aria-labelledby="kategori-pilihan" className="catalog-category-section scroll-mt-[76px] rounded-2xl border border-[#C9A45B]/15 bg-white p-4 shadow-[0_8px_24px_rgba(18,53,36,0.04)] sm:p-6">
+            <div className="flex flex-col gap-5 sm:gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#A7833A]">Kategori Pilihan</p>
-                    <div className="flex items-end justify-between gap-3">
-                        <h2 id="kategori-pilihan" className="mt-1 font-display text-xl font-bold text-[#123524] sm:text-2xl">Belanja per Kategori</h2>
-                        <Link href="/produk" scroll={false} className="shrink-0 rounded-md px-1 py-1 text-xs font-bold text-[#D4AF37] transition hover:text-[#E4C982] sm:text-sm">Lihat Semua Produk&nbsp; ?</Link>
-                    </div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#C9A45B]">KOLEKSI AFA STORE</p>
+                    <h2 id="kategori-pilihan" className="mt-2 font-display text-2xl font-bold text-[#123524] sm:text-3xl">Temukan Favorit Anda</h2>
+                    <p className="mt-2 max-w-md text-sm leading-relaxed text-[#6D6558]">Pilih kategori dan temukan produk pilihan untuk setiap kebutuhan.</p>
                 </div>
-                {overflowing && (
-                    <div className="hidden items-center gap-1.5 sm:flex">
-                        <button type="button" onClick={() => scrollBy(-320)} aria-label="Kategori sebelumnya" className="grid h-9 w-9 place-items-center rounded-full border border-[#C9A45B]/30 bg-white text-[#123524] transition hover:bg-[#F8F5EE]">
-                            <ChevronLeft size={18} />
-                        </button>
-                        <button type="button" onClick={() => scrollBy(320)} aria-label="Kategori berikutnya" className="grid h-9 w-9 place-items-center rounded-full border border-[#C9A45B]/30 bg-white text-[#123524] transition hover:bg-[#F8F5EE]">
-                            <ChevronRight size={18} />
-                        </button>
-                    </div>
-                )}
+                <Link href="/produk" scroll={false} className="inline-flex w-fit items-center gap-2 rounded-full bg-[#123524] px-4 py-2.5 text-sm font-semibold text-[#FBF4E8] shadow-[0_8px_18px_rgba(18,53,36,0.16)] transition duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:shadow-[0_10px_22px_rgba(18,53,36,0.22)] lg:mb-1">
+                    Jelajahi Semua Produk <ArrowRight size={16} aria-hidden="true" />
+                </Link>
             </div>
-            <div ref={scrollerRef} className="catalog-tiles flex snap-x gap-3 overflow-x-auto pb-1">
+            <div className="catalog-tiles mt-6 flex flex-wrap gap-3 sm:gap-4">
                 {categories.map((category) => {
                     const active = activeSlug === category.slug;
                     return (
@@ -542,10 +519,10 @@ function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogC
                             href={buildCatalogHref(query, { category: active ? "" : category.slug, page: 1 })}
                             scroll={false}
                             aria-current={active ? "true" : undefined}
-                            className={`catalog-category-card night-category-card group flex w-[116px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border p-3 text-center transition sm:w-[132px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
+                            className={`catalog-category-card night-category-card group flex w-[104px] flex-col items-center gap-2 rounded-xl border p-2.5 text-center transition sm:w-[116px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
                         >
-                            <span className="night-category-image-stage night-category-media-surface relative grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-[#FBF4E8] sm:h-[72px] sm:w-[72px]">
-                                <ProductImage src={category.image} alt={category.name} sizes="72px" imgClassName="p-1.5" />
+                            <span className="night-category-image-stage night-category-media-surface relative grid h-16 w-16 place-items-center overflow-hidden rounded-full border border-[#C9A45B]/35 bg-[#FBF4E8] sm:h-[68px] sm:w-[68px]">
+                                <ProductImage src={category.image} alt={category.name} sizes="68px" imgClassName="rounded-full object-cover" />
                             </span>
                             <span className={`line-clamp-2 text-xs font-semibold leading-tight ${active ? "text-[#123524]" : "text-[#5c5346] group-hover:text-[#123524]"}`}>{category.name}</span>
                         </Link>

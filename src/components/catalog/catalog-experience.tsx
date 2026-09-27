@@ -510,7 +510,7 @@ function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogC
                     Jelajahi Semua Produk <ArrowRight size={16} aria-hidden="true" />
                 </Link>
             </div>
-            <div className="catalog-tiles mt-6 flex flex-wrap gap-3 sm:gap-4">
+            <div className="catalog-tiles mt-5 flex snap-x snap-proximity flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:none] sm:mt-6 sm:flex-wrap sm:overflow-visible sm:pb-0 sm:gap-4 [&::-webkit-scrollbar]:hidden">
                 {categories.map((category) => {
                     const active = activeSlug === category.slug;
                     return (
@@ -519,10 +519,10 @@ function CategoryTiles({ categories, activeSlug, query }: { categories: CatalogC
                             href={buildCatalogHref(query, { category: active ? "" : category.slug, page: 1 })}
                             scroll={false}
                             aria-current={active ? "true" : undefined}
-                            className={`catalog-category-card night-category-card group flex w-[104px] flex-col items-center gap-2 rounded-xl border p-2.5 text-center transition sm:w-[116px] ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
+                            className={`catalog-category-card night-category-card group flex w-[78px] shrink-0 snap-start flex-col items-center gap-1.5 rounded-xl border p-2 text-center transition sm:w-[116px] sm:shrink sm:gap-2 sm:p-2.5 ${active ? "border-[#C9A45B] bg-[#F8F5EE] shadow-sm" : "border-[#C9A45B]/15 bg-white hover:border-[#C9A45B]/40"}`}
                         >
-                            <span className="night-category-image-stage night-category-media-surface relative grid h-16 w-16 place-items-center overflow-hidden rounded-full border border-[#C9A45B]/35 bg-[#FBF4E8] sm:h-[68px] sm:w-[68px]">
-                                <ProductImage src={category.image} alt={category.name} sizes="68px" imgClassName="rounded-full object-cover" />
+                            <span className="night-category-image-stage night-category-media-surface relative grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-[#C9A45B]/35 bg-[#FBF4E8] sm:h-[68px] sm:w-[68px]">
+                                <ProductImage src={category.image} alt={category.name} sizes="68px" imgClassName="rounded-full object-contain" />
                             </span>
                             <span className={`line-clamp-2 text-xs font-semibold leading-tight ${active ? "text-[#123524]" : "text-[#5c5346] group-hover:text-[#123524]"}`}>{category.name}</span>
                         </Link>

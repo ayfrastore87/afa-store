@@ -23,7 +23,10 @@ test("product category tiles remain dynamic, filter-aware, and active-state awar
     assert.match(header, /activeSlug === category\.slug/);
     assert.match(header, /active \? "border-\[#C9A45B\] bg-\[#F8F5EE\]/);
     assert.match(header, /rounded-full/);
-    assert.match(header, /object-cover/);
-    assert.match(header, /flex flex-wrap/);
+    assert.match(header, /object-contain/);
+    assert.match(header, /flex snap-x snap-proximity flex-nowrap/);
+    assert.match(header, /overflow-x-auto/);
+    assert.match(header, /overscroll-x-contain/);
+    assert.match(header, /shrink-0 snap-start/);
     assert.doesNotMatch(header, /grayscale|invert|filter:/);
 });

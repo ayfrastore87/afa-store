@@ -57,7 +57,10 @@ test("category navigation uses compact responsive circular frames and preserves 
     assert.match(component, /sm:w-\[120px\]/);
     assert.match(component, /lg:w-\[145px\]/);
     assert.match(component, /max-w-\[900px\]/);
-    assert.match(component, /flex flex-wrap/);
+    assert.match(component, /flex snap-x snap-proximity flex-nowrap/);
+    assert.match(component, /overflow-x-auto/);
+    assert.match(component, /overscroll-x-contain/);
+    assert.match(component, /shrink-0 snap-start/);
     assert.match(component, /border-\[#D4AF37\]\/30/);
     assert.match(component, /shadow-\[0_8px_20px/);
     assert.match(component, /hover:-translate-y-1/);

@@ -201,20 +201,12 @@ export function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
         let data: AuthApiResponse = {};
 
         try {
-            if (mode === "login") {
-                console.log("Login request started");
-            }
-
             response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
                 signal: controller.signal,
             });
-
-            if (mode === "login") {
-                console.log("Login response received", { ok: response.ok, status: response.status });
-            }
 
             data = parseSafeBody(await response.text());
         } catch (error) {

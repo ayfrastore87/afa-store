@@ -68,6 +68,49 @@ test("AdminAdvancedPanels: image upload + revalidate + pendingDeletes", () => {
     assert.ok(content.includes("flushPendingDeletes"), "Must flush pending deletes");
 });
 
+test("AdminAdvancedPanels: save() uses PATCH /api/admin/settings (not direct supabase upsert)", () => {
+    const content = read("components/admin/AdminAdvancedPanels.tsx");
+    // Must use the secure server-side API — anon browser upsert fails in production due to RLS
+    assert.ok(
+        content.includes('fetch("/api/admin/settings"') || content.includes("fetch('/api/admin/settings'"),
+        "save() must call /api/admin/settings PATCH endpoint"
+    );
+    assert.ok(
+        content.includes('"PATCH"') || content.includes("'PATCH'"),
+        "save() must use PATCH method"
+    );
+    // Must NOT use direct browser-side supabase upsert for settings save
+    assert.ok(
+        !content.includes('supabase.from("settings").upsert'),
+        "Must NOT use browser supabase upsert for settings (causes RLS failure in production)"
+    );
+});
+
+test("admin settings API route: exists with GET + PATCH + admin guard + service role write", () => {
+    const content = read("app/api/admin/settings/route.ts");
+    assert.ok(content.includes("export async function GET"), "Must export GET");
+    assert.ok(content.includes("export async function PATCH"), "Must export PATCH");
+    assert.ok(content.includes("getCurrentAdmin"), "Must guard with getCurrentAdmin");
+    assert.ok(content.includes("VALID_KEYS"), "Must have VALID_KEYS whitelist");
+    assert.ok(content.includes("createSupabaseAdminClient"), "Must use service role client for writes");
+    assert.ok(
+        content.includes('revalidateTag("settings"'),
+        "Must revalidate settings tag after save"
+    );
+    assert.ok(
+        content.includes('revalidatePath("/", "layout")'),
+        "Must revalidate layout path after save"
+    );
+    // Server-side log with safe fields only
+    assert.ok(
+        content.includes("[admin-settings-save]"),
+        "Must have structured server log prefix"
+    );
+    // Must NOT expose secrets
+    assert.ok(!content.includes("SERVICE_ROLE_KEY"), "Must not expose service role key in response");
+    assert.ok(!content.includes("stack"), "Must not include stack trace in response");
+});
+
 test("settings-image-upload-client: core exports and safety guards", () => {
     const content = read("lib/settings-image-upload-client.ts");
     assert.ok(content.includes("export async function optimizeSettingsImage"), "Must export optimizeSettingsImage");

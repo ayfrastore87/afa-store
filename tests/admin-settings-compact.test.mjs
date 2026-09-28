@@ -167,8 +167,13 @@ test("save handler uses existing settingSchema.safeParse", () => {
     assert.ok(tsx.includes("settingSchema.safeParse(values)"), "settingSchema.safeParse missing");
 });
 
-test("save handler uses supabase upsert (UNCHANGED API)", () => {
-    assert.ok(tsx.includes('.upsert(rows, { onConflict: "key" })'), "supabase upsert unchanged");
+test("save handler does NOT use browser supabase upsert (moved to server API)", () => {
+    // Direct browser supabase upsert fails in production due to RLS on anon key.
+    // The save now goes through PATCH /api/admin/settings (service-role server write).
+    assert.ok(
+        !tsx.includes('supabase.from("settings").upsert'),
+        "save() must not use browser supabase.upsert — use PATCH /api/admin/settings instead"
+    );
 });
 
 test("save handler uses getUserFacingMessage for errors", () => {
@@ -294,9 +299,18 @@ test("settingSchema unchanged (z.record validation)", () => {
     assert.ok(tsx.includes("z.record(z.string(), z.union([z.string(), z.boolean()]))"), "settingSchema changed");
 });
 
-test("no new API routes created (no fetch('/api/admin/settings'))", () => {
-    assert.ok(!tsx.includes("fetch('/api/admin/settings')"), "new API route unexpectedly added");
-    assert.ok(!tsx.includes('fetch("/api/admin/settings")'), "new API route unexpectedly added");
+test("save() uses secure PATCH /api/admin/settings endpoint (server-side write)", () => {
+    // The compact redesign previously guarded against adding this route.
+    // The settings e2e fix now requires it: direct browser supabase upsert fails
+    // in production due to RLS/write restrictions on anon key.
+    assert.ok(
+        tsx.includes('fetch("/api/admin/settings"') || tsx.includes("fetch('/api/admin/settings'"),
+        "save() must call /api/admin/settings PATCH instead of direct supabase.upsert"
+    );
+    assert.ok(
+        tsx.includes('"PATCH"') || tsx.includes("'PATCH'"),
+        "fetch call must use PATCH method"
+    );
 });
 
 test("no Prisma references added to SettingsPanel", () => {

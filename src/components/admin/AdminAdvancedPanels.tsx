@@ -851,23 +851,36 @@ export function SettingsPanel() {
         setDirty(true);
     }
 
-    // ── Save (UNCHANGED) ──────────────────────────────────────────────────────
+    // ── Save — uses server-side PATCH /api/admin/settings (service-role write) ──
     async function save(event: FormEvent) {
         event.preventDefault();
         const parsed = settingSchema.safeParse(values);
         if (!parsed.success) return toast("Pengaturan tidak valid", "error");
         setSaving(true);
-        const rows = Object.entries(values).map(([key, value]) => ({ key, value: { value } }));
-        const res = await supabase.from("settings").upsert(rows, { onConflict: "key" });
-        setSaving(false);
-        if (res.error) {
-            console.error("Pengaturan gagal disimpan", res.error);
-            return toast(getUserFacingMessage(res.error, "Pengaturan gagal disimpan. Silakan coba lagi."), "error");
+        try {
+            const res = await fetch("/api/admin/settings", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(values),
+            });
+            setSaving(false);
+            if (!res.ok) {
+                let errMsg = "Pengaturan gagal disimpan. Silakan coba lagi.";
+                try {
+                    const data = await res.json() as { error?: string };
+                    if (typeof data.error === "string" && data.error) errMsg = data.error;
+                } catch { /* ignore parse error */ }
+                console.error("[admin-settings-save]", { status: res.status });
+                return toast(errMsg, "error");
+            }
+            setDirty(false);
+            toast("Pengaturan tersimpan");
+            void revalidatePublicCache();
+            void flushPendingDeletes();
+        } catch (err) {
+            setSaving(false);
+            return toast(getUserFacingMessage(err, "Gagal menyimpan pengaturan toko."), "error");
         }
-        setDirty(false);
-        toast("Pengaturan tersimpan realtime");
-        void revalidatePublicCache();
-        void flushPendingDeletes();
     }
     // ── Post-save side effects ────────────────────────────────────────────────
     async function revalidatePublicCache(): Promise<void> {

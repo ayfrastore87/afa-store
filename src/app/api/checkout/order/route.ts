@@ -15,6 +15,7 @@ import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/sh
 import { normalizeAreaId, denyArbitraryAreaId } from "@/lib/shipping-destination";
 import { parseDeliveryCoordinates } from "@/lib/coordinates";
 import { isManualQris } from "@/lib/qris-config";
+import { buildN8nPayload, fireN8nWebhook } from "@/lib/n8n-webhook";
 
 export const runtime = "nodejs";
 
@@ -295,6 +296,18 @@ export async function POST(request: Request) {
             const clearCart = await cart.delete().eq("userId", user.id).eq("productRef", item.id).eq("quantity", item.qty);
             if (clearCart.error) throw new Error(clearCart.error.message);
         }
+
+        // Fire ORDER_CREATED webhook to n8n — non-blocking, never throws.
+        // Skipped silently when N8N_WEBHOOK_URL is not configured.
+        void fireN8nWebhook(buildN8nPayload({
+            id: order.id, invoice: order.invoice, publicToken: order.publicToken ?? null,
+            customer: order.customer, phone: order.phone, source: order.source ?? "ONLINE",
+            total: order.total, subtotal: order.subtotal, shipping: order.shipping,
+            discount: order.discount ?? 0, paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus, status: order.status,
+            items: order.items.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price, unitPrice: item.unitPrice ?? null, subtotal: item.subtotal })),
+            createdAt: order.createdAt,
+        }));
 
         const response = NextResponse.json({ success: true, status: "PENDING", orderId: order.id, invoice: order.invoice, redirectTo: normalizedMethod === "QRIS" ? `/payment/${order.invoice}` : `/order/${order.invoice}` }, { status: 201 });
         response.cookies.set(CHECKOUT_COOKIE, "", { path: "/", maxAge: 0 });

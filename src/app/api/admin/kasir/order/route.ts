@@ -32,6 +32,7 @@ import {
 import { getQrisProvider } from "@/lib/qris-config";
 import { randomBytes } from "node:crypto";
 import { validateManualItem } from "@/lib/custom-order";
+import { buildN8nPayload, fireN8nWebhook } from "@/lib/n8n-webhook";
 
 export const runtime = "nodejs";
 
@@ -499,6 +500,21 @@ export async function POST(request: Request) {
             }
             return { order, total };
         });
+
+        // Fire ORDER_CREATED webhook to n8n — non-blocking, never throws.
+        // Skipped silently when N8N_WEBHOOK_URL is not configured.
+        void fireN8nWebhook(buildN8nPayload({
+            id: created.order.id, invoice: created.order.invoice,
+            publicToken: created.order.publicToken ?? null,
+            customer: created.order.customer, phone: created.order.phone,
+            source: created.order.source, total: created.total,
+            subtotal: created.order.subtotal, shipping: created.order.shipping,
+            discount: created.order.discount ?? 0,
+            paymentMethod: created.order.paymentMethod,
+            paymentStatus: created.order.paymentStatus, status: created.order.status,
+            items: created.order.items.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price, unitPrice: item.unitPrice ?? null, subtotal: item.subtotal })),
+            createdAt: created.order.createdAt,
+        }));
 
         return NextResponse.json(
             {

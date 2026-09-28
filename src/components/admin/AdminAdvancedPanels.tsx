@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
@@ -10,6 +10,12 @@ import type { LucideIcon } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
+import {
+    optimizeSettingsImage,
+    uploadSettingsImage,
+    extractSettingsStoragePath,
+    type SettingsImageProfile,
+} from "@/lib/settings-image-upload-client";
 
 type Product = { id: string; name: string; slug: string; sku?: string | null; price: number; stock: number; minimumStock?: number | null; image: string | null; category?: string | null; updatedAt?: string | null; createdAt?: string | null };
 type StockHistory = { id?: string; product_id?: string; productId?: string; product_name?: string; productName?: string; type?: string; transaction_type?: string; quantity?: number; previous_stock?: number; previousStock?: number; new_stock?: number; newStock?: number; created_at?: string; createdAt?: string; note?: string | null; admin?: string | null; admin_name?: string | null; order_id?: string | null };
@@ -654,10 +660,10 @@ const defaultSettings: Record<string, SettingValue> = { storeName: "AFA STORE", 
 
 // ── Module-level constants (placed before SettingsPanel) ──────────────────────
 
-const STG_FIELD_CFG: Record<string, { label: string; wide?: boolean; textarea?: boolean; hint?: string }> = {
+const STG_FIELD_CFG: Record<string, { label: string; wide?: boolean; textarea?: boolean; hint?: string; image?: boolean; profile?: SettingsImageProfile }> = {
     storeName:       { label: "Nama Toko" },
-    logo:            { label: "URL Logo" },
-    favicon:         { label: "URL Favicon" },
+    logo:            { label: "Logo Toko", image: true, profile: "logo" },
+    favicon:         { label: "Favicon", image: true, profile: "favicon" },
     address:         { label: "Alamat", wide: true, textarea: true },
     whatsapp:        { label: "WhatsApp" },
     email:           { label: "Email" },
@@ -678,8 +684,8 @@ const STG_FIELD_CFG: Record<string, { label: string; wide?: boolean; textarea?: 
     websiteTitle:    { label: "Judul Website", wide: true },
     metaDescription: { label: "Meta Description", wide: true, textarea: true },
     seoKeywords:     { label: "Kata Kunci SEO", wide: true },
-    homeBanner:      { label: "URL Banner Utama", wide: true },
-    footerLogo:      { label: "URL Logo Footer" },
+    homeBanner:      { label: "Banner Utama", wide: true, image: true, profile: "banner" },
+    footerLogo:      { label: "Logo Footer", image: true, profile: "footer-logo" },
     themeColor:      { label: "Warna Tema" },
     darkMode:        { label: "Dark Mode" },
     twoFA:           { label: "2FA (Verifikasi Dua Langkah)" },
@@ -706,13 +712,109 @@ const STG_BACKUP_ACTIONS = [
     { label: "Download Backup",  desc: "Unduh file backup ke perangkat" },
 ];
 
+// ── SettingsImageUploader ────────────────────────────────────────────────────
+// A self-contained image uploader for settings fields.
+// Uses the browser Canvas optimizer + the admin settings image API.
+// No service-role key / supabase-admin required on the client.
+type SettingsImageUploaderProps = {
+    label: string;
+    value: string;
+    profile: SettingsImageProfile;
+    wide?: boolean;
+    onChange: (url: string, path: string) => void;
+    onRemove: () => void;
+};
+function SettingsImageUploader({ label, value, profile, wide, onChange, onRemove }: SettingsImageUploaderProps) {
+    const [uploading, setUploading] = useState(false);
+    const [preview, setPreview] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (!uploading) setPreview(value || null);
+    }, [value, uploading]);
+    async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        setUploadError(null);
+        setUploading(true);
+        try {
+            const { blob, previewUrl } = await optimizeSettingsImage(file, profile);
+            setPreview(previewUrl);
+            const { url, path } = await uploadSettingsImage(blob, profile);
+            URL.revokeObjectURL(previewUrl);
+            onChange(url, path);
+        } catch (err) {
+            setUploadError(err instanceof Error ? err.message : "Upload gagal.");
+            setPreview(value || null);
+        } finally {
+            setUploading(false);
+        }
+    }
+    const hasImage = Boolean(preview);
+    return (
+        <div className={`stg-field flex flex-col gap-1.5${wide ? " stg-field-wide" : ""}`}>
+            <span className="stg-field-label text-[11px] font-bold uppercase tracking-[0.18em] text-[#184D47]/60">{label}</span>
+            <div className="relative flex items-center gap-3">
+                {hasImage ? (
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-[#184D47]/15 bg-[#f5f5f5]">
+                        <Image src={preview!} alt={label} fill unoptimized className="object-contain" sizes="64px" />
+                        {uploading && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                                <Loader2 size={20} className="animate-spin text-[#0F4C45]" />
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[12px] border-2 border-dashed border-[#184D47]/20 bg-[#f8f0dd]">
+                        {uploading
+                            ? <Loader2 size={20} className="animate-spin text-[#0F4C45]" />
+                            : <UploadCloud size={20} className="text-[#184D47]/40" />}
+                    </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                    <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => inputRef.current?.click()}
+                        className="flex items-center gap-1.5 rounded-[10px] bg-[#0F4C45] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
+                    >
+                        <UploadCloud size={13} />
+                        {uploading ? "Mengunggah..." : hasImage ? "Ganti" : "Unggah"}
+                    </button>
+                    {hasImage && !uploading && (
+                        <button
+                            type="button"
+                            onClick={onRemove}
+                            className="flex items-center gap-1 rounded-[10px] border border-red-200 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50"
+                        >
+                            Hapus
+                        </button>
+                    )}
+                </div>
+                <input
+                    ref={inputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    aria-label={`Unggah ${label}`}
+                    onChange={(e) => void handleFileChange(e)}
+                />
+            </div>
+            {uploadError && <span className="text-xs font-semibold text-red-600" role="alert">{uploadError}</span>}
+        </div>
+    );
+}
+
 export function SettingsPanel() {
-    // ── State ──────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // ── State ─────────────────────────────────────────────────────────────────
     const [values, setValues] = useState<Record<string, SettingValue>>(defaultSettings);
     const [admins, setAdmins] = useState<{ id: string; name?: string; email?: string; role?: string }[]>([]);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [activeSection, setActiveSection] = useState("informasi");
+    const pendingDeletesRef = useRef<string[]>([]);
 
     // ── Load (UNCHANGED) ───────────────────────────────────────────────────────
     const load = useCallback(async () => {
@@ -764,6 +866,30 @@ export function SettingsPanel() {
         }
         setDirty(false);
         toast("Pengaturan tersimpan realtime");
+        void revalidatePublicCache();
+        void flushPendingDeletes();
+    }
+    // ── Post-save side effects ────────────────────────────────────────────────
+    async function revalidatePublicCache(): Promise<void> {
+        try {
+            await fetch("/api/admin/settings/revalidate", { method: "POST" });
+        } catch {
+            // silently ignore \u2014 revalidation is best-effort
+        }
+    }
+    // ── Flush old image files from storage ───────────────────────────────────
+    async function flushPendingDeletes() {
+        const paths = pendingDeletesRef.current.slice();
+        pendingDeletesRef.current = [];
+        await Promise.allSettled(
+            paths.map((path) =>
+                fetch("/api/admin/settings/image", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path }),
+                }).catch(() => undefined)
+            )
+        );
     }
 
     // ── Admin action (UNCHANGED) ───────────────────────────────────────────────
@@ -780,6 +906,30 @@ export function SettingsPanel() {
         const cfg = STG_FIELD_CFG[key];
         if (!cfg) return null;
         const isBoolean = typeof values[key] === "boolean";
+
+        if (cfg.image && cfg.profile) {
+            const currentUrl = String(values[key] ?? "");
+            return (
+                <SettingsImageUploader
+                    key={key}
+                    label={cfg.label}
+                    value={currentUrl}
+                    profile={cfg.profile}
+                    wide={cfg.wide}
+                    onChange={(url, _path) => {
+                        // Queue old path for deletion after save
+                        const oldPath = extractSettingsStoragePath(currentUrl);
+                        if (oldPath) pendingDeletesRef.current.push(oldPath);
+                        setValue(key, url);
+                    }}
+                    onRemove={() => {
+                        const oldPath = extractSettingsStoragePath(currentUrl);
+                        if (oldPath) pendingDeletesRef.current.push(oldPath);
+                        setValue(key, "");
+                    }}
+                />
+            );
+        }
 
         if (isBoolean) {
             return (

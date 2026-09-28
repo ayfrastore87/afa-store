@@ -4,10 +4,14 @@ import { whatsappUrl } from "@/lib/client-auth";
 
 type FloatingWhatsAppProps = {
     className?: string;
+    whatsapp?: string;
 };
 
-export default function FloatingWhatsApp({ className = "" }: FloatingWhatsAppProps) {
-    const href = whatsappUrl("Halo AFA STORE, saya ingin bertanya tentang produk Anda.");
+export default function FloatingWhatsApp({ className = "", whatsapp }: FloatingWhatsAppProps) {
+    const defaultHref = whatsappUrl("Halo AFA STORE, saya ingin bertanya tentang produk Anda.");
+    const href = whatsapp
+        ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent("Halo AFA STORE, saya ingin bertanya tentang produk Anda.")}`
+        : defaultHref;
     if (!href) return null;
 
     return (

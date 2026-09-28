@@ -2170,3 +2170,191 @@ html[data-theme="dark"] body .admin-shell .admin-kpi-grid [data-tone="coral"] {
 html[data-theme="dark"] body .admin-shell .admin-kpi-grid [data-tone="blue"] {
   border-left-color: rgba(76,141,245,.70);
 }
+
+
+/* === Admin Settings Compact Workspace === */
+/* Scoped to .admin-shell – UI only, no business-logic changes */
+
+/* ── Settings workspace layout ─────────────────────────────────────────────── */
+.stg-root {
+  /* full-width, compact flex column */
+  width: 100%;
+}
+
+/* Desktop: left nav sidebar */
+.stg-nav {
+  /* flex-col gap-1 hidden lg:flex — set in JSX via Tailwind */
+}
+.stg-nav-item {
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.stg-nav-active {
+  background: linear-gradient(130deg, #0F4C45 0%, #184D47 100%);
+  box-shadow: 0 8px 22px rgba(15,76,69,.28);
+}
+
+/* Workspace panel */
+.stg-panel {
+  /* Uses admin-advanced-card styling + extra: */
+  min-height: 420px;
+}
+
+/* ── Field grid: 2-col on desktop, 1-col on mobile ─────────────────────────── */
+.stg-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+/* Wide fields span both columns */
+.stg-field-wide {
+  grid-column: 1 / -1;
+}
+/* Mobile & tablet: 1 column */
+@media (max-width: 767px) {
+  .stg-field-grid {
+    grid-template-columns: 1fr;
+  }
+  .stg-field-wide {
+    grid-column: 1;
+  }
+}
+
+/* ── Inputs ─────────────────────────────────────────────────────────────────── */
+.stg-input {
+  background: #fff;
+  color: #184D47;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.stg-input::placeholder {
+  color: rgba(24,77,71,.38);
+}
+.stg-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ── Toggle rows ─────────────────────────────────────────────────────────────── */
+.stg-toggle-row {
+  min-height: 52px;
+  background: #f8f0dd;
+  transition: background 0.15s;
+}
+.stg-toggle-row:has(.stg-checkbox:checked) {
+  background: #edf7f2;
+}
+
+/* ── Mobile tabs strip ──────────────────────────────────────────────────────── */
+.stg-tabs-strip {
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.stg-tabs-strip::-webkit-scrollbar {
+  display: none;
+}
+.stg-tab {
+  scroll-snap-align: start;
+  min-height: 44px; /* accessibility touch target */
+}
+
+/* ── Mobile bottom save bar ─────────────────────────────────────────────────── */
+.stg-mobile-save {
+  /* normal flow (below panel) — safe for keyboard / bottom-nav */
+}
+
+/* ── Security action button ─────────────────────────────────────────────────── */
+.stg-security-btn {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── Admin avatar ───────────────────────────────────────────────────────────── */
+.stg-admin-avatar {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Panel heading separator ────────────────────────────────────────────────── */
+.stg-panel-head {
+  border-bottom-color: rgba(24,77,71,.08);
+}
+
+/* ── Save button ────────────────────────────────────────────────────────────── */
+.stg-save-btn {
+  cursor: pointer;
+  user-select: none;
+  min-height: 44px; /* accessibility */
+}
+
+/* ── Night mode overrides ───────────────────────────────────────────────────── */
+html[data-theme="dark"] .stg-input,
+html[data-theme="dark"] .stg-input:focus {
+  background: var(--night-input, #1e2d2a);
+  color: var(--night-text, #e8e0d0);
+  border-color: rgba(212,175,55,.22);
+}
+html[data-theme="dark"] .stg-input::placeholder {
+  color: var(--night-placeholder, rgba(232,224,208,.35));
+}
+html[data-theme="dark"] .stg-textarea {
+  background: var(--night-input, #1e2d2a);
+  color: var(--night-text, #e8e0d0);
+}
+html[data-theme="dark"] .stg-toggle-row {
+  background: rgba(212,175,55,.10);
+  color: var(--night-text, #e8e0d0);
+}
+html[data-theme="dark"] .stg-toggle-row:has(.stg-checkbox:checked) {
+  background: rgba(15,76,69,.30);
+}
+html[data-theme="dark"] .stg-panel {
+  background: var(--night-surface, #162420) !important;
+  border-color: rgba(212,175,55,.14) !important;
+}
+html[data-theme="dark"] .stg-nav-item:not(.stg-nav-active) {
+  color: var(--night-text-secondary, rgba(232,224,208,.70));
+}
+html[data-theme="dark"] .stg-nav-item:not(.stg-nav-active):hover {
+  background: rgba(212,175,55,.10);
+  color: var(--night-gold, #D4AF37);
+}
+html[data-theme="dark"] .stg-tab:not([aria-selected="true"]) {
+  background: rgba(255,255,255,.07);
+  color: var(--night-text-secondary, rgba(232,224,208,.70));
+}
+html[data-theme="dark"] .stg-tab:not([aria-selected="true"]):hover {
+  background: rgba(255,255,255,.12);
+}
+html[data-theme="dark"] .stg-security-btn,
+html[data-theme="dark"] .stg-admin-panel .rounded-\[13px\] {
+  background: rgba(212,175,55,.09);
+  color: var(--night-text, #e8e0d0);
+}
+html[data-theme="dark"] .stg-mobile-save {
+  background: var(--night-surface-elevated, #1c2b27);
+  border-color: rgba(212,175,55,.18);
+}
+html[data-theme="dark"] .stg-panel-head {
+  border-bottom-color: rgba(212,175,55,.12);
+}
+html[data-theme="dark"] .stg-panel h4 {
+  color: var(--night-text, #e8e0d0);
+}
+html[data-theme="dark"] .stg-panel p,
+html[data-theme="dark"] .stg-panel span {
+  color: var(--night-text-secondary, rgba(232,224,208,.70));
+}
+html[data-theme="dark"] .stg-panel .text-\[\#184D47\] {
+  color: var(--night-text, #e8e0d0) !important;
+}
+html[data-theme="dark"] .stg-panel .text-\[\#184D47\]\/60,
+html[data-theme="dark"] .stg-panel .text-\[\#184D47\]\/65 {
+  color: var(--night-text-secondary, rgba(232,224,208,.65)) !important;
+}
+html[data-theme="dark"] .stg-panel select {
+  background: var(--night-input, #1e2d2a);
+  color: var(--night-text, #e8e0d0);
+  border-color: rgba(212,175,55,.22);
+}
+/* === End Admin Settings Compact Workspace === */

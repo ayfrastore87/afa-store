@@ -5,7 +5,8 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowRight, CheckCircle2, Download, Edit3, Eye, EyeOff, FileSpreadsheet, FileText, History, Loader2, PackageMinus, PackagePlus, Printer, Save, Search, Settings2, ShieldCheck, Star, Trash2, TrendingUp, UploadCloud } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, CreditCard, Download, Edit3, Eye, EyeOff, FileSpreadsheet, FileText, Globe, History, Loader2, PackageMinus, PackagePlus, Printer, Save, Search, Settings2, ShieldCheck, Star, Trash2, TrendingUp, Truck, UploadCloud, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
@@ -650,15 +651,390 @@ export function ReportsPanel() {
 const settingSchema = z.record(z.string(), z.union([z.string(), z.boolean()]));
 const defaultSettings: Record<string, SettingValue> = { storeName: "AFA STORE", logo: "", favicon: "", address: "", whatsapp: "", email: "", instagram: "", facebook: "", tiktok: "", maps: "", shippingEnabled: true, couriers: "JNE, J&T, SiCepat", defaultWeight: "1000", freeShipping: false, qris: true, bankTransfer: true, cod: false, virtualAccount: false, accountNumber: "", bankName: "", websiteTitle: "AFA STORE", metaDescription: "", seoKeywords: "", homeBanner: "", footerLogo: "", themeColor: "#0F4C45", darkMode: false, twoFA: false, session: "30 hari" };
 
+
+// ── Module-level constants (placed before SettingsPanel) ──────────────────────
+
+const STG_FIELD_CFG: Record<string, { label: string; wide?: boolean; textarea?: boolean; hint?: string }> = {
+    storeName:       { label: "Nama Toko" },
+    logo:            { label: "URL Logo" },
+    favicon:         { label: "URL Favicon" },
+    address:         { label: "Alamat", wide: true, textarea: true },
+    whatsapp:        { label: "WhatsApp" },
+    email:           { label: "Email" },
+    instagram:       { label: "Instagram" },
+    facebook:        { label: "Facebook" },
+    tiktok:          { label: "TikTok" },
+    maps:            { label: "Google Maps URL", wide: true },
+    shippingEnabled: { label: "Aktifkan Pengiriman" },
+    couriers:        { label: "Kurir", hint: "Pisahkan dengan koma (contoh: JNE, J&T, SiCepat)" },
+    defaultWeight:   { label: "Berat Default (gram)" },
+    freeShipping:    { label: "Gratis Ongkir" },
+    qris:            { label: "QRIS" },
+    bankTransfer:    { label: "Transfer Bank" },
+    cod:             { label: "COD" },
+    virtualAccount:  { label: "Virtual Account" },
+    accountNumber:   { label: "Nomor Rekening", wide: true },
+    bankName:        { label: "Nama Bank" },
+    websiteTitle:    { label: "Judul Website", wide: true },
+    metaDescription: { label: "Meta Description", wide: true, textarea: true },
+    seoKeywords:     { label: "Kata Kunci SEO", wide: true },
+    homeBanner:      { label: "URL Banner Utama", wide: true },
+    footerLogo:      { label: "URL Logo Footer" },
+    themeColor:      { label: "Warna Tema" },
+    darkMode:        { label: "Dark Mode" },
+    twoFA:           { label: "2FA (Verifikasi Dua Langkah)" },
+    session:         { label: "Durasi Sesi" },
+};
+
+const STG_SECTIONS: Array<{ id: string; title: string; icon: LucideIcon; keys: string[] }> = [
+    { id: "informasi",  title: "Informasi Toko", icon: Building2,   keys: ["storeName","logo","favicon","address","whatsapp","email","instagram","facebook","tiktok","maps"] },
+    { id: "pengiriman", title: "Pengiriman",      icon: Truck,       keys: ["shippingEnabled","couriers","defaultWeight","freeShipping"] },
+    { id: "pembayaran", title: "Pembayaran",      icon: CreditCard,  keys: ["qris","bankTransfer","cod","virtualAccount","accountNumber","bankName"] },
+    { id: "website",    title: "Website",          icon: Globe,       keys: ["websiteTitle","metaDescription","seoKeywords","homeBanner","footerLogo","themeColor","darkMode"] },
+    { id: "keamanan",   title: "Keamanan",         icon: ShieldCheck, keys: ["twoFA","session"] },
+    { id: "admin",      title: "Admin",             icon: Users,       keys: [] },
+    { id: "backup",     title: "Backup",            icon: UploadCloud, keys: [] },
+];
+
+// ── Security action labels (preserved from original) ──────────────────────────
+const STG_SECURITY_ACTIONS = ["Ganti Password", "2FA", "Logout Semua Device", "Session"];
+
+// ── Backup action items (preserved from original) ─────────────────────────────
+const STG_BACKUP_ACTIONS = [
+    { label: "Backup Database",  desc: "Buat snapshot data toko saat ini" },
+    { label: "Restore Database", desc: "Pulihkan data dari backup" },
+    { label: "Download Backup",  desc: "Unduh file backup ke perangkat" },
+];
+
 export function SettingsPanel() {
+    // ── State ──────────────────────────────────────────────────────────────────
     const [values, setValues] = useState<Record<string, SettingValue>>(defaultSettings);
     const [admins, setAdmins] = useState<{ id: string; name?: string; email?: string; role?: string }[]>([]);
     const [saving, setSaving] = useState(false);
-    const load = useCallback(async () => { const [settingsRes, adminRes] = await Promise.all([supabase.from("settings").select("*"), supabase.from("users").select("id,name,email,role").in("role", ["Owner", "Administrator", "Operator", "Viewer", "admin"])]); const mapped = Object.fromEntries((settingsRes.data ?? []).map((s: { key: string; value: unknown }) => { const raw = typeof s.value === "object" && s.value && "value" in s.value ? (s.value as { value: unknown }).value : s.value; return [s.key, typeof raw === "boolean" ? raw : String(raw ?? "")]; })) as Record<string, SettingValue>; setValues({ ...defaultSettings, ...mapped }); setAdmins((adminRes.data ?? []) as { id: string; name?: string; email?: string; role?: string }[]); }, []);
-    useEffect(() => { void load(); const channel = supabase.channel("afa-settings-panel").on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => void load()).on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => void load()).subscribe(); return () => { void supabase.removeChannel(channel); }; }, [load]);
-    function setValue(key: string, value: string | boolean) { setValues((v) => ({ ...v, [key]: value })); }
-    async function save(event: FormEvent) { event.preventDefault(); const parsed = settingSchema.safeParse(values); if (!parsed.success) return toast("Pengaturan tidak valid", "error"); setSaving(true); const rows = Object.entries(values).map(([key, value]) => ({ key, value: { value } })); const res = await supabase.from("settings").upsert(rows, { onConflict: "key" }); setSaving(false); if (res.error) { console.error("Pengaturan gagal disimpan", res.error); return toast(getUserFacingMessage(res.error, "Pengaturan gagal disimpan. Silakan coba lagi."), "error"); } toast("Pengaturan tersimpan realtime"); }
-    async function adminAction(action: string) { toast(`${action} admin siap dihubungkan ke tabel profiles/users`, "info"); }
-    const sections = [{ title: "Informasi Toko", keys: ["storeName", "logo", "favicon", "address", "whatsapp", "email", "instagram", "facebook", "tiktok", "maps"] }, { title: "Pengiriman", keys: ["shippingEnabled", "couriers", "defaultWeight", "freeShipping"] }, { title: "Pembayaran", keys: ["qris", "bankTransfer", "cod", "virtualAccount", "accountNumber", "bankName"] }, { title: "Website", keys: ["websiteTitle", "metaDescription", "seoKeywords", "homeBanner", "footerLogo", "themeColor", "darkMode"] }, { title: "Keamanan", keys: ["twoFA", "session"] }];
-    return <form onSubmit={save} className="space-y-5"><Card className="bg-[#0F4C45] text-white"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><p className="text-sm font-bold uppercase tracking-[0.3em] text-[#D4AF37]">Control Center</p><h3 className="text-3xl font-black">Pengaturan AFA STORE</h3></div><button disabled={saving} className="rounded-2xl bg-[#D4AF37] px-5 py-3 font-black text-[#0F4C45] disabled:opacity-60"><Save className="mr-2 inline" size={18} />{saving ? "Menyimpan..." : "Simpan Semua"}</button></div></Card><div className="grid gap-5 xl:grid-cols-2">{sections.map((section) => <Card key={section.title}><h4 className="mb-4 flex items-center gap-2 text-xl font-black"><Settings2 size={20} />{section.title}</h4><div className="grid gap-3">{section.keys.map((key) => typeof values[key] === "boolean" ? <label key={key} className="flex items-center justify-between rounded-2xl bg-[#f8f0dd] p-4 font-bold"><span>{key}</span><input type="checkbox" checked={Boolean(values[key])} onChange={(e) => setValue(key, e.target.checked)} /></label> : <label key={key} className="space-y-2"><span className="text-sm font-bold text-[#184D47]/70">{key}</span><input value={String(values[key] ?? "")} onChange={(e) => setValue(key, e.target.value)} className="h-12 w-full rounded-2xl border border-[#184D47]/15 px-4 outline-none focus:border-[#D4AF37]" /></label>)}</div></Card>)}</div><div className="grid gap-5 xl:grid-cols-3"><Card><h4 className="mb-4 text-xl font-black">Admin</h4><div className="mb-3 flex flex-wrap gap-2">{["Tambah", "Edit", "Hapus"].map((a) => <button type="button" key={a} onClick={() => void adminAction(a)} className="rounded-xl bg-[#0F4C45] px-3 py-2 font-bold text-white">{a} Admin</button>)}</div><select className="mb-3 h-12 w-full rounded-2xl bg-[#f8f0dd] px-4 font-bold">{["Owner", "Administrator", "Operator", "Viewer"].map((r) => <option key={r}>{r}</option>)}</select>{admins.length ? admins.map((a) => <p key={a.id} className="rounded-xl border p-3 text-sm font-bold">{a.email} - {a.role}</p>) : <p className="text-sm font-bold text-[#184D47]/60">Belum ada data admin/profiles.</p>}</Card><Card><h4 className="mb-4 flex items-center gap-2 text-xl font-black"><ShieldCheck /> Keamanan</h4>{["Ganti Password", "2FA", "Logout Semua Device", "Session"].map((a) => <button type="button" key={a} onClick={() => toast(`${a} diproses melalui auth Supabase`, "info")} className="mb-2 w-full rounded-2xl bg-[#f8f0dd] p-3 text-left font-bold">{a}</button>)}</Card><Card><h4 className="mb-4 flex items-center gap-2 text-xl font-black"><UploadCloud /> Backup</h4>{["Backup Database", "Restore Database", "Download Backup"].map((a) => <button type="button" key={a} onClick={() => toast(`${a} membutuhkan service role/server action`, "info")} className="mb-2 w-full rounded-2xl bg-[#f8f0dd] p-3 text-left font-bold">{a}</button>)}</Card></div></form>;
+    const [dirty, setDirty] = useState(false);
+    const [activeSection, setActiveSection] = useState("informasi");
+
+    // ── Load (UNCHANGED) ───────────────────────────────────────────────────────
+    const load = useCallback(async () => {
+        const [settingsRes, adminRes] = await Promise.all([
+            supabase.from("settings").select("*"),
+            supabase.from("users").select("id,name,email,role").in("role", ["Owner","Administrator","Operator","Viewer","admin"]),
+        ]);
+        const mapped = Object.fromEntries(
+            (settingsRes.data ?? []).map((s: { key: string; value: unknown }) => {
+                const raw = typeof s.value === "object" && s.value && "value" in s.value
+                    ? (s.value as { value: unknown }).value
+                    : s.value;
+                return [s.key, typeof raw === "boolean" ? raw : String(raw ?? "")];
+            })
+        ) as Record<string, SettingValue>;
+        setValues({ ...defaultSettings, ...mapped });
+        setAdmins((adminRes.data ?? []) as { id: string; name?: string; email?: string; role?: string }[]);
+    }, []);
+
+    // ── Realtime subscription (UNCHANGED) ─────────────────────────────────────
+    useEffect(() => {
+        void load();
+        const channel = supabase
+            .channel("afa-settings-panel")
+            .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => void load())
+            .on("postgres_changes", { event: "*", schema: "public", table: "users" }, () => void load())
+            .subscribe();
+        return () => { void supabase.removeChannel(channel); };
+    }, [load]);
+
+    // ── setValue (UNCHANGED + dirty tracking) ─────────────────────────────────
+    function setValue(key: string, value: string | boolean) {
+        setValues((v) => ({ ...v, [key]: value }));
+        setDirty(true);
+    }
+
+    // ── Save (UNCHANGED) ──────────────────────────────────────────────────────
+    async function save(event: FormEvent) {
+        event.preventDefault();
+        const parsed = settingSchema.safeParse(values);
+        if (!parsed.success) return toast("Pengaturan tidak valid", "error");
+        setSaving(true);
+        const rows = Object.entries(values).map(([key, value]) => ({ key, value: { value } }));
+        const res = await supabase.from("settings").upsert(rows, { onConflict: "key" });
+        setSaving(false);
+        if (res.error) {
+            console.error("Pengaturan gagal disimpan", res.error);
+            return toast(getUserFacingMessage(res.error, "Pengaturan gagal disimpan. Silakan coba lagi."), "error");
+        }
+        setDirty(false);
+        toast("Pengaturan tersimpan realtime");
+    }
+
+    // ── Admin action (UNCHANGED) ───────────────────────────────────────────────
+    async function adminAction(action: string) {
+        toast(`${action} admin siap dihubungkan ke tabel profiles/users`, "info");
+    }
+
+    // ── Derived ────────────────────────────────────────────────────────────────
+    const currentSection = STG_SECTIONS.find((s) => s.id === activeSection) ?? STG_SECTIONS[0];
+    const SectionIcon = currentSection.icon;
+
+    // ── Field renderer ─────────────────────────────────────────────────────────
+    function renderField(key: string) {
+        const cfg = STG_FIELD_CFG[key];
+        if (!cfg) return null;
+        const isBoolean = typeof values[key] === "boolean";
+
+        if (isBoolean) {
+            return (
+                <label key={key} className={`stg-toggle-row flex items-center justify-between gap-4 rounded-[13px] bg-[#f8f0dd] px-4 py-3${cfg.wide ? " stg-field-wide" : ""}`}>
+                    <div className="min-w-0">
+                        <p className="font-bold text-[#184D47]">{cfg.label}</p>
+                        {cfg.hint && <p className="mt-0.5 text-xs text-[#184D47]/60">{cfg.hint}</p>}
+                    </div>
+                    <input
+                        type="checkbox"
+                        checked={Boolean(values[key])}
+                        onChange={(e) => setValue(key, e.target.checked)}
+                        className="stg-checkbox h-5 w-5 shrink-0 cursor-pointer rounded accent-[#0F4C45]"
+                        aria-label={cfg.label}
+                    />
+                </label>
+            );
+        }
+
+        if (cfg.textarea) {
+            return (
+                <label key={key} className="stg-field stg-field-wide flex flex-col gap-1.5">
+                    <span className="stg-field-label text-[11px] font-bold uppercase tracking-[0.18em] text-[#184D47]/60">{cfg.label}</span>
+                    <textarea
+                        rows={3}
+                        value={String(values[key] ?? "")}
+                        onChange={(e) => setValue(key, e.target.value)}
+                        className="stg-input stg-textarea w-full rounded-[13px] border border-[#184D47]/15 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                        aria-label={cfg.label}
+                    />
+                    {cfg.hint && <span className="stg-field-hint text-xs text-[#184D47]/55">{cfg.hint}</span>}
+                </label>
+            );
+        }
+
+        return (
+            <label key={key} className={`stg-field flex flex-col gap-1.5${cfg.wide ? " stg-field-wide" : ""}`}>
+                <span className="stg-field-label text-[11px] font-bold uppercase tracking-[0.18em] text-[#184D47]/60">{cfg.label}</span>
+                <input
+                    value={String(values[key] ?? "")}
+                    onChange={(e) => setValue(key, e.target.value)}
+                    className="stg-input h-11 w-full rounded-[13px] border border-[#184D47]/15 bg-white px-4 text-sm outline-none transition focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                    aria-label={cfg.label}
+                />
+                {cfg.hint && <span className="stg-field-hint text-xs text-[#184D47]/55">{cfg.hint}</span>}
+            </label>
+        );
+    }
+
+    // ── JSX ────────────────────────────────────────────────────────────────────
+    return (
+        <form onSubmit={save} className="stg-root flex flex-col gap-4" data-testid="settings-panel">
+
+            {/* ── Compact header ── */}
+            <div className="stg-header flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-xl font-black text-[#184D47] lg:text-2xl">Pengaturan</h3>
+                    <p className="mt-0.5 text-sm text-[#184D47]/65">Kelola konfigurasi toko, pembayaran, pengiriman, dan keamanan.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    {dirty && (
+                        <span className="stg-dirty hidden items-center gap-1.5 text-xs font-bold text-amber-600 sm:flex" aria-live="polite">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                            Belum disimpan
+                        </span>
+                    )}
+                    <button
+                        disabled={saving}
+                        className="stg-save-btn flex items-center gap-2 rounded-[13px] bg-[#D4AF37] px-5 py-2.5 font-black text-[#0F4C45] shadow-md transition hover:brightness-105 active:scale-[0.97] disabled:opacity-60"
+                    >
+                        <Save size={16} aria-hidden="true" />
+                        {saving ? "Menyimpan..." : "Simpan Perubahan"}
+                    </button>
+                </div>
+            </div>
+
+            {/* ── Mobile section tabs (≤1023px) ── */}
+            <div className="stg-mobile-tabs lg:hidden" role="tablist" aria-label="Kategori pengaturan">
+                <div className="stg-tabs-strip flex gap-2 overflow-x-auto pb-1">
+                    {STG_SECTIONS.map((sec) => {
+                        const active = activeSection === sec.id;
+                        return (
+                            <button
+                                type="button"
+                                key={sec.id}
+                                role="tab"
+                                aria-selected={active}
+                                onClick={() => setActiveSection(sec.id)}
+                                className={`stg-tab shrink-0 whitespace-nowrap rounded-[11px] px-4 py-2.5 text-[13px] font-bold transition active:scale-95 focus-visible:outline-2 focus-visible:outline-[#D4AF37] focus-visible:outline-offset-2 ${active ? "bg-[#0F4C45] text-white shadow-md" : "bg-white/80 text-[#184D47]/70 hover:bg-white"}`}
+                            >
+                                {sec.title}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* ── Desktop nav + workspace / Mobile active panel ── */}
+            <div className="stg-workspace flex min-h-0 gap-5">
+
+                {/* Desktop left navigation */}
+                <nav
+                    className="stg-nav hidden shrink-0 flex-col gap-1 lg:flex"
+                    aria-label="Navigasi pengaturan"
+                    style={{ width: "180px" }}
+                >
+                    {STG_SECTIONS.map((sec) => {
+                        const NavIcon = sec.icon;
+                        const active = activeSection === sec.id;
+                        return (
+                            <button
+                                type="button"
+                                key={sec.id}
+                                aria-current={active ? "true" : undefined}
+                                onClick={() => setActiveSection(sec.id)}
+                                className={`stg-nav-item flex min-h-11 w-full items-center gap-3 rounded-[13px] px-4 py-2.5 text-left text-[14px] font-bold transition active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-[#D4AF37] focus-visible:outline-offset-2 ${active ? "stg-nav-active bg-[#0F4C45] text-white shadow-lg" : "text-[#184D47]/75 hover:bg-[#0F4C45]/8 hover:text-[#184D47]"}`}
+                            >
+                                <NavIcon size={18} className="shrink-0" aria-hidden="true" />
+                                <span className="truncate">{sec.title}</span>
+                            </button>
+                        );
+                    })}
+                </nav>
+
+                {/* ── Workspace panel ── */}
+                <div className="admin-advanced-card stg-panel min-w-0 flex-1 rounded-[20px] border border-white/70 bg-white/90 p-5 shadow-xl shadow-[#184D47]/10">
+
+                    {/* Panel heading */}
+                    <div className="stg-panel-head mb-4 flex items-center gap-2.5 border-b border-[#184D47]/8 pb-3.5">
+                        <SectionIcon size={20} className="shrink-0 text-[#0F4C45]" aria-hidden="true" />
+                        <h4 className="text-lg font-black text-[#184D47]">{currentSection.title}</h4>
+                    </div>
+
+                    {/* ── Standard field sections ── */}
+                    {!["keamanan", "admin", "backup"].includes(activeSection) && (
+                        <div className="stg-field-grid" data-section={activeSection}>
+                            {currentSection.keys.map((key) => renderField(key))}
+                        </div>
+                    )}
+
+                    {/* ── Keamanan section ── */}
+                    {activeSection === "keamanan" && (
+                        <div className="stg-field-grid" data-section="keamanan">
+                            {currentSection.keys.map((key) => renderField(key))}
+                            <div className="stg-field-wide mt-2">
+                                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#184D47]/60">Aksi Keamanan</p>
+                                <div className="flex flex-col gap-2">
+                                    {STG_SECURITY_ACTIONS.map((a) => (
+                                        <button
+                                            type="button"
+                                            key={a}
+                                            onClick={() => toast(`${a} diproses melalui auth Supabase`, "info")}
+                                            className="stg-security-btn flex min-h-11 items-center justify-between rounded-[13px] bg-[#f8f0dd] px-4 py-3 text-left font-bold text-[#184D47] transition hover:bg-[#edf7f2] active:scale-[0.98]"
+                                        >
+                                            <span className="flex items-center gap-3">
+                                                <ShieldCheck size={17} aria-hidden="true" />
+                                                {a}
+                                            </span>
+                                            <ArrowRight size={16} className="opacity-50" aria-hidden="true" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Admin section ── */}
+                    {activeSection === "admin" && (
+                        <div className="stg-admin-panel flex flex-col gap-4" data-section="admin">
+                            <div className="flex flex-wrap gap-2">
+                                {["Tambah", "Edit", "Hapus"].map((a) => (
+                                    <button
+                                        type="button"
+                                        key={a}
+                                        onClick={() => void adminAction(a)}
+                                        className="rounded-[12px] bg-[#0F4C45] px-4 py-2.5 font-bold text-white transition active:scale-95"
+                                    >
+                                        {a} Admin
+                                    </button>
+                                ))}
+                            </div>
+                            <select
+                                className="stg-input h-11 w-full max-w-xs rounded-[13px] border border-[#184D47]/15 bg-white px-4 text-sm font-bold outline-none"
+                                aria-label="Filter role admin"
+                            >
+                                {["Owner", "Administrator", "Operator", "Viewer"].map((r) => (
+                                    <option key={r}>{r}</option>
+                                ))}
+                            </select>
+                            {admins.length > 0 ? (
+                                <div className="flex flex-col gap-2">
+                                    {admins.map((a) => (
+                                        <div key={a.id} className="flex items-center gap-3 rounded-[13px] border border-[#184D47]/10 bg-white px-4 py-3">
+                                            <div
+                                                className="stg-admin-avatar grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#0F4C45] text-sm font-black text-[#D4AF37]"
+                                                aria-hidden="true"
+                                            >
+                                                {(a.name ?? a.email ?? "A").slice(0, 1).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate font-bold text-[#184D47]">{a.name ?? a.email}</p>
+                                                <p className="truncate text-xs text-[#184D47]/60">{a.email}</p>
+                                            </div>
+                                            <span className="shrink-0 rounded-full bg-[#f8f0dd] px-3 py-1 text-xs font-black text-[#184D47]">
+                                                {a.role}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm font-bold text-[#184D47]/60">Belum ada data admin/profiles.</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Backup section ── */}
+                    {activeSection === "backup" && (
+                        <div className="flex flex-col gap-3" data-section="backup">
+                            {STG_BACKUP_ACTIONS.map((item) => (
+                                <button
+                                    type="button"
+                                    key={item.label}
+                                    onClick={() => toast(`${item.label} membutuhkan service role/server action`, "info")}
+                                    className="flex min-h-14 items-center justify-between rounded-[13px] bg-[#f8f0dd] px-4 py-4 text-left transition hover:bg-[#edf7f2] active:scale-[0.98]"
+                                >
+                                    <div>
+                                        <p className="font-bold text-[#184D47]">{item.label}</p>
+                                        <p className="text-xs text-[#184D47]/60">{item.desc}</p>
+                                    </div>
+                                    <ArrowRight size={18} className="shrink-0 text-[#184D47]/50" aria-hidden="true" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Mobile bottom save bar (≤1023px) ── */}
+            <div className="stg-mobile-save mt-1 flex items-center justify-between gap-3 rounded-[16px] border border-[#184D47]/10 bg-white/90 px-4 py-3 shadow-lg backdrop-blur lg:hidden">
+                {dirty ? (
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600" aria-live="polite">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                        Belum disimpan
+                    </span>
+                ) : (
+                    <span className="text-xs text-[#184D47]/50">Simpan setelah mengubah pengaturan</span>
+                )}
+                <button
+                    disabled={saving}
+                    className="stg-save-btn flex shrink-0 items-center gap-2 rounded-[13px] bg-[#D4AF37] px-5 py-2.5 font-black text-[#0F4C45] shadow-md transition active:scale-[0.97] disabled:opacity-60"
+                >
+                    <Save size={16} aria-hidden="true" />
+                    {saving ? "Menyimpan..." : "Simpan"}
+                </button>
+            </div>
+        </form>
+    );
 }

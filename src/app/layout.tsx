@@ -87,6 +87,30 @@ export async function generateViewport(): Promise<Viewport> {
   };
 }
 
+/** LocalBusiness structured data — static, server-rendered, no JS dependency.
+ *  Helps Meta Business Verification and Google find the legal identity. */
+const LOCAL_BUSINESS_JSONLD = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "AFA STORE",
+  "legalName": "IRMA RATNA MARYANI",
+  "url": "https://afastore.online",
+  "telephone": "+6287770000883",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Komp. Griya Praja Mandiri Blok C06 No 06",
+    "addressLocality": "Cibeber",
+    "addressRegion": "Banten",
+    "postalCode": "42422",
+    "addressCountry": "ID",
+  },
+  "sameAs": [
+    "https://www.instagram.com/afa_store_c6/",
+    "https://www.facebook.com/AFAstoreC6",
+    "https://www.tiktok.com/@afa_store_c6",
+  ],
+});
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -96,6 +120,13 @@ export default function RootLayout({
     <html lang="id" suppressHydrationWarning className={`${display.variable} ${body.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-[#F8F5EE] text-[#123524]">
         <Script id="afa-theme-init" strategy="beforeInteractive">{themeInitScript}</Script>
+        {/* LocalBusiness structured data for Meta/Google verification */}
+        <script
+          id="ld-local-business"
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: LOCAL_BUSINESS_JSONLD }}
+        />
         <ThemeProvider><CartProvider><WishlistProvider>{children}</WishlistProvider></CartProvider></ThemeProvider>
       </body>
     </html>

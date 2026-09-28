@@ -1094,7 +1094,7 @@ export function SettingsPanel() {
                                         <button
                                             type="button"
                                             key={a}
-                                            onClick={() => toast(`${a} diproses melalui auth Supabase`, "info")}
+                                            onClick={() => toast(`${a}: Belum tersedia di versi ini.`, "info")}
                                             className="stg-security-btn flex min-h-11 items-center justify-between rounded-[13px] bg-[#f8f0dd] px-4 py-3 text-left font-bold text-[#184D47] transition hover:bg-[#edf7f2] active:scale-[0.98]"
                                         >
                                             <span className="flex items-center gap-3">
@@ -1165,7 +1165,7 @@ export function SettingsPanel() {
                                 <button
                                     type="button"
                                     key={item.label}
-                                    onClick={() => toast(`${item.label} membutuhkan service role/server action`, "info")}
+                                    onClick={() => toast(`${item.label}: Belum tersedia di versi ini.`, "info")}
                                     className="flex min-h-14 items-center justify-between rounded-[13px] bg-[#f8f0dd] px-4 py-4 text-left transition hover:bg-[#edf7f2] active:scale-[0.98]"
                                 >
                                     <div>

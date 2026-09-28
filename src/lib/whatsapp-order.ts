@@ -33,12 +33,30 @@ export function buildWhatsAppOrderMessage(product: WhatsAppOrderProduct, quantit
     return lines.join("\n");
 }
 
-export function buildWhatsAppOrderUrl(product: WhatsAppOrderProduct, quantity = 1) {
-    return `https://wa.me/${AFA_STORE_WHATSAPP_NUMBER}?text=${encodeURIComponent(buildWhatsAppOrderMessage(product, quantity))}`;
+/**
+ * Build a WhatsApp deep-link for a product order message.
+ *
+ * @param product    - Product to include in the message body.
+ * @param quantity   - Quantity (default: 1).
+ * @param phoneNumber - Optional store WhatsApp number (E.164 or local format).
+ *                      Digits are extracted; falls back to AFA_STORE_WHATSAPP_NUMBER.
+ */
+export function buildWhatsAppOrderUrl(
+    product: WhatsAppOrderProduct,
+    quantity = 1,
+    phoneNumber?: string,
+) {
+    const digits = phoneNumber?.replace(/\D/g, "") || "";
+    const wa = digits || AFA_STORE_WHATSAPP_NUMBER;
+    return `https://wa.me/${wa}?text=${encodeURIComponent(buildWhatsAppOrderMessage(product, quantity))}`;
 }
 
-export function openWhatsAppOrder(product: WhatsAppOrderProduct, quantity = 1) {
-    window.open(buildWhatsAppOrderUrl(product, quantity), "_blank", "noopener,noreferrer");
+export function openWhatsAppOrder(
+    product: WhatsAppOrderProduct,
+    quantity = 1,
+    phoneNumber?: string,
+) {
+    window.open(buildWhatsAppOrderUrl(product, quantity, phoneNumber), "_blank", "noopener,noreferrer");
 }
 
 export type { WhatsAppOrderProduct };

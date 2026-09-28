@@ -112,12 +112,29 @@ export async function uploadSettingsImage(
     return { url: result.url, path: result.path };
 }
 
-/** Extracts the storage path from a Supabase settings image public URL.
- *  Returns null if the URL is not from the settings bucket. */
+/** Extracts the storage object path from a Supabase settings image public URL.
+ *
+ *  Supabase public URL format:
+ *    https://<project>.supabase.co/storage/v1/object/public/<bucket>/<object-path>
+ *
+ *  The bucket name is "settings". Object paths uploaded by this app are:
+ *    settings/<imageType>/<timestamp>-<uuid>.webp
+ *
+ *  A real public URL therefore looks like:
+ *    .../storage/v1/object/public/settings/settings/logo/<timestamp>-<uuid>.webp
+ *                                          ^^^^^^^^  <- bucket name (skipped)
+ *                                                   ^^^^^^^^^^^^^^^^^^^^^^^^  <- object path returned
+ *
+ *  The DELETE handler validates the returned value against:
+ *    /^settings\/(logo|favicon|banner|footer-logo)\/[a-zA-Z0-9_.-]+\.webp$/
+ *  so we return only the object path, stripping the leading bucket segment.
+ *
+ *  Returns null if the URL does not belong to the settings bucket. */
 export function extractSettingsStoragePath(url: string): string | null {
     try {
         const parsed = new URL(url);
-        const match = /\/storage\/v1\/object\/public\/(settings\/.+)$/.exec(parsed.pathname);
+        // Capture everything after the bucket name "settings/" in the public path.
+        const match = /\/storage\/v1\/object\/public\/settings\/(.+)$/.exec(parsed.pathname);
         return match?.[1] ?? null;
     } catch {
         return null;

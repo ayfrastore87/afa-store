@@ -27,7 +27,20 @@ const settingSchema = z.record(z.string(), z.union([z.string(), z.boolean()]));
 // ── GET /api/admin/settings ───────────────────────────────────────────────────
 // Admin-only. Returns current settings from the database (service-role read).
 export async function GET() {
-    const admin = await getCurrentAdmin();
+    // Guard: getCurrentAdmin may throw if the auth provider or Prisma DB is unavailable.
+    let admin: Awaited<ReturnType<typeof getCurrentAdmin>>;
+    try {
+        admin = await getCurrentAdmin();
+    } catch (err) {
+        console.error("[admin-settings-get] Auth check failed", {
+            operation: "getCurrentAdmin",
+            name: err instanceof Error ? err.name : "unknown",
+        });
+        return NextResponse.json(
+            { error: "Layanan autentikasi tidak tersedia. Coba lagi." },
+            { status: 503 }
+        );
+    }
     if (!admin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -40,10 +53,12 @@ export async function GET() {
                 operation: "select",
                 code: error.code ?? "unknown",
                 message: (error.message ?? "").slice(0, 200),
+                details: (error.details ?? "").slice(0, 200),
+                hint: (error.hint ?? "").slice(0, 200),
             });
             return NextResponse.json(
                 { error: "Gagal memuat pengaturan toko." },
-                { status: 502 }
+                { status: 503 }
             );
         }
 
@@ -81,7 +96,20 @@ export async function GET() {
 // Admin-only. Validates + whitelists keys. Writes via service-role.
 // Revalidates settings cache tag + root layout after successful save.
 export async function PATCH(request: Request) {
-    const admin = await getCurrentAdmin();
+    // Guard: getCurrentAdmin may throw if the auth provider or Prisma DB is unavailable.
+    let admin: Awaited<ReturnType<typeof getCurrentAdmin>>;
+    try {
+        admin = await getCurrentAdmin();
+    } catch (err) {
+        console.error("[admin-settings-save] Auth check failed", {
+            operation: "getCurrentAdmin",
+            name: err instanceof Error ? err.name : "unknown",
+        });
+        return NextResponse.json(
+            { error: "Layanan autentikasi tidak tersedia. Coba lagi." },
+            { status: 503 }
+        );
+    }
     if (!admin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -127,10 +155,12 @@ export async function PATCH(request: Request) {
                 operation: "upsert",
                 code: error.code ?? "unknown",
                 message: (error.message ?? "").slice(0, 200),
+                details: (error.details ?? "").slice(0, 200),
+                hint: (error.hint ?? "").slice(0, 200),
             });
             return NextResponse.json(
                 { error: "Gagal memperbarui database pengaturan." },
-                { status: 502 }
+                { status: 503 }
             );
         }
 

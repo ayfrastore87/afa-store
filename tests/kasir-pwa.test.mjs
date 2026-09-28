@@ -70,7 +70,7 @@ test("kasir pages link the kasir manifest; customer site keeps its own", () => {
     assert.match(customerManifest, /name: "AFA STORE"/);
     assert.match(customerManifest, /start_url: "\/"/);
     assert.match(rootLayout, /manifest: "\/manifest\.webmanifest"/);
-    assert.match(rootLayout, /applicationName: "AFA STORE"/);
+    assert.match(rootLayout, /applicationName: .*"AFA STORE"/);
     assert.doesNotMatch(customerManifest, /KASIR/);
     assert.doesNotMatch(rootLayout, /kasir-pwa|KASIR/);
 });

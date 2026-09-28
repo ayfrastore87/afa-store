@@ -54,12 +54,12 @@ export async function generateMetadata(): Promise<Metadata> {
       };
   return {
     metadataBase: new URL("https://afastore.online"),
-    applicationName: "AFA STORE",
+    applicationName: settings.storeName || "AFA STORE",
     title,
     description,
     keywords,
     manifest: "/manifest.webmanifest",
-    appleWebApp: { capable: true, title: "AFA STORE", statusBarStyle: "default" },
+    appleWebApp: { capable: true, title: settings.storeName || "AFA STORE", statusBarStyle: "default" },
     icons,
     openGraph: {
       title: settings.websiteTitle || "AFA STORE",
@@ -69,13 +69,23 @@ export async function generateMetadata(): Promise<Metadata> {
     },
   };
 }
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  colorScheme: "light",
-  themeColor: "#123524",
-};
+/** Dynamic viewport — reads themeColor from settings so the browser chrome
+ *  matches the admin-configured brand colour.
+ *  Falls back to "#123524" (AFA dark green) when the setting is absent or
+ *  not a valid 3/6-digit hex colour. */
+export async function generateViewport(): Promise<Viewport> {
+  const settings = await getPublicSettings();
+  const raw = (settings.themeColor || "").trim();
+  // Accept only #RGB or #RRGGBB — reject anything else for safety.
+  const safeHex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(raw) ? raw : "#123524";
+  return {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+    colorScheme: "light",
+    themeColor: safeHex,
+  };
+}
 
 export default function RootLayout({
   children,

@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { MessageCircle, X } from "lucide-react";
 
-const WHATSAPP_NUMBER = "6287770000883";
+const WHATSAPP_FALLBACK = "6287770000883";
 const ORDER_TYPES = ["Hampers", "Parcel", "Makanan", "Dessert", "Minuman", "Produk Lain", "Lainnya"] as const;
 
-export default function CustomOrderCta() {
+export default function CustomOrderCta({ whatsapp }: { whatsapp?: string }) {
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", type: "Hampers", description: "", budget: "" });
+    // Resolve the WhatsApp number: prop → env → hard-coded fallback
+    const waNumber = (whatsapp?.replace(/\D/g, "") || WHATSAPP_FALLBACK);
 
     const send = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -28,7 +30,7 @@ export default function CustomOrderCta() {
             "",
             "Terima kasih.",
         ].join("\n");
-        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+        window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
         setOpen(false);
     };
 

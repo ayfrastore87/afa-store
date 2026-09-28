@@ -17,8 +17,10 @@ type MidtransNotification = {
 };
 
 function parseIdr(value: unknown) {
-    if (typeof value !== "string" || !/^(0|[1-9]\d*)$/.test(value.trim())) return null;
-    const amount = Number(value);
+    if (typeof value !== "string") return null;
+    const match = /^(0|[1-9]\d*)(?:\.00)?$/.exec(value.trim());
+    if (!match) return null;
+    const amount = Number(match[1]);
     return Number.isSafeInteger(amount) ? amount : null;
 }
 

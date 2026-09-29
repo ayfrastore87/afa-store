@@ -82,16 +82,22 @@ test("coordinates migration is additive only (no DROP / ALTER COLUMN)", () => {
     assert.doesNotMatch(migration, /ALTER COLUMN/);
 });
 
-// 5. lat/lng not used in Biteship rate authority
-test("rates route never reads coordinates for pricing", () => {
-    assert.doesNotMatch(ratesRoute, /destinationLatitude|destinationLongitude|latitude|longitude/);
+// 5. package and coordinate quotes are both server-authoritative
+test("rates route uses validated coordinates only for Instan/Same-day quotes", () => {
+    assert.match(ratesRoute, /getBiteshipRates\(\{/);
+    assert.match(ratesRoute, /getBiteshipCoordinateRates\(/);
+    assert.match(ratesRoute, /validCoordinates/);
+    assert.match(ratesRoute, /shipmentCategory === "instant"/);
+    assert.match(ratesRoute, /shipmentCategory === "regular"/);
 });
 
-test("order route stores coordinates as metadata only, never in quote selection", () => {
+test("order route uses mode-specific authoritative quotes and stores coordinates", () => {
     assert.match(orderRoute, /parseDeliveryCoordinates/);
     assert.match(orderRoute, /destinationLatitude = coordinates\.coordinates\?\.latitude/);
     assert.match(orderRoute, /destinationLongitude = coordinates\.coordinates\?\.longitude/);
-    assert.match(orderRoute, /const quoted = await getBiteshipRates\(\{/);
+    assert.match(orderRoute, /getBiteshipCoordinateRates\(/);
+    assert.match(orderRoute, /getBiteshipRates\(\{/);
+    assert.match(orderRoute, /shippingMode === "instant"/);
 });
 
 // 6. destinationAreaId stays authoritative
@@ -104,7 +110,9 @@ test("destinationAreaId remains required and authoritative", () => {
 // 7. courierCode stays from revalidated quote
 test("courierCode still comes from the server-side revalidated quote", () => {
     assert.match(orderRoute, /courierCode = selected\.courierCode/);
-    assert.match(orderRoute, /selectRate\(quoted\.rates, selection\)/);
+    assert.match(orderRoute, /selectRate\(eligibleRates, selection\)/);
+    assert.match(orderRoute, /shipmentCategory === "instant"/);
+    assert.match(orderRoute, /shipmentCategory === "regular"/);
 });
 
 // 8. QRIS only preserved

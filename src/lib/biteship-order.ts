@@ -35,6 +35,7 @@ export type BiteshipOrderInput = {
     serviceCode: string;
     referenceId: string;
     items: BiteshipOrderItem[];
+    coordinates?: { origin: { latitude: number; longitude: number }; destination: { latitude: number; longitude: number } };
     // Optional dropshipper label-only identity (never changes physical origin).
     senderName?: string | null;
     senderPhone?: string | null;
@@ -132,6 +133,11 @@ export function buildBiteshipOrderPayload(input: BiteshipOrderInput): Record<str
             weight: item.weight,
         })),
     };
+
+    if (input.coordinates) {
+        payload.origin_coordinate = { latitude: input.coordinates.origin.latitude, longitude: input.coordinates.origin.longitude };
+        payload.destination_coordinate = { latitude: input.coordinates.destination.latitude, longitude: input.coordinates.destination.longitude };
+    }
 
     if (input.destination.note) payload.destination_note = input.destination.note;
 

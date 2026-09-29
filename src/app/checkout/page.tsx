@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, X } from "lucide-react";
+import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Search, X, Zap } from "lucide-react";
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
@@ -280,6 +280,7 @@ export default function CheckoutPage() {
     const [rateError, setRateError] = useState("");
     const [selected, setSelected] = useState<{ courierCode: string; serviceCode: string } | null>(null);
     const [showAllShipping, setShowAllShipping] = useState(false);
+    const [shippingMode, setShippingMode] = useState<"instant" | "package">("package");
     const rateRequestRef = useRef(0);
     // Destination signature the current rate list (and its quoteRef) belongs to. A quote
     // whose signature no longer matches the live destination is never usable. It is kept
@@ -621,6 +622,7 @@ export default function CheckoutPage() {
         // Genuinely no official candidate: reveal the manual search as the fallback.
         setDestinationArea(null);
         setSelected(null);
+        setShippingMode("package");
         setAreaState("not_found");
     };
 
@@ -797,7 +799,7 @@ export default function CheckoutPage() {
     const selectRate = (rate: Rate) => setSelected({ courierCode: rate.courierCode, serviceCode: rate.serviceCode });
     const selectedRate = selected ? rates.find((r) => r.courierCode === selected.courierCode && r.serviceCode === selected.serviceCode) ?? null : null;
     const shipping = selectedRate?.price ?? 0;
-    const groupedRates = groupShippingRatesByCategory(rates);
+    const groupedRates = groupShippingRatesByCategory(rates).filter((group) => shippingMode === "package" ? group.category === "regular" : group.category === "instant" || group.category === "same_day");
 
     // ---- Destination address: map/area components (auto-filled) + the customer's own detail ----
     const destinationFieldValues = {
@@ -863,6 +865,7 @@ export default function CheckoutPage() {
             senderPhone: mode === "dropship" ? cleanFieldValue(senderPhone) || undefined : undefined,
             hidePrice: mode === "dropship" ? hidePrice : undefined,
             destinationAreaId: destinationArea.id,
+            shippingMode,
             courierCode: selectedRate.courierCode,
             courierName: selectedRate.courierName,
             serviceCode: selectedRate.serviceCode,
@@ -1053,6 +1056,11 @@ export default function CheckoutPage() {
 
                         <Panel title="2 · Pilih Pengiriman">
                             <p className="mb-3 text-sm text-[#6D6558]">Pilih layanan yang paling sesuai untuk pesanan Anda.</p>
+                            <div className="mb-4 grid grid-cols-2 gap-2" role="tablist" aria-label="Pengiriman">
+                                <button type="button" onClick={() => { setShippingMode("instant"); setSelected(null); setQuoteSignature(""); }} className={`min-h-12 rounded-xl border font-bold ${shippingMode === "instant" ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}><Zap size={16} className="mr-1 inline" /> Instan</button>
+                                <button type="button" onClick={() => { setShippingMode("package"); setSelected(null); setQuoteSignature(""); }} className={`min-h-12 rounded-xl border font-bold ${shippingMode === "package" ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>📦 Kirim Paket</button>
+                            </div>
+                            {shippingMode === "instant" && !groupedRates.length && rateState === "ready" && <div className="mb-3 rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Pengiriman instan belum tersedia untuk lokasi ini. Silakan pilih Kirim Paket.</div>}
                             <ShippingRates state={rateState} error={rateError} groups={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
                         </Panel>
                     </div>

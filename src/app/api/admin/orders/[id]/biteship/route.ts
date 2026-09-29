@@ -16,6 +16,7 @@ import {
     BiteshipUnavailableError,
     createBiteshipOrder,
     getBiteshipOriginIdentity,
+    getBiteshipOriginCoordinates,
     retrieveBiteshipOrder,
 } from "@/lib/biteship";
 import { resolveKasirOrderType } from "@/lib/kasir-delivery";
@@ -152,6 +153,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         prisma.order.updateMany({ where: { id, biteshipOrderId: claim }, data: { biteshipOrderId: null } });
 
     try {
+        const instantCategory = /\binstant\b|\bon[ _-]?demand\b/i.test(`${order.courierCode} ${order.serviceCode}`) || /\bsame[ _-]?day\b/i.test(`${order.courierCode} ${order.serviceCode}`);
+        const coordinates = instantCategory && order.destinationLatitude !== null && order.destinationLongitude !== null && getBiteshipOriginCoordinates()
+            ? { origin: getBiteshipOriginCoordinates()!, destination: { latitude: order.destinationLatitude, longitude: order.destinationLongitude } } : undefined;
         const created = await createBiteshipOrder({
             origin,
             destination: {
@@ -179,6 +183,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             // rather than posted as an invalid `shipper_contact_phone`.
             senderPhone: order.senderPhone ? normalizeRecipientPhone(order.senderPhone) || undefined : undefined,
             hidePrice: order.hidePrice,
+            coordinates,
         });
 
         const updated = await prisma.order.update({

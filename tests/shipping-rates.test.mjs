@@ -129,8 +129,9 @@ test("same-key retry returns stored responsePayload without re-quoting", () => {
 
 // 8C. New idempotency key still requires live Biteship validation
 test("new idempotency key still performs live Biteship validation", () => {
-    assert.match(orderRoute, /const quoted = await getBiteshipRates\(\{/);
-    assert.match(orderRoute, /const selected = selectRate\(quoted\.rates, selection\)/);
+    assert.match(orderRoute, /getBiteshipRates\(\{/);
+    assert.match(orderRoute, /getBiteshipCoordinateRates\(/);
+    assert.match(orderRoute, /selectRate\(eligibleRates, selection\)/);
     assert.match(orderRoute, /shipping = selected\.price/);
 });
 
@@ -231,6 +232,8 @@ test("checkout order route still requires origin area ID for shipping", () => {
     assert.match(orderRoute, /getBiteshipOriginAreaId/);
     assert.match(orderRoute, /BiteshipUnavailableError/);
     assert.match(orderRoute, /getBiteshipRates\(/);
+    assert.match(orderRoute, /getBiteshipCoordinateRates\(/);
+    assert.match(orderRoute, /getBiteshipOriginCoordinates\(/);
 });
 
 // 18. Biteship courier listing

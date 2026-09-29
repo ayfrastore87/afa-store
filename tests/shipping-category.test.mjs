@@ -166,7 +166,7 @@ test("normalizer keeps the semantic fields Biteship returns (serviceType/descrip
 
 // 12. The rates API contract stays additive for the client
 test("rates route forwards courierCode/serviceCode plus the additive fields", () => {
-    assert.match(ratesRoute, /rates: result\.rates\.map\(/);
+    assert.match(ratesRoute, /rates: rates\.map\(/);
     assert.match(ratesRoute, /courierCode: rate\.courierCode/);
     assert.match(ratesRoute, /serviceCode: rate\.serviceCode/);
     assert.match(ratesRoute, /shipmentCategory: rate\.shipmentCategory/);
@@ -245,7 +245,8 @@ test("checkout sends only courierCode/serviceCode and the server re-quotes", () 
     assert.match(checkoutPage, /courierCode: selectedRate\.courierCode,/);
     assert.match(checkoutPage, /serviceCode: selectedRate\.serviceCode,/);
     assert.doesNotMatch(checkoutPage, /price: selectedRate\.price/);
-    assert.match(orderRoute, /const quoted = await getBiteshipRates\(\{/);
-    assert.match(orderRoute, /selectRate\(quoted\.rates, selection\)/);
+    assert.match(orderRoute, /getBiteshipRates\(\{/);
+    assert.match(orderRoute, /getBiteshipCoordinateRates\(/);
+    assert.match(orderRoute, /selectRate\(eligibleRates, selection\)/);
     assert.match(orderRoute, /shipping = selected\.price/);
 });

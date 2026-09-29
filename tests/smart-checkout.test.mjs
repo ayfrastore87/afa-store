@@ -127,8 +127,8 @@ test("checkout keeps fallback area search inside Data Penerima when auto-match f
 
 // 8. server shipping revalidation still present
 test("server shipping revalidation preserved", () => {
-    assert.match(orderRoute, /selectRate\(quoted\.rates, selection\)/);
-    assert.match(orderRoute, /const quoted = await getBiteshipRates/);
+    assert.match(orderRoute, /selectRate\(eligibleRates, selection\)/);
+    assert.match(orderRoute, /getBiteshipRates\(|getBiteshipCoordinateRates\(/);
 });
 
 // 9. courierCode authoritative
@@ -267,8 +267,8 @@ test("destinationAreaId still comes from official Biteship match (no areas[0] fa
 
 test("QRIS-only + server-side quote authority remain intact", () => {
     assert.match(checkoutPage, /const PAYMENT_METHOD = "QRIS" as const/);
-    assert.match(orderRoute, /selectRate\(quoted\.rates, selection\)/);
-    assert.match(orderRoute, /const quoted = await getBiteshipRates/);
+    assert.match(orderRoute, /selectRate\(eligibleRates, selection\)/);
+    assert.match(orderRoute, /getBiteshipRates\(|getBiteshipCoordinateRates\(/);
 });
 
 // Fullscreen location picker UX.

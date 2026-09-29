@@ -22,6 +22,7 @@ export const BITESHIP_DEFAULT_TIMEOUT_MS = 10_000;
 
 export type BiteshipItem = { name?: string; weight: number; quantity: number; value?: number };
 export type BiteshipRateRequest = { destinationAreaId: string; items: BiteshipItem[] };
+export type BiteshipCoordinateRateRequest = { destinationLatitude: number; destinationLongitude: number; items: BiteshipItem[] };
 
 export type BiteshipArea = {
     id: string;
@@ -41,6 +42,8 @@ export type BiteshipRatesResult = {
     destinationAreaId: string;
     rates: BiteshipCategorizedRate[];
 };
+
+export type BiteshipCoordinateRatesResult = { rates: BiteshipCategorizedRate[] };
 
 type BiteshipRatesRawResponse = {
     success?: boolean;
@@ -100,6 +103,14 @@ export function getBiteshipConfig() {
     // (`/api/shipping/areas`) only needs the API key. Rates/checkout enforce it
     // separately via getBiteshipOriginAreaId().
     return { apiKey, originAreaId, baseUrl };
+}
+
+export function getBiteshipOriginCoordinates(): { latitude: number; longitude: number } | null {
+    const latitude = Number(process.env.BITESHIP_ORIGIN_LATITUDE);
+    const longitude = Number(process.env.BITESHIP_ORIGIN_LONGITUDE);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+    if (!process.env.BITESHIP_ORIGIN_LATITUDE?.trim() || !process.env.BITESHIP_ORIGIN_LONGITUDE?.trim()) return null;
+    return { latitude, longitude };
 }
 
 export function getBiteshipOriginAreaId() {
@@ -270,6 +281,23 @@ export async function getBiteshipRates(request: BiteshipRateRequest): Promise<Bi
         destinationAreaId: raw.destination?.area_id || request.destinationAreaId,
         rates,
     };
+}
+
+/** Coordinate quote for Instan/Same-day. Origin is deliberately read only from server env. */
+export async function getBiteshipCoordinateRates(request: BiteshipCoordinateRateRequest): Promise<BiteshipCoordinateRatesResult> {
+    const origin = getBiteshipOriginCoordinates();
+    if (!origin) return { rates: [] };
+    const couriers = (await listBiteshipCouriers()).join(",");
+    if (!couriers) throw new BiteshipUnavailableError();
+    const items = request.items.map((item) => ({ name: item.name || "Produk", weight: item.weight, quantity: item.quantity, value: item.value ?? 0 }));
+    const data = await biteshipFetch("/v1/rates/couriers", { method: "POST", body: JSON.stringify({
+        origin_latitude: origin.latitude, origin_longitude: origin.longitude,
+        destination_latitude: request.destinationLatitude, destination_longitude: request.destinationLongitude,
+        couriers, items,
+    }) });
+    const raw = data as BiteshipRatesRawResponse;
+    const rates = (await normalizeBiteshipRatesResponse(raw)).map((rate) => ({ ...rate, shipmentCategory: classifyShippingService(rate) }));
+    return { rates };
 }
 
 /**

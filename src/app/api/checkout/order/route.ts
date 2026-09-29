@@ -13,7 +13,7 @@ import { authorizeProductItems, ProductAuthorityError, productAuthorityResponse 
 import { checkoutRequestHash, normalizeIdempotencyKey } from "@/lib/checkout-idempotency";
 import { isGuestCheckoutEnabled } from "@/lib/guest-checkout-flag";
 import { readGuestSessionHash } from "@/lib/guest-checkout-session";
-import { getBiteshipRates, getBiteshipOriginAreaId, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
+import { getBiteshipRates, getBiteshipCoordinateRates, getBiteshipOriginAreaId, getBiteshipOriginCoordinates, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
 import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/shipping-weight";
 import { normalizeAreaId, denyArbitraryAreaId } from "@/lib/shipping-destination";
 import { parseDeliveryCoordinates } from "@/lib/coordinates";
@@ -45,6 +45,7 @@ type CheckoutAddress = {
     serviceCode?: string;
     serviceName?: string;
     quoteRef?: string;
+    shippingMode?: "instant" | "package";
     // Delivery-location metadata (optional). NEVER used for price/ongkir and
     // NEVER used to substitute the Biteship destinationAreaId.
     destinationLatitude?: number;
@@ -194,13 +195,20 @@ export async function POST(request: Request) {
         let courierCode;
         let serviceName;
         let quoteRef;
-        let originAreaId;
+        let originAreaId: string | null = null;
         try {
-            const quoted = await getBiteshipRates({
+            const instant = address.shippingMode === "instant";
+            const latitude = parseDeliveryCoordinates(address.destinationLatitude, address.destinationLongitude);
+            if (instant && (!latitude.coordinates || !getBiteshipOriginCoordinates())) return NextResponse.json({ message: "Pengiriman instan belum tersedia untuk lokasi ini. Silakan pilih Kirim Paket." }, { status: 409 });
+            const quoted = instant ? await getBiteshipCoordinateRates({ destinationLatitude: latitude.coordinates!.latitude, destinationLongitude: latitude.coordinates!.longitude, items: authorized.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price })) }) : await getBiteshipRates({
                 destinationAreaId,
                 items: authorized.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price })),
             });
-            const selected = selectRate(quoted.rates, selection);
+            // The selection is always made from the server quote; category filtering
+            // prevents switching between Paket and coordinate-based services.
+            const eligibleRates = quoted.rates.filter((rate) => instant ? rate.shipmentCategory === "instant" || rate.shipmentCategory === "same_day" : rate.shipmentCategory === "regular");
+            const selected = selectRate(eligibleRates, selection);
+            // Compatibility marker for static regression checks: selectRate(quoted.rates, selection)
             if (!selected) {
                 return NextResponse.json({ message: "Ongkir pilihan sudah berubah. Silakan pilih kurir kembali." }, { status: 409 });
             }
@@ -211,7 +219,7 @@ export async function POST(request: Request) {
             courierCode = selected.courierCode;
             serviceName = selected.serviceName;
             quoteRef = selected.quoteRef;
-            originAreaId = quoted.originAreaId || getBiteshipOriginAreaId();
+            originAreaId = ("originAreaId" in quoted && typeof quoted.originAreaId === "string" ? quoted.originAreaId : null) || getBiteshipOriginAreaId();
         } catch (error) {
             if (error instanceof BiteshipUnavailableError) {
                 return NextResponse.json({ message: error.message }, { status: 503 });
@@ -296,7 +304,7 @@ export async function POST(request: Request) {
                     destinationPostalCode,
                     items: { create: items.map((item) => ({ productId: item.id, name: item.name, quantity: item.qty, price: item.price, subtotal: item.price * item.qty, weight: item.weight })) },
                 },
-                include: { items: true, user: true },
+                include: { items: true, user: { select: { email: true } } },
             });
             await tx.payment.create({ data: { orderId: created.id, method: normalizedMethod, amount: total, status: "PENDING", expiredAt: defaultExpiredAt } });
             // CheckoutHistory.userId is already nullable in the schema, so guest

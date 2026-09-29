@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { parseJsonResponse } from "@/lib/api-fetch";
 import { calculateSubtotal, calculateTotalItems, type CartItem, type CartResponse, type ProductInput } from "@/lib/cart";
 import { getUserFacingMessage, safeApiMessage } from "@/lib/user-facing-error";
+import { addToGuestCart, clearGuestCart, readGuestCart, removeFromGuestCart, updateGuestCartQty } from "@/lib/guest-cart-store";
 
 export type { CartItem } from "@/lib/cart";
 
@@ -79,6 +80,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [guestEnabled, setGuestEnabled] = useState(false);
     const [toast, setToast] = useState<CartToast | null>(null);
     const versions = useRef(new Map<string, number>());
     const requestedQuantities = useRef(new Map<string, number>());
@@ -127,6 +129,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const refreshCart = useCallback(async () => {
+        const capability = await fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<{ guestCheckoutEnabled?: boolean }> : {}).catch(() => ({}));
+        const enabled = (capability as { guestCheckoutEnabled?: boolean }).guestCheckoutEnabled === true;
+        setGuestEnabled(enabled);
+        if (enabled) {
+            const entries = readGuestCart();
+            const query = entries.map((entry) => `item=${encodeURIComponent(`${entry.productId}:${entry.qty}`)}`).join("&");
+            const result = await requestCart(`/api/cart?${query}`);
+            if (result.ok) setCart(result.data.items);
+            setIsAuthenticated(false);
+            setLoading(false);
+            return;
+        }
         const result = await requestCart();
         if (result.ok) {
             setCart(result.data.items);
@@ -161,8 +175,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, [beginMutation, finishMutation]);
 
     const addToCart = useCallback(async (item: ProductInput, quantity = 1): Promise<boolean> => {
-        if (!isAuthenticated) return false;
         const qty = Math.max(1, Math.floor(quantity));
+        if (!isAuthenticated) {
+            if (!guestEnabled) return false;
+            addToGuestCart(item.id, qty);
+            setCart((current) => [...current.filter((entry) => entry.id !== item.id), { ...item, qty: (current.find((entry) => entry.id === item.id)?.qty ?? 0) + qty }]);
+            showToast({ title: "Berhasil ditambahkan", message: `${item.name} masuk ke keranjang.`, variant: "success" });
+            return true;
+        }
         const version = beginMutation(item.id, qty);
 
         const result = await requestCart("/api/cart", {
@@ -179,34 +199,34 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
         showToast({ title: "Berhasil ditambahkan", message: `${item.name} masuk ke keranjang.`, variant: "success" });
         return true;
-    }, [isAuthenticated, beginMutation, finishMutation, showToast]);
+    }, [guestEnabled, isAuthenticated, beginMutation, finishMutation, showToast]);
 
     const increaseQty = useCallback((id: string) => {
-        if (!isAuthenticated) return;
         const current = cart.find((item) => item.id === id);
         if (!current) return;
         const target = current.stock ? Math.min(current.stock, current.qty + 1) : current.qty + 1;
         if (target === current.qty) return;
+        if (!isAuthenticated && guestEnabled) { updateGuestCartQty(id, target); setCart((items) => items.map((item) => item.id === id ? { ...item, qty: target } : item)); return; }
         persistQty(id, target);
-    }, [isAuthenticated, cart, persistQty]);
+    }, [guestEnabled, isAuthenticated, cart, persistQty]);
 
     const decreaseQty = useCallback((id: string) => {
-        if (!isAuthenticated) return;
         const current = cart.find((item) => item.id === id);
         if (!current || current.qty <= 1) return;
+        if (!isAuthenticated && guestEnabled) { updateGuestCartQty(id, current.qty - 1); setCart((items) => items.map((item) => item.id === id ? { ...item, qty: item.qty - 1 } : item)); return; }
         persistQty(id, current.qty - 1);
-    }, [isAuthenticated, cart, persistQty]);
+    }, [guestEnabled, isAuthenticated, cart, persistQty]);
 
     const removeFromCart = useCallback((id: string) => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated) { if (guestEnabled) { removeFromGuestCart(id); setCart((items) => items.filter((item) => item.id !== id)); } return; }
         const version = beginMutation(id, 0);
 
         requestCart(`/api/cart?id=${encodeURIComponent(id)}`, { method: "DELETE" })
             .then((result) => finishMutation(id, version, result, "Produk belum berhasil dihapus. Silakan coba lagi."));
-    }, [isAuthenticated, beginMutation, finishMutation]);
+    }, [guestEnabled, isAuthenticated, beginMutation, finishMutation]);
 
     const clearCart = useCallback(async () => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated) { if (guestEnabled) { clearGuestCart(); setCart([]); } return; }
         const result = await requestCart("/api/cart", { method: "DELETE" });
         if (result.ok) {
             setCart(result.data.items);

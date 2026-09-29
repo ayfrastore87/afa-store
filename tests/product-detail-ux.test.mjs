@@ -40,10 +40,10 @@ test("badge updates from cart context state without full page reload after add",
     assert.doesNotMatch(cartContextSource, /localStorage/);
 });
 
-test("unauthenticated add keeps existing auth behavior (login redirect, no guest cart)", () => {
-    assert.match(pageSource, /await requireAuth\("\/"\)/);
-    assert.match(cartContextSource, /if \(!isAuthenticated\) return false;/);
-    assert.doesNotMatch(cartContextSource, /guest/i);
+test("guest add remains behind the server capability while authenticated cart stays supported", () => {
+    assert.match(pageSource, /guestCheckoutAvailable/);
+    assert.match(cartContextSource, /if \(!guestEnabled\) return false;/);
+    assert.match(cartContextSource, /addToGuestCart/);
 });
 
 test("product detail renders real data: name, price, stock, rating, category, badge", () => {
@@ -60,13 +60,14 @@ test("product detail does not fabricate per-product reviews", () => {
     assert.doesNotMatch(detailPageSource, /testimonials/i);
 });
 
-test("Beli Sekarang opens guest WhatsApp order without checkout or order creation", () => {
-    const whatsappSource = fs.readFileSync(new URL("../src/lib/whatsapp-order.ts", import.meta.url), "utf8");
-    assert.match(ctaSource, /buildWhatsAppOrderUrl\(product, quantity\)/);
-    assert.match(ctaSource, /disabled=\{!available\}/);
+test("Beli Sekarang goes through cart checkout flow and requires authentication", () => {
+    const buyNowFn = ctaSource.slice(ctaSource.indexOf("const buyNow"), ctaSource.indexOf("const controls"));
+    assert.match(buyNowFn, /confirmCustomerAuth\("cart"/);
+    assert.match(buyNowFn, /router\.push\("\/cart"\)/);
+    assert.doesNotMatch(buyNowFn, /window\.open/);
     assert.doesNotMatch(ctaSource, /\/api\/cart\/buy-now/);
-    const buyNowSource = ctaSource.slice(ctaSource.indexOf("const buyNow"), ctaSource.indexOf("const controls"));
-    assert.doesNotMatch(buyNowSource, /router\.push|login|checkout/);
+    // whatsapp-order.ts library remains intact and is used for the secondary contact link
+    const whatsappSource = fs.readFileSync(new URL("../src/lib/whatsapp-order.ts", import.meta.url), "utf8");
     assert.match(whatsappSource, /6287770000883/);
     assert.match(whatsappSource, /encodeURIComponent/);
     assert.match(whatsappSource, /product\.name/);
@@ -77,11 +78,16 @@ test("Beli Sekarang opens guest WhatsApp order without checkout or order creatio
     assert.doesNotMatch(whatsappSource, /fetch|prisma|Payment|Biteship|stock/);
 });
 
-test("catalog and homepage buy-now actions share the WhatsApp helper", () => {
+test("WhatsApp secondary contact link present on product detail; buy-now and catalog route to cart", () => {
     const catalogSource = fs.readFileSync(new URL("../src/components/catalog/catalog-experience.tsx", import.meta.url), "utf8");
-    assert.match(pageSource, /buildWhatsAppOrderUrl/);
-    assert.match(catalogSource, /buildWhatsAppOrderUrl\(item\)/);
+    // Secondary "Tanya via WhatsApp" link still uses buildWhatsAppOrderUrl on product detail
+    assert.match(ctaSource, /buildWhatsAppOrderUrl\(product, quantity\)/);
+    assert.match(ctaSource, /Tanya via WhatsApp/);
+    // ProductCard still exposes onBuy callback for parent to wire
     assert.match(productCardSource, /onClick=\{onBuy\}/);
+    // Neither homepage nor catalog sends buyNow to WhatsApp anymore
+    assert.doesNotMatch(pageSource, /window\.open.*buildWhatsAppOrderUrl/);
+    assert.doesNotMatch(catalogSource, /window\.open.*buildWhatsAppOrderUrl/);
 });
 
 test("schema remains untouched by the customer WhatsApp flow", () => {

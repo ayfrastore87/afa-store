@@ -68,8 +68,11 @@ test("page: uses storeName fallback", () => {
 test("page: passes whatsapp to CustomOrderCta", () => {
   match(homePage, /CustomOrderCta whatsapp=\{whatsappSetting/);
 });
-test("page: passes whatsapp to buildWhatsAppOrderUrl", () => {
-  match(homePage, /buildWhatsAppOrderUrl.*whatsappSetting/);
+test("page: buyNow routes to cart using requireAuth (WhatsApp removed from buyNow)", () => {
+  // buyNow now adds to cart and navigates; whatsappSetting is still used by contact CTAs
+  doesNotMatch(homePage, /buildWhatsAppOrderUrl.*whatsappSetting/);
+  match(homePage, /requireAuth\("\/cart", "cart"\)/);
+  match(homePage, /router\.push\("\/cart"\)/);
 });
 
 // ── 6. whatsapp-order.ts ──────────────────────────────────────────────────────

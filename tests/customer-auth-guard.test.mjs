@@ -39,8 +39,12 @@ test("guest wishlist and cart navigation remains protected at the route level", 
     assert.match(cartPage, /hasAuthenticatedUser\(\)/);
 });
 
-test("guest Beli Sekarang remains a direct WhatsApp action", () => {
-    assert.match(detailCta, /buildWhatsAppOrderUrl\(product, quantity\)/);
+test("Beli Sekarang routes to cart and requires auth; WhatsApp remains as secondary contact link", () => {
     const buyNow = detailCta.slice(detailCta.indexOf("const buyNow"), detailCta.indexOf("const controls"));
-    assert.doesNotMatch(buyNow, /hasAuthenticatedUser|loginPath|router\.push|checkout/);
+    assert.match(buyNow, /confirmCustomerAuth\("cart"/);
+    assert.match(buyNow, /router\.push\("\/cart"\)/);
+    assert.doesNotMatch(buyNow, /window\.open/);
+    // WhatsApp remains as a separate "Tanya via WhatsApp" anchor using buildWhatsAppOrderUrl
+    assert.match(detailCta, /buildWhatsAppOrderUrl\(product, quantity\)/);
+    assert.match(detailCta, /Tanya via WhatsApp/);
 });

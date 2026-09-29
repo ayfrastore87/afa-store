@@ -135,10 +135,10 @@ test("authenticated add posts only id + qty and feeds server cart back into clie
     assert.doesNotMatch(cartContextSource, /window\.location\.reload/);
 });
 
-test("unauthenticated add returns false and never writes a local/guest cart", () => {
-    assert.match(cartContextSource, /if \(!isAuthenticated\) return false;/);
-    assert.doesNotMatch(cartContextSource, /localStorage/);
-    assert.doesNotMatch(cartContextSource, /guest/i);
+test("guest add is capability-gated and persists only the minimal guest cart", () => {
+    assert.match(cartContextSource, /if \(!guestEnabled\) return false;/);
+    assert.match(cartContextSource, /addToGuestCart\(item\.id, qty\)/);
+    assert.match(cartContextSource, /readGuestCart/);
 });
 
 test("same product merges quantity via existing /api/cart merge behavior", () => {

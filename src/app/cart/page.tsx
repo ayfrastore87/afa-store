@@ -12,7 +12,7 @@ import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
 export default function CartPage() {
     const router = useRouter();
     const { cart, subtotal, totalItems, itemState, increaseQty, decreaseQty, removeFromCart } = useCart();
-    useEffect(() => { void hasAuthenticatedUser().then((authenticated) => { if (!authenticated) router.replace(loginPath("/cart")); }); }, [router]);
+    useEffect(() => { void fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((r) => r.json()).then(async ({ guestCheckoutEnabled }) => { if (guestCheckoutEnabled) return; if (!(await hasAuthenticatedUser())) router.replace(loginPath("/cart")); }).catch(() => void hasAuthenticatedUser().then((authenticated) => { if (!authenticated) router.replace(loginPath("/cart")); })); }, [router]);
     const unavailable = cart.some((item) => itemState(item.id).notice.includes("tidak tersedia"));
     const startCheckout = async () => {
         if (unavailable) return;

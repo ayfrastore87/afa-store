@@ -21,7 +21,7 @@ import CustomOrderCta from "@/components/custom-order-cta";
 import HomePromoBanners from "@/components/home/HomePromoBanners";
 import { CartItem, type CartToast, useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
-import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
+
 import { hasAuthenticatedUser } from "@/lib/client-auth";
 import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
 import { fetchProducts, formatRupiah, type Product } from "@/lib/products";
@@ -78,6 +78,7 @@ export default function Home() {
     if (await hasAuthenticatedUser()) return true;
     return confirmCustomerAuth(kind, next);
   };
+  const guestCheckoutAvailable = async () => ((await fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).catch(() => ({}))) as { guestCheckoutEnabled?: boolean }).guestCheckoutEnabled === true;
   const openCart = async () => { if (await requireAuth("/cart", "cart")) setCartOpen(true); };
   const openAccount = async () => {
     if (await hasAuthenticatedUser()) router.push("/account");
@@ -97,9 +98,17 @@ export default function Home() {
       setAddState((current) => { const next = { ...current }; delete next[item.id]; return next; });
     }
   };
-  const buyNow = (item: { name: string; slug?: string | null; price: number }) => {
+  const buyNow = async (item: Product) => {
     if (!item.slug) return;
-    window.open(buildWhatsAppOrderUrl({ name: item.name, slug: item.slug, price: item.price }, 1, whatsappSetting || undefined), "_blank", "noopener,noreferrer");
+    if (!(await hasAuthenticatedUser()) && !(await guestCheckoutAvailable())) { if (!(await requireAuth("/cart", "cart"))) return; }
+    setAddState((current) => ({ ...current, [item.id]: "adding" }));
+    const added = await addToCart(item);
+    if (added) {
+      setAddState((current) => ({ ...current, [item.id]: "added" }));
+      router.push("/cart");
+    } else {
+      setAddState((current) => { const next = { ...current }; delete next[item.id]; return next; });
+    }
   };
   const continueToCheckout = async () => {
     if (checkoutPending || !cart.length) return;

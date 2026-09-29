@@ -14,7 +14,7 @@ import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
 import { hasAuthenticatedUser } from "@/lib/client-auth";
 import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
-import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
+
 import type { Product } from "@/lib/products";
 import {
     CATALOG_SORT_LABELS,
@@ -117,9 +117,26 @@ export default function CatalogExperience({ products, categories, totalActive, q
         [addState, addToCart, requireAuth],
     );
 
-    const buyNow = useCallback((item: Product) => {
-        window.open(buildWhatsAppOrderUrl(item), "_blank", "noopener,noreferrer");
-    }, []);
+    const buyNow = useCallback(
+        async (item: Product) => {
+            if (addState[item.id]) return;
+            const capability = await fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).catch(() => ({}));
+            if (!(await hasAuthenticatedUser()) && (capability as { guestCheckoutEnabled?: boolean }).guestCheckoutEnabled !== true && !(await requireAuth("/cart"))) return;
+            setAddState((current) => ({ ...current, [item.id]: "adding" }));
+            const added = await addToCart(item);
+            if (added) {
+                setAddState((current) => ({ ...current, [item.id]: "added" }));
+                router.push("/cart");
+            } else {
+                setAddState((current) => {
+                    const next = { ...current };
+                    delete next[item.id];
+                    return next;
+                });
+            }
+        },
+        [addState, addToCart, requireAuth, router],
+    );
 
     const onWish = useCallback(
         async (item: Product) => {

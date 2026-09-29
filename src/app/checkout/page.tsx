@@ -8,6 +8,8 @@ import { ArrowLeft, Check, Home, Loader2, LocateFixed, MapPin, PackageOpen, Sear
 import type { CheckoutItem } from "@/lib/checkout";
 import { formatRupiah } from "@/lib/products";
 import { getUserFacingMessage } from "@/lib/user-facing-error";
+import { clearGuestCart } from "@/lib/guest-cart-store";
+import { hasAuthenticatedUser } from "@/lib/client-auth";
 import type { DeliveryCoordinates } from "@/lib/coordinates";
 import { CheckoutLocationMap } from "@/components/checkout/location-map";
 import { CheckoutLocationSearch } from "@/components/checkout/location-search";
@@ -882,6 +884,7 @@ export default function CheckoutPage() {
             const d = await r.json().catch(() => ({}));
             if (r.status === 409 && d.status === "PROCESSING") { setProcessing(true); return; }
             if (!r.ok || !d.redirectTo) throw new Error(d.message || d.error || "Order belum berhasil dibuat.");
+            if (!(await hasAuthenticatedUser())) clearGuestCart();
             window.location.href = d.redirectTo;
         } catch (e) {
             setError(getUserFacingMessage(e, "Order belum berhasil dibuat. Silakan coba lagi."));

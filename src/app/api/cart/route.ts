@@ -3,6 +3,7 @@ import { createSupabaseServiceClient } from "@/lib/supabase-admin";
 import { buildCartResponse } from "@/lib/cart";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, parseProductRequestItem, productAuthorityResponse, reconcileProductItems } from "@/lib/product-authority";
+import { isGuestCheckoutEnabled } from "@/lib/guest-checkout-flag";
 
 export const runtime = "nodejs";
 
@@ -61,10 +62,19 @@ async function getCart(userId: string) {
     return buildCartResponse(items);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const user = await getCurrentUser();
-        if (!user) return unauthenticatedCartResponse();
+        if (!user) {
+            if (!isGuestCheckoutEnabled()) return unauthenticatedCartResponse();
+            const quantities = new URL(request.url).searchParams.getAll("item").map((value) => {
+                const [id, rawQty] = value.split(":");
+                const qty = Number(rawQty);
+                return { id, qty };
+            }).filter((item) => item.id && Number.isInteger(item.qty) && item.qty >= 1);
+            if (!quantities.length) return NextResponse.json({ items: [], subtotal: 0, totalItems: 0, grandTotal: 0 });
+            return NextResponse.json(buildCartResponse(await authorizeProductItems(quantities)));
+        }
         return NextResponse.json(await getCart(user.id));
     } catch (error) {
         return cartErrorResponse(error);

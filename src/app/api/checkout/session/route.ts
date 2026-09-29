@@ -3,13 +3,18 @@ import { NextResponse } from "next/server";
 import { CHECKOUT_COOKIE, checkoutSubtotal, decodeCheckoutItems, encodeCheckoutItems } from "@/lib/checkout";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, parseProductRequestItem, productAuthorityResponse } from "@/lib/product-authority";
+import { isGuestCheckoutEnabled } from "@/lib/guest-checkout-flag";
+import { ensureGuestSession } from "@/lib/guest-checkout-session";
 
 export const runtime = "nodejs";
 
 export async function GET() {
     try {
         const user = await getCurrentUser();
-        if (!user) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        // Feature-flag gate: unchanged authenticated behaviour when OFF.
+        if (!user && !isGuestCheckoutEnabled()) {
+            return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        }
         const store = await cookies();
         const snapshot = decodeCheckoutItems(store.get(CHECKOUT_COOKIE)?.value);
         const items = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })));
@@ -25,7 +30,10 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const user = await getCurrentUser();
-        if (!user) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        // Feature-flag gate: unchanged authenticated behaviour when OFF.
+        if (!user && !isGuestCheckoutEnabled()) {
+            return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        }
         const body: unknown = await request.json();
         const values = typeof body === "object" && body !== null && Array.isArray((body as Record<string, unknown>).items) ? (body as { items: unknown[] }).items : [];
         const requested = values.map(parseProductRequestItem);
@@ -40,6 +48,13 @@ export async function POST(request: Request) {
             path: "/",
             maxAge: 60 * 30,
         });
+        // Guest branch: mint (or reuse) the HttpOnly guest session cookie so
+        // /api/checkout/order can bind this checkout to a stable guest identity.
+        // The raw token never leaves the cookie header — only the sha256 hash
+        // reaches the database in CheckoutIdempotency.guestSessionHash.
+        if (!user) {
+            await ensureGuestSession(response);
+        }
         return response;
     } catch (error) {
         const safe = productAuthorityResponse(error);

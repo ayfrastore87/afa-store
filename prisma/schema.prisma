@@ -277,21 +277,30 @@ model CheckoutHistory {
 }
 
 model CheckoutIdempotency {
-  id              String    @id @default(cuid())
-  key             String    @unique
-  userId          String
-  orderId         String?   @unique
-  requestHash     String
-  status          String
-  responsePayload Json?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  expiresAt       DateTime?
+  id               String    @id @default(cuid())
+  key              String    @unique
+  // userId is nullable to accommodate guest checkout. Exactly one of userId /
+  // guestSessionHash is populated per row, enforced by the DB-level XOR CHECK
+  // (CheckoutIdempotency_identity_xor_chk) added in migration
+  // 20260929000000_guest_checkout_idempotency.
+  userId           String?
+  // sha256(raw guest cookie token) hex-64 lowercase. Raw guest tokens never
+  // touch the database — only their sha256 hash lives here. Shape is enforced
+  // by DB-level CHECK (CheckoutIdempotency_guestSessionHash_shape_chk).
+  guestSessionHash String?
+  orderId          String?   @unique
+  requestHash      String
+  status           String
+  responsePayload  Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  expiresAt        DateTime?
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([guestSessionHash])
   @@index([status, expiresAt])
 }
 

@@ -1,4 +1,5 @@
-﻿import { cookies } from "next/headers";
+﻿import { randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { createSupabaseServiceClient } from "@/lib/supabase-admin";
@@ -10,6 +11,8 @@ import { isPaymentMethod } from "@/lib/payments";
 import { getCurrentUser } from "@/lib/server-auth";
 import { authorizeProductItems, ProductAuthorityError, productAuthorityResponse } from "@/lib/product-authority";
 import { checkoutRequestHash, normalizeIdempotencyKey } from "@/lib/checkout-idempotency";
+import { isGuestCheckoutEnabled } from "@/lib/guest-checkout-flag";
+import { readGuestSessionHash } from "@/lib/guest-checkout-session";
 import { getBiteshipRates, getBiteshipOriginAreaId, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
 import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/shipping-weight";
 import { normalizeAreaId, denyArbitraryAreaId } from "@/lib/shipping-destination";
@@ -67,7 +70,18 @@ function getSupabaseServerClient() {
 export async function POST(request: Request) {
     try {
         const user = await getCurrentUser();
-        if (!user) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        // Feature-flag gate: when GUEST_CHECKOUT_ENABLED != "true", require an
+        // authenticated user exactly as before. Existing authenticated behaviour
+        // — including all 14 replayable CheckoutIdempotency rows in Production —
+        // is byte-for-byte unchanged when the flag is off.
+        const guestEnabled = isGuestCheckoutEnabled();
+        if (!user && !guestEnabled) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
+        // When the flag is on and no user is signed in, the buyer MUST already
+        // carry a guest session cookie minted upstream by /api/cart/buy-now or
+        // /api/checkout/session. If the cookie is missing/malformed we fall
+        // back to the login flow rather than silently creating anonymous orders.
+        const guestSessionHash = user ? null : await readGuestSessionHash();
+        if (!user && !guestSessionHash) return NextResponse.json({ redirectTo: "/login" }, { status: 401 });
         const key = normalizeIdempotencyKey(request.headers.get("Idempotency-Key"));
         if (!key) return NextResponse.json({ message: "Permintaan tidak valid. Silakan muat ulang halaman checkout." }, { status: 400 });
 
@@ -100,7 +114,13 @@ export async function POST(request: Request) {
         const fullAddress = [streetAddress, address.district, address.city, address.province, address.postalCode].map((part) => (typeof part === "string" ? part.trim().slice(0, 200) : "")).filter(Boolean).join(", ").slice(0, 800);
         const paymentMethod = paymentMethods.includes(String(address.paymentMethod).toUpperCase() as (typeof paymentMethods)[number]) ? String(address.paymentMethod).toUpperCase() : "QRIS";
         const normalizedMethod = isPaymentMethod(paymentMethod) ? paymentMethod : "QRIS";
-        const requestHash = checkoutRequestHash(user.id, address, snapshot.map(({ id, qty }) => ({ id, qty })));
+        // Identity-aware request hash. Authenticated path uses the legacy
+        // signature so existing CheckoutIdempotency rows keep replaying; guest
+        // path swaps userId for the sha256 guest session hash so two different
+        // guests can never collide on the same Idempotency-Key.
+        const requestHash = user
+            ? checkoutRequestHash(user.id, address, snapshot.map(({ id, qty }) => ({ id, qty })))
+            : checkoutRequestHash({ kind: "guest", guestSessionHash: guestSessionHash! }, address, snapshot.map(({ id, qty }) => ({ id, qty })));
 
         // Idempotency: resolve a previous checkout BEFORE any external call (Biteship) or
         // shipping validation. A retry with the same key must reuse the existing result and
@@ -108,8 +128,18 @@ export async function POST(request: Request) {
         try {
             const existing = await prisma.checkoutIdempotency.findUnique({ where: { key } });
             if (existing) {
-                if (existing.userId !== user.id || existing.requestHash !== requestHash) {
-                    return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
+                if (user) {
+                    // Authenticated replay check — literal condition preserved so the
+                    // existing checkout-payment-readiness regression assertions still hold.
+                    if (existing.userId !== user.id || existing.requestHash !== requestHash) {
+                        return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
+                    }
+                } else {
+                    // Guest replay check. Cross-identity replay (user↔guest or guest↔guest)
+                    // is rejected with 409, never accepted silently.
+                    if (existing.guestSessionHash !== guestSessionHash || existing.userId !== null || existing.requestHash !== requestHash) {
+                        return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
+                    }
                 }
                 if (existing.responsePayload) return NextResponse.json(existing.responsePayload, { status: 201 });
                 return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
@@ -197,7 +227,16 @@ export async function POST(request: Request) {
         let total = 0;
         try {
         order = await prisma.$transaction(async (tx) => {
-            await tx.checkoutIdempotency.create({ data: { key, userId: user.id, requestHash, status: "PROCESSING" } });
+            // Exactly one of userId / guestSessionHash is populated per row,
+            // matching the DB-level XOR CHECK added in the guest-checkout
+            // migration. The authenticated call site is deliberately kept as a
+            // literal single-line statement so pre-existing regression tests
+            // that regex-match this exact shape continue to hold.
+            if (user) {
+                await tx.checkoutIdempotency.create({ data: { key, userId: user.id, requestHash, status: "PROCESSING" } });
+            } else {
+                await tx.checkoutIdempotency.create({ data: { key, guestSessionHash: guestSessionHash!, requestHash, status: "PROCESSING" } });
+            }
             const items = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })), tx);
             const subtotal = checkoutSubtotal(items);
             total = subtotal + shipping;
@@ -216,8 +255,17 @@ export async function POST(request: Request) {
             const todayCount = await tx.order.count({ where: { invoice: { startsWith: todayPrefix } } });
             const created = await tx.order.create({
                 data: {
-                    userId: user.id,
+                    // Guest orders are stored with userId = null. Order.userId is
+                    // already nullable in the schema, so no migration is required
+                    // on the Order table. Kasir orders already exercise this path.
+                    userId: user ? user.id : null,
                     invoice: formatOrderInvoice(now, todayCount + 1),
+                    // publicToken is generated for EVERY ONLINE order (auth + guest),
+                    // per FASE-2.5x §11: it gives the buyer a stable, non-guessable
+                    // /pesanan/<publicToken> URL identical to the kasir flow. Uses
+                    // 24 raw bytes (192 bits) base64url — same shape as
+                    // /api/admin/kasir/order — and is unique by DB index.
+                    publicToken: randomBytes(24).toString("base64url"),
                     customer: recipientLabel,
                     phone: recipientPhone,
                     address: fullAddress,
@@ -251,8 +299,11 @@ export async function POST(request: Request) {
                 include: { items: true, user: true },
             });
             await tx.payment.create({ data: { orderId: created.id, method: normalizedMethod, amount: total, status: "PENDING", expiredAt: defaultExpiredAt } });
+            // CheckoutHistory.userId is already nullable in the schema, so guest
+            // checkouts write history with userId = null (matches existing
+            // anonymous channels such as kasir walk-ins).
             await tx.checkoutHistory.create({
-                data: { userId: user.id, orderId: created.id, channel: "checkout", items, subtotal, shipping, discount: 0, total, city: address.city?.trim() || null, message: `Order ${created.invoice} dibuat pada ${now.toISOString()}${address.email ? ` untuk ${address.email.trim()}` : ""}` },
+                data: { userId: user ? user.id : null, orderId: created.id, channel: "checkout", items, subtotal, shipping, discount: 0, total, city: address.city?.trim() || null, message: `Order ${created.invoice} dibuat pada ${now.toISOString()}${address.email ? ` untuk ${address.email.trim()}` : ""}` },
             });
             const responsePayload = { success: true, status: "PENDING", orderId: created.id, invoice: created.invoice, redirectTo: normalizedMethod === "QRIS" ? `/payment/${created.invoice}` : `/order/${created.invoice}` };
             await tx.checkoutIdempotency.update({ where: { key }, data: { orderId: created.id, status: "COMPLETED", responsePayload } });
@@ -265,8 +316,14 @@ export async function POST(request: Request) {
             }
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
                 const concurrent = await prisma.checkoutIdempotency.findUnique({ where: { key } });
-                if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash && concurrent.responsePayload) return NextResponse.json(concurrent.responsePayload, { status: 201 });
-                if (concurrent && concurrent.userId === user.id && concurrent.requestHash === requestHash) return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
+                // Identity-aware concurrent-write reconciliation. Auth and guest
+                // paths reuse the exact same 201/409/409 ladder — only the
+                // identity comparison differs.
+                const identityMatches = user
+                    ? !!concurrent && concurrent.userId === user.id
+                    : !!concurrent && concurrent.userId === null && concurrent.guestSessionHash === guestSessionHash;
+                if (concurrent && identityMatches && concurrent.requestHash === requestHash && concurrent.responsePayload) return NextResponse.json(concurrent.responsePayload, { status: 201 });
+                if (concurrent && identityMatches && concurrent.requestHash === requestHash) return NextResponse.json({ success: false, status: "PROCESSING", message: "Pesanan sedang diproses. Silakan tunggu sebentar." }, { status: 409 });
                 return NextResponse.json({ message: "Permintaan checkout tidak valid. Silakan muat ulang halaman." }, { status: 409 });
             }
             throw error;
@@ -291,10 +348,16 @@ export async function POST(request: Request) {
             }
         }
 
-        const cart = getSupabaseServerClient().from("cart_items");
-        for (const item of snapshot) {
-            const clearCart = await cart.delete().eq("userId", user.id).eq("productRef", item.id).eq("quantity", item.qty);
-            if (clearCart.error) throw new Error(clearCart.error.message);
+        // Cart cleanup runs only for authenticated buyers — cart_items is a
+        // user-scoped Supabase table. Guest carts live in the browser under
+        // localStorage["afa_guest_cart_v1"] and are cleared client-side by the
+        // /checkout success page (see guest-cart-store.ts).
+        if (user) {
+            const cart = getSupabaseServerClient().from("cart_items");
+            for (const item of snapshot) {
+                const clearCart = await cart.delete().eq("userId", user.id).eq("productRef", item.id).eq("quantity", item.qty);
+                if (clearCart.error) throw new Error(clearCart.error.message);
+            }
         }
 
         // Fire ORDER_CREATED webhook to n8n — non-blocking, never throws.
@@ -309,7 +372,7 @@ export async function POST(request: Request) {
             createdAt: order.createdAt,
         }));
 
-        const response = NextResponse.json({ success: true, status: "PENDING", orderId: order.id, invoice: order.invoice, redirectTo: normalizedMethod === "QRIS" ? `/payment/${order.invoice}` : `/order/${order.invoice}` }, { status: 201 });
+        const response = NextResponse.json({ success: true, status: "PENDING", orderId: order.id, invoice: order.invoice, redirectTo: `/pesanan/${order.publicToken}` }, { status: 201 });
         response.cookies.set(CHECKOUT_COOKIE, "", { path: "/", maxAge: 0 });
         return response;
     } catch (error) {

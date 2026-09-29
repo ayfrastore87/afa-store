@@ -771,7 +771,7 @@ export default function CheckoutPage() {
         fetch("/api/shipping/rates", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ destinationAreaId: destinationArea.id, items: session.items.map(({ id, qty }) => ({ id, qty })) }),
+            body: JSON.stringify({ destinationAreaId: destinationArea.id, destinationLatitude: confirmedLocation?.latitude, destinationLongitude: confirmedLocation?.longitude, items: session.items.map(({ id, qty }) => ({ id, qty })) }),
         })
             .then(async (r) => {
                 const d = await r.json().catch(() => ({}));

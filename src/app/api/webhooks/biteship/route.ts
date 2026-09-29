@@ -12,12 +12,22 @@ function validSecret(received: string | null, expected: string | undefined): boo
 }
 
 export async function POST(request: Request) {
+    const rawBody = await request.text();
+    if (rawBody.trim().length === 0) {
+        return new Response("ok", {
+            status: 200,
+            headers: {
+                "Content-Type": "text/plain; charset=utf-8",
+                "Cache-Control": "no-store",
+            },
+        });
+    }
     if (!validSecret(request.headers.get("x-afa-biteship-webhook-secret"), process.env.BITESHIP_WEBHOOK_SECRET)) {
         return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
     let body: Record<string, unknown>;
     try {
-        const parsed: unknown = await request.json();
+        const parsed: unknown = JSON.parse(rawBody);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid payload");
         body = parsed as Record<string, unknown>;
     } catch { return NextResponse.json({ message: "Invalid JSON" }, { status: 400 }); }

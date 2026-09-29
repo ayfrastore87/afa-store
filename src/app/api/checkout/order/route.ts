@@ -88,7 +88,14 @@ export async function POST(request: Request) {
 
         const store = await cookies();
         const snapshot = decodeCheckoutItems(store.get(CHECKOUT_COOKIE)?.value);
-        if (!snapshot.length) return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
+        if (!snapshot.length) {
+            console.warn("checkout_validation_failed", {
+                route: "/api/checkout/order",
+                category: "empty_server_checkout_snapshot",
+                hasCheckoutCookie: Boolean(store.get(CHECKOUT_COOKIE)?.value),
+            });
+            return NextResponse.json({ success: false, error: "Data tidak valid" }, { status: 400 });
+        }
 
         let address: CheckoutAddress;
         try {

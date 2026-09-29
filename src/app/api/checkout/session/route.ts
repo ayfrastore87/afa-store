@@ -20,7 +20,19 @@ export async function GET() {
         const items = await authorizeProductItems(snapshot.map(({ id, qty }) => ({ id, qty })));
         const subtotal = checkoutSubtotal(items);
         // Shipping is now quoted live via POST /api/shipping/rates (never a flat fee).
-        return NextResponse.json({ items, subtotal, shipping: 0, total: subtotal });
+        // Refresh the short-lived server snapshot after re-authorizing it. This
+        // prevents a customer who spends time selecting a shipping service from
+        // reaching /api/checkout/order after the original 30-minute cookie has
+        // expired. The cookie contains only server-authorized product data.
+        const response = NextResponse.json({ items, subtotal, shipping: 0, total: subtotal });
+        response.cookies.set(CHECKOUT_COOKIE, encodeCheckoutItems(items), {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            path: "/",
+            maxAge: 60 * 30,
+        });
+        return response;
     } catch (error) {
         const safe = productAuthorityResponse(error);
         return NextResponse.json({ success: false, error: safe.error }, { status: safe.status });

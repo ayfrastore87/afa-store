@@ -29,7 +29,8 @@ test("guest wishlist and cart actions use confirmation without mutation before l
     assert.match(prompt, /loginPath\(next\)/);
     assert.match(homeSource, /confirmCustomerAuth\(kind, next\)/);
     assert.ok(catalogSource.includes('confirmCustomerAuth(next === "/wishlist" ? "wishlist" : "cart", next)'));
-    assert.match(detailCta, /confirmCustomerAuth\("cart"/);
+    assert.match(detailCta, /hasAuthenticatedUser\(\)/);
+    assert.match(detailCta, /buildWhatsAppOrderUrl\(product, quantity\)/);
     assert.ok(homeSource.includes('requireAuth("/cart", "cart")'));
     assert.ok(catalogSource.includes('requireAuth("/cart")'));
 });
@@ -39,11 +40,12 @@ test("guest wishlist and cart navigation remains protected at the route level", 
     assert.match(cartPage, /hasAuthenticatedUser\(\)/);
 });
 
-test("Beli Sekarang routes to cart and requires auth; WhatsApp remains as secondary contact link", () => {
+test("Beli Sekarang uses guest WhatsApp fallback and authenticated cart checkout", () => {
     const buyNow = detailCta.slice(detailCta.indexOf("const buyNow"), detailCta.indexOf("const controls"));
-    assert.match(buyNow, /confirmCustomerAuth\("cart"/);
+    assert.match(buyNow, /hasAuthenticatedUser\(\)/);
+    assert.match(buyNow, /buildWhatsAppOrderUrl\(product, quantity\)/);
+    assert.match(buyNow, /window\.open\(url, "_blank", "noopener,noreferrer"\)/);
     assert.match(buyNow, /router\.push\("\/cart"\)/);
-    assert.doesNotMatch(buyNow, /window\.open/);
     // WhatsApp remains as a separate "Tanya via WhatsApp" anchor using buildWhatsAppOrderUrl
     assert.match(detailCta, /buildWhatsAppOrderUrl\(product, quantity\)/);
     assert.match(detailCta, /Tanya via WhatsApp/);

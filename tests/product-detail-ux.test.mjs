@@ -60,16 +60,20 @@ test("product detail does not fabricate per-product reviews", () => {
     assert.doesNotMatch(detailPageSource, /testimonials/i);
 });
 
-test("Beli Sekarang goes through cart checkout flow and requires authentication", () => {
+test("Beli Sekarang supports guest WhatsApp ordering and authenticated cart checkout", () => {
     const buyNowFn = ctaSource.slice(ctaSource.indexOf("const buyNow"), ctaSource.indexOf("const controls"));
-    assert.match(buyNowFn, /confirmCustomerAuth\("cart"/);
+    // Guest customers use the intentional WhatsApp fallback instead of being
+    // forced through authentication; authenticated customers retain cart checkout.
+    assert.match(buyNowFn, /hasAuthenticatedUser\(\)/);
+    assert.match(buyNowFn, /buildWhatsAppOrderUrl\(product, quantity\)/);
+    assert.match(buyNowFn, /window\.open\(url, "_blank", "noopener,noreferrer"\)/);
     assert.match(buyNowFn, /router\.push\("\/cart"\)/);
-    assert.doesNotMatch(buyNowFn, /window\.open/);
     assert.doesNotMatch(ctaSource, /\/api\/cart\/buy-now/);
-    // whatsapp-order.ts library remains intact and is used for the secondary contact link
+    // The WhatsApp URL is encoded and contains only the intended product-order fields.
     const whatsappSource = fs.readFileSync(new URL("../src/lib/whatsapp-order.ts", import.meta.url), "utf8");
-    assert.match(whatsappSource, /6287770000883/);
     assert.match(whatsappSource, /encodeURIComponent/);
+    assert.match(whatsappSource, /https:\/\/wa\.me\//);
+    assert.match(whatsappSource, /replace\(\/\\D\/g, ""\)/);
     assert.match(whatsappSource, /product\.name/);
     assert.match(whatsappSource, /product\.price/);
     assert.match(whatsappSource, /product\.size/);

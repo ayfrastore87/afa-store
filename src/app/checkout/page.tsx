@@ -797,7 +797,7 @@ export default function CheckoutPage() {
     }, [destinationArea, destinationSignature, session?.items, rateReload]);
 
     const selectRate = (rate: Rate) => setSelected({ courierCode: rate.courierCode, serviceCode: rate.serviceCode });
-    const selectedRate = selected ? rates.find((r) => r.courierCode === selected.courierCode && r.serviceCode === selected.serviceCode) ?? null : null;
+    const selectedRate = selected ? rates.find((r) => r.courierCode === selected.courierCode && r.serviceCode === selected.serviceCode && r.quoteRef && (shippingMode === "package" ? r.shipmentCategory === "regular" : r.shipmentCategory === "instant" || r.shipmentCategory === "same_day")) ?? null : null;
     const shipping = selectedRate?.price ?? 0;
     const groupedRates = groupShippingRatesByCategory(rates).filter((group) => shippingMode === "package" ? group.category === "regular" : group.category === "instant" || group.category === "same_day");
 
@@ -1057,8 +1057,8 @@ export default function CheckoutPage() {
                         <Panel title="2 · Pilih Pengiriman">
                             <p className="mb-3 text-sm text-[#6D6558]">Pilih layanan yang paling sesuai untuk pesanan Anda.</p>
                             <div className="mb-4 grid grid-cols-2 gap-2" role="tablist" aria-label="Pengiriman">
-                                <button type="button" onClick={() => { setShippingMode("instant"); setSelected(null); setQuoteSignature(""); }} className={`min-h-12 rounded-xl border font-bold ${shippingMode === "instant" ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}><Zap size={16} className="mr-1 inline" /> Instan</button>
-                                <button type="button" onClick={() => { setShippingMode("package"); setSelected(null); setQuoteSignature(""); }} className={`min-h-12 rounded-xl border font-bold ${shippingMode === "package" ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>📦 Kirim Paket</button>
+                                <button type="button" onClick={() => { setShippingMode("instant"); setSelected(null); }} className={`min-h-12 rounded-xl border font-bold ${shippingMode === "instant" ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}><Zap size={16} className="mr-1 inline" /> Instan</button>
+                                <button type="button" onClick={() => { setShippingMode("package"); setSelected(null); }} className={`min-h-12 rounded-xl border font-bold ${shippingMode === "package" ? "border-[#184D47] bg-[#EAF1ED]" : "border-[#C9A45B]/30"}`}>📦 Kirim Paket</button>
                             </div>
                             {shippingMode === "instant" && !groupedRates.length && rateState === "ready" && <div className="mb-3 rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Pengiriman instan belum tersedia untuk lokasi ini. Silakan pilih Kirim Paket.</div>}
                             <ShippingRates state={rateState} error={rateError} groups={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />

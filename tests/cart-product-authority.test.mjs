@@ -179,8 +179,9 @@ test("failed add does not inflate the badge and surfaces a safe error", () => {
     assert.match(cartContextSource, /return false;/);
 });
 
-test("login redirect is safe via loginPath and no guest add happens in catalog", () => {
-    assert.match(pageSource, /await requireAuth\("\/"\)/);
+test("login redirect is safe via loginPath and guest add uses the supported flow", () => {
+    assert.match(pageSource, /hasAuthenticatedUser\(\)/);
+    assert.match(pageSource, /buildWhatsAppOrderUrl\(item\)/);
     assert.match(clientAuthSource, /`\/login\?next=\$\{encodeURIComponent\(next\)\}`/);
     assert.match(pageSource, /await addToCart\(item\)/);
 });

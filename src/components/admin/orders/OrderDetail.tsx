@@ -5,6 +5,7 @@
 import Swal from "sweetalert2";
  import { OrderStatusBadge } from "./OrderStatusBadge";
  import { formatDate, formatRupiah } from "@/components/admin/kasir/kasir-shared";
+ import { biteshipStatusLabel } from "@/lib/kasir-delivery";
 
  export interface OrderDetailItem {
      id: string;
@@ -37,10 +38,12 @@ import Swal from "sweetalert2";
      createdAt: string;
      items: OrderDetailItem[];
      courier?: string | null;
+      service?: string | null;
      serviceCode?: string | null;
      trackingNumber?: string | null;
      biteshipStatus?: string | null;
      biteshipTrackingId?: string | null;
+      biteshipLabelUrl?: string | null;
  }
 
  interface OrderDetailProps {
@@ -243,19 +246,23 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
                                  </div>
 
                                  {/* Shipping Info */}
-                                 {order.courier && (
+                                  {(order.courier || order.service || order.biteshipStatus || order.biteshipTrackingId || order.trackingNumber) && (
                                      <div>
                                          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                                             Pengiriman
+                                              Pengiriman
                                          </label>
                                          <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                                             {order.courier} {order.serviceCode ? `(${order.serviceCode})` : ""}
+                                              Kurir: {order.courier || "-"}<br />
+                                              Layanan: {order.service || order.serviceCode || "-"}<br />
+                                              Status Pengiriman: {biteshipStatusLabel(order.biteshipStatus)}
                                          </p>
+                                          {order.biteshipTrackingId && <p className="mt-1 font-mono text-sm text-gray-600 dark:text-gray-400">Tracking ID: {order.biteshipTrackingId}</p>}
                                          {order.trackingNumber && (
                                              <p className="mt-1 font-mono text-sm text-gray-600 dark:text-gray-400">
                                                  Resi: {order.trackingNumber}
                                              </p>
                                          )}
+                                          {order.biteshipLabelUrl && <a href={order.biteshipLabelUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold text-emerald-700 underline">Label pengiriman</a>}
                                      </div>
                                  )}
 

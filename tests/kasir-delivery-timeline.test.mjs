@@ -385,22 +385,20 @@ test("25. the refresh path can never create a shipment or reach POST /v1/orders"
 // D. Webhook decision + preserved production behaviour
 // ---------------------------------------------------------------------------
 
-test("26. no unverifiable Biteship webhook endpoint was added", () => {
+test("26. the authenticated Biteship webhook endpoint is scoped to shipment sync", () => {
     const apiDir = fileURLToPath(new URL("../src/app/api", import.meta.url));
     const files = walk(apiDir);
 
-    // The audited official Biteship documentation describes the webhook events and payload but
-    // NO verifiable authentication/signature, so a provider webhook was deliberately NOT added:
-    // no endpoint under this API may accept a Biteship callback.
+    // Tahap 3 adds one authenticated endpoint; unrelated webhook handlers remain untouched.
     const webhookFiles = files.filter((file) => /webhook/i.test(file));
     assert.ok(webhookFiles.length > 0, "the existing Midtrans webhook is untouched");
-    for (const file of webhookFiles) {
-        assert.doesNotMatch(fs.readFileSync(file, "utf8"), /biteship/i, `${file} must not accept Biteship callbacks`);
-    }
+    const biteshipFiles = webhookFiles.filter((file) => /biteship/i.test(file));
+    assert.equal(biteshipFiles.length, 1);
+    assert.match(fs.readFileSync(biteshipFiles[0], "utf8"), /x-afa-biteship-webhook-secret/);
 
-    // The only Biteship order endpoint remains the admin-protected one.
+    // Shipment creation remains admin-protected; the separate webhook only syncs status.
     const biteshipRoutes = files.filter((file) => /biteship/i.test(file)).map((file) => file.split("/src/app/api/")[1]);
-    assert.deepEqual(biteshipRoutes, ["admin/orders/[id]/biteship/route.ts"]);
+    assert.deepEqual(biteshipRoutes.sort(), ["admin/orders/[id]/biteship/route.ts", "webhooks/biteship/route.ts"].sort());
 });
 
 test("27. the only Biteship mutation entry point stays admin-guarded and claimed", () => {

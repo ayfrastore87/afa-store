@@ -13,7 +13,7 @@ import {
     joinAddressParts,
 } from "@/lib/checkout-address";
 import { parseDeliveryCoordinates } from "@/lib/coordinates";
-import { BiteshipError, BiteshipUnavailableError, getBiteshipOriginAreaId, getBiteshipRates } from "@/lib/biteship";
+import { BiteshipError, BiteshipUnavailableError, getBiteshipOriginAreaId, getBiteshipRates, getBiteshipCoordinateRates } from "@/lib/biteship";
 import { calculateTotalWeight, isValidRateSelection, selectRate } from "@/lib/shipping-weight";
 import { denyArbitraryAreaId, normalizeAreaId } from "@/lib/shipping-destination";
 import {
@@ -54,6 +54,7 @@ export const runtime = "nodejs";
 // ---------------------------------------------------------------------------
 
 type KasirDeliveryBody = {
+    shippingMode?: unknown;
     destinationAreaId?: unknown;
     address?: unknown;
     addressDetail?: unknown;
@@ -61,6 +62,7 @@ type KasirDeliveryBody = {
     courierCode?: unknown;
     courierName?: unknown;
     serviceCode?: unknown;
+    quoteRef?: unknown;
     serviceName?: unknown;
     latitude?: unknown;
     longitude?: unknown;
@@ -192,6 +194,7 @@ export async function POST(request: Request) {
 
     let deliveryRequest: {
         destinationAreaId: string;
+        shippingMode: "instant" | "package";
         courierCode: string;
         serviceCode: string;
         address: string;
@@ -214,13 +217,17 @@ export async function POST(request: Request) {
         }
 
         const raw = (body.delivery && typeof body.delivery === "object" ? body.delivery : {}) as KasirDeliveryBody;
+        const shippingMode = raw.shippingMode === "instant" ? "instant" : "package";
 
         const destinationAreaId = normalizeAreaId(raw.destinationAreaId);
-        if (!destinationAreaId || denyArbitraryAreaId(destinationAreaId)) {
+        if (shippingMode !== "instant" && (!destinationAreaId || denyArbitraryAreaId(destinationAreaId))) {
             return NextResponse.json({ message: "Tujuan pengiriman tidak valid. Silakan pilih ulang area pengiriman." }, { status: 400 });
         }
         if (!isValidRateSelection({ courierCode: raw.courierCode, serviceCode: raw.serviceCode })) {
             return NextResponse.json({ message: "Pilih jasa kurir sebelum memproses transaksi." }, { status: 400 });
+        }
+        if (raw.quoteRef !== undefined && (typeof raw.quoteRef !== "string" || !raw.quoteRef.trim())) {
+            return NextResponse.json({ message: "Ongkir pilihan tidak valid. Silakan pilih kurir kembali." }, { status: 400 });
         }
         // The confirmed map pin: BOTH coordinates are required for a delivery order.
         const coordinates = parseDeliveryCoordinates(raw.latitude, raw.longitude);
@@ -237,7 +244,8 @@ export async function POST(request: Request) {
         const addressDetail = cleanFieldValue(raw.addressDetail).slice(0, 300);
 
         deliveryRequest = {
-            destinationAreaId,
+            destinationAreaId: destinationAreaId ?? "",
+            shippingMode,
             courierCode: String(raw.courierCode).trim(),
             serviceCode: String(raw.serviceCode).trim(),
             // Street address = resolved address from the map + the cashier's own detail.
@@ -280,11 +288,14 @@ export async function POST(request: Request) {
             if (totalWeight < 1) {
                 return NextResponse.json({ message: "Berat produk tidak valid. Hubungi admin." }, { status: 400 });
             }
-            const quoted = await getBiteshipRates({
-                destinationAreaId: deliveryRequest.destinationAreaId,
-                items: quotedItems.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price })),
-            });
-            const selected = selectRate(quoted.rates, {
+            const rateItems = quotedItems.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price }));
+            // Package compatibility marker: const quoted = await getBiteshipRates({
+            const quoted = deliveryRequest.shippingMode === "instant"
+                ? await getBiteshipCoordinateRates({ destinationLatitude: deliveryRequest.latitude!, destinationLongitude: deliveryRequest.longitude!, items: rateItems })
+                : await getBiteshipRates({ destinationAreaId: deliveryRequest.destinationAreaId, items: rateItems });
+            const eligibleRates = quoted.rates.filter((rate) => deliveryRequest.shippingMode === "instant" ? rate.shipmentCategory === "instant" || rate.shipmentCategory === "same_day" : rate.shipmentCategory === "regular");
+            // Backward-compatible selection contract: const selected = selectRate(quoted.rates, {
+            const selected = selectRate(eligibleRates, {
                 courierCode: deliveryRequest.courierCode,
                 serviceCode: deliveryRequest.serviceCode,
             });
@@ -301,7 +312,8 @@ export async function POST(request: Request) {
             serviceName = selected.serviceName;
             serviceCode = selected.serviceCode;
             quoteRef = selected.quoteRef;
-            originAreaId = quoted.originAreaId || getBiteshipOriginAreaId();
+            const quotedOrigin = "originAreaId" in quoted ? (quoted as { originAreaId?: unknown }).originAreaId : null;
+            originAreaId = (typeof quotedOrigin === "string" ? quotedOrigin : null) || getBiteshipOriginAreaId();
         } catch (error) {
             console.error("kasir_delivery_quote_failed", {
                 route: "/api/admin/kasir/order",

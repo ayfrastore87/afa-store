@@ -156,7 +156,7 @@ export default function KasirDeliveryPanel({
     const readiness = kasirDeliveryReadiness({
         recipientValid,
         locationValid,
-        quoteSelected: Boolean(draft.courierCode && draft.serviceCode),
+        quoteSelected: Boolean(draft.courierCode && draft.serviceCode && draft.quoteRef),
         quoteMatchesDestination,
     });
 
@@ -182,6 +182,7 @@ export default function KasirDeliveryPanel({
             serviceCode: "",
             serviceName: "",
             shipping: 0,
+            quoteRef: "",
             quoteSignature: "",
         });
         // The address is known. From here nothing below may turn that into an address failure:
@@ -326,7 +327,7 @@ export default function KasirDeliveryPanel({
         setAreaQuery(area.name);
         setAreaOptions([]);
         // A manual pick replaces the destination, so no previous quote may survive.
-        patchRef.current({ ...areaComponentPatch(area), courierCode: "", courierName: "", serviceCode: "", serviceName: "", shipping: 0, quoteSignature: "" });
+        patchRef.current({ ...areaComponentPatch(area), courierCode: "", courierName: "", serviceCode: "", serviceName: "", shipping: 0, quoteRef: "", quoteSignature: "" });
     };
 
     /**
@@ -336,7 +337,7 @@ export default function KasirDeliveryPanel({
      * `destinationSignature` and therefore re-runs this quote.
      */
     useEffect(() => {
-        if (!draft.areaId || items.length === 0) {
+        if ((draft.shippingMode === "package" && !draft.areaId) || (draft.shippingMode === "instant" && (draft.latitude == null || draft.longitude == null)) || items.length === 0) {
             setRates([]);
             setRateState("idle");
             setRateError("");
@@ -350,6 +351,9 @@ export default function KasirDeliveryPanel({
             headers: { "Content-Type": "application/json", Accept: "application/json" },
             body: JSON.stringify({
                 destinationAreaId: draft.areaId,
+                shippingMode: draft.shippingMode,
+                destinationLatitude: draft.latitude,
+                destinationLongitude: draft.longitude,
                 items: items.map((item) => ({ id: item.productId, qty: item.quantity })),
             }),
         })
@@ -400,8 +404,16 @@ export default function KasirDeliveryPanel({
             serviceCode: rate.serviceCode,
             serviceName: rate.serviceName,
             shipping: rate.price,
+            quoteRef: rate.quoteRef || "",
             quoteSignature: destinationSignature,
         });
+    };
+
+    const switchShippingMode = (shippingMode: KasirDeliveryDraft["shippingMode"]) => {
+        if (shippingMode === draft.shippingMode) return;
+        patchRef.current({ shippingMode, courierCode: "", courierName: "", serviceCode: "", serviceName: "", shipping: 0, quoteRef: "" });
+        setRates([]);
+        setRateState("idle");
     };
 
     // The single confirmation point: freeze the draft pin as the CONFIRMED pin, drop the
@@ -567,12 +579,16 @@ export default function KasirDeliveryPanel({
 
             {/* PENGIRIMAN — rates come ONLY from Biteship via /api/shipping/rates */}
             <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => switchShippingMode("instant")} className={`rounded-xl border px-3 py-2 text-sm font-black ${draft.shippingMode === "instant" ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]"}`}>⚡ Instan</button>
+                    <button type="button" onClick={() => switchShippingMode("package")} className={`rounded-xl border px-3 py-2 text-sm font-black ${draft.shippingMode === "package" ? "border-[#184D47] bg-[#184D47] text-white" : "border-[#184D47]/15 bg-white text-[#184D47]"}`}>📦 Kirim Paket</button>
+                </div>
                 <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-black uppercase tracking-[0.15em] text-[#184D47]/50">Pengiriman</p>
                     <button
                         type="button"
                         onClick={() => setRateReload((value) => value + 1)}
-                        disabled={!draft.areaId || rateState === "loading"}
+                        disabled={(draft.shippingMode === "package" && !draft.areaId) || (draft.shippingMode === "instant" && (draft.latitude == null || draft.longitude == null)) || rateState === "loading"}
                         className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#D4AF37] px-3 text-xs font-black text-[#184D47] transition hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {rateState === "loading" ? <Loader2 size={14} className="animate-spin" /> : <PackageSearch size={14} />}
@@ -580,7 +596,7 @@ export default function KasirDeliveryPanel({
                     </button>
                 </div>
 
-                {!draft.areaId ? (
+                {draft.shippingMode === "package" && !draft.areaId ? (
                     <p className="text-xs font-semibold text-[#184D47]/60">
                         Pilih area pengiriman terlebih dahulu untuk mengecek ongkir.
                     </p>
@@ -611,7 +627,7 @@ export default function KasirDeliveryPanel({
                             <p className="text-xs font-black uppercase tracking-[0.12em] text-[#184D47]/70">
                                 {meta.icon} {meta.title}
                             </p>
-                            {group.rates.map((rate) => {
+                            {group.rates.filter((rate) => draft.shippingMode === "instant" ? rate.shipmentCategory === "instant" || rate.shipmentCategory === "same_day" : rate.shipmentCategory === "regular").map((rate) => {
                                 const selectedRate = draft.courierCode === rate.courierCode && draft.serviceCode === rate.serviceCode;
                                 const estimate = formatShippingDuration(rate.duration);
                                 return (

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/server-auth";
-import { getBiteshipRates, getBiteshipCoordinateRates, BiteshipError, BiteshipUnavailableError } from "@/lib/biteship";
+import { getCurrentCashier, getCurrentUser } from "@/lib/server-auth";
+import { getBiteshipRates, getBiteshipCoordinateRates, BiteshipError, BiteshipUnavailableError, type BiteshipCategorizedRate } from "@/lib/biteship";
 import { BITESHIP_FAILURE_MESSAGES } from "@/lib/biteship-failure";
 import { denyArbitraryAreaId, normalizeAreaId } from "@/lib/shipping-destination";
 import { calculateTotalWeight } from "@/lib/shipping-weight";
 
 export const runtime = "nodejs";
 
-type RateRequest = { destinationAreaId?: string; destinationLatitude?: number; destinationLongitude?: number; items?: Array<{ id: string; qty: number }> };
+type RateRequest = { destinationAreaId?: string; destinationLatitude?: number; destinationLongitude?: number; shippingMode?: "instant" | "package"; items?: Array<{ id: string; qty: number }> };
 
 function parseItems(value: unknown): Array<{ id: string; qty: number }> {
     if (!Array.isArray(value)) return [];
@@ -30,12 +30,13 @@ function parseItems(value: unknown): Array<{ id: string; qty: number }> {
  */
 export async function POST(request: Request) {
     try {
-        const user = await getCurrentUser();
+        const user = (await getCurrentUser()) ?? (await getCurrentCashier());
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
         const body = (await request.json().catch(() => ({}))) as RateRequest;
         const destinationAreaId = normalizeAreaId(body.destinationAreaId);
-        if (!destinationAreaId || denyArbitraryAreaId(destinationAreaId)) {
+        const instantOnly = body.shippingMode === "instant";
+        if (!instantOnly && (!destinationAreaId || denyArbitraryAreaId(destinationAreaId))) {
             return NextResponse.json({ message: BITESHIP_FAILURE_MESSAGES.invalid_destination }, { status: 400 });
         }
         const items = parseItems(body.items);
@@ -64,21 +65,21 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: "Berat produk tidak valid. Hubungi admin." }, { status: 400 });
         }
 
-        const packageResult = await getBiteshipRates({
+        const packageResult = destinationAreaId ? await getBiteshipRates({
             destinationAreaId,
             items: valid.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price })),
-        });
+        }) : null;
 
         const lat = body.destinationLatitude;
         const lon = body.destinationLongitude;
         const validCoordinates = typeof lat === "number" && typeof lon === "number" && Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-        let instantRates = [] as typeof packageResult.rates;
-        if (validCoordinates) {
+        let instantRates: BiteshipCategorizedRate[] = [];
+        if (validCoordinates && (instantOnly || body.shippingMode !== "package")) {
             try { instantRates = (await getBiteshipCoordinateRates({ destinationLatitude: lat, destinationLongitude: lon, items: valid.map((item) => ({ name: item.name, weight: item.weight, quantity: item.qty, value: item.price })) })).rates; }
             catch (error) { if (error instanceof BiteshipUnavailableError && error.kind !== "provider") instantRates = []; else throw error; }
         }
         const seen = new Set<string>();
-        const rates = [...instantRates.filter((r) => r.shipmentCategory === "instant" || r.shipmentCategory === "same_day"), ...packageResult.rates.filter((r) => r.shipmentCategory === "regular")]
+        const rates = [...instantRates.filter((r) => r.shipmentCategory === "instant" || r.shipmentCategory === "same_day"), ...(instantOnly ? [] : (packageResult?.rates ?? []).filter((r) => r.shipmentCategory === "regular"))]
             .filter((rate) => { const key = `${rate.courierCode}|${rate.serviceCode}`; if (seen.has(key)) return false; seen.add(key); return true; });
         if (!rates.length) {
             // Genuine "no service for this destination" — distinct from an upstream
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
             success: true,
-            destinationAreaId: packageResult.destinationAreaId,
+            destinationAreaId: packageResult?.destinationAreaId ?? destinationAreaId ?? null,
             totalWeight,
             rates: rates.map((rate) => ({
                 courierCode: rate.courierCode,

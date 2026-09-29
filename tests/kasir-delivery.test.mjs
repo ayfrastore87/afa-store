@@ -356,7 +356,7 @@ test("9. changing products, quantities, destination, pin or area invalidates the
 // 10. Server does not trust the client shipping price.
 test("10. the server re-quotes Biteship and never reads a client price", () => {
     assert.match(kasirRoute, /const quoted = await getBiteshipRates\(\{/);
-    assert.match(kasirRoute, /const selected = selectRate\(quoted\.rates, \{\s*courierCode: deliveryRequest\.courierCode,\s*serviceCode: deliveryRequest\.serviceCode,/);
+    assert.match(kasirRoute, /const selected = selectRate\(eligibleRates, \{\s*courierCode: deliveryRequest\.courierCode,\s*serviceCode: deliveryRequest\.serviceCode,/);
     assert.match(kasirRoute, /if \(!selected\) \{\s*return NextResponse\.json\(\s*\{ message: "Ongkir pilihan sudah berubah\. Silakan pilih kurir kembali\." \},\s*\{ status: 409 \},/);
     assert.match(kasirRoute, /shipping = selected\.price;/);
     // The authoritative weight comes from the database, never from the request body.
@@ -366,7 +366,7 @@ test("10. the server re-quotes Biteship and never reads a client price", () => {
     const deliveryBlock = kasirRoute.slice(kasirRoute.indexOf("let deliveryRequest"), kasirRoute.indexOf("// --- server-side shipping re-quote"));
     assert.doesNotMatch(deliveryBlock, /price/);
     assert.doesNotMatch(deliveryBlock, /weight/);
-    assert.doesNotMatch(code(kasirRoute), /raw\.shipping|delivery\.shipping|body\.shipping/);
+    assert.doesNotMatch(code(kasirRoute), /raw\.shipping(?!Mode)|delivery\.shipping|body\.shipping/);
 });
 
 // 11. Delivery total = authoritative subtotal + authoritative shipping.
@@ -375,8 +375,8 @@ test("11. a delivery total is authoritative subtotal + authoritative ongkir", ()
     assert.equal(kasirOrderTotal({ subtotal: 100000, orderType: "DELIVERY", shipping: null }), 100000);
     assert.equal(kasirOrderTotal({ subtotal: 100000, orderType: "DELIVERY", shipping: -5 }), 100000);
 
-    // The request payload carries the confirmed destination + selection, but NEVER a price,
-    // a weight or an internal Biteship quote reference.
+    // The request payload carries the confirmed destination + selection and quote reference,
+    // but never a client-controlled price or weight.
     const request = kasirDeliveryRequest(deliveryDraft());
     assert.equal(request.destinationAreaId, "IDJC07");
     assert.equal(request.courierCode, "gojek");
@@ -395,10 +395,11 @@ test("11. a delivery total is authoritative subtotal + authoritative ongkir", ()
         "longitude",
         "postalCode",
         "province",
+        "quoteRef",
         "serviceCode",
         "village",
     ]);
-    assert.doesNotMatch(JSON.stringify(request), /price|shipping|quoteRef|weight/);
+    assert.doesNotMatch(JSON.stringify(request), /price|shipping|weight/);
 
     assert.match(kasirRoute, /const subtotal = items\.reduce\([\s\S]*?manualItems\.reduce/);
     assert.match(kasirRoute, /const total = kasirOrderTotal\(\{ subtotal, orderType, shipping \}\);/);

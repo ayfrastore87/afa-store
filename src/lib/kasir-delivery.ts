@@ -186,6 +186,7 @@ export function kasirOrderTotal(input: KasirOrderTotalInput): number {
  * map or Biteship-area metadata — the same rule as the customer checkout.
  */
 export type KasirDeliveryDraft = {
+    shippingMode?: "instant" | "package";
     latitude: number | null;
     longitude: number | null;
     /** Resolved display address from Google reverse geocoding OR the free fallback. */
@@ -203,6 +204,7 @@ export type KasirDeliveryDraft = {
     courierName: string;
     serviceCode: string;
     serviceName: string;
+    quoteRef?: string;
     /** Ongkir from the last server quote (display + total only; the server re-quotes). */
     shipping: number;
     /** Signature the current quote belongs to (cart + destination + pin + area). */
@@ -211,6 +213,7 @@ export type KasirDeliveryDraft = {
 
 export function emptyKasirDeliveryDraft(): KasirDeliveryDraft {
     return {
+        shippingMode: "package",
         latitude: null,
         longitude: null,
         address: "",
@@ -226,6 +229,7 @@ export function emptyKasirDeliveryDraft(): KasirDeliveryDraft {
         courierName: "",
         serviceCode: "",
         serviceName: "",
+        quoteRef: "",
         shipping: 0,
         quoteSignature: "",
     };
@@ -235,10 +239,12 @@ export function emptyKasirDeliveryDraft(): KasirDeliveryDraft {
 export function kasirDeliveryRequest(draft: KasirDeliveryDraft) {
     return {
         destinationAreaId: draft.areaId.trim(),
+        ...(draft.shippingMode === "instant" ? { shippingMode: "instant" as const } : {}),
         address: draft.address.trim(),
         addressDetail: draft.detail.trim(),
         courierCode: draft.courierCode.trim(),
         serviceCode: draft.serviceCode.trim(),
+        quoteRef: draft.quoteRef?.trim() ?? "",
         latitude: draft.latitude,
         longitude: draft.longitude,
         province: draft.province.trim(),
@@ -369,6 +375,23 @@ const BITESHIP_ORDER_STATUS_MAP: Record<string, KasirDeliveryStatusKey> = {
     onhold: "DITAHAN",
     couriernotfound: "GAGAL",
 };
+
+/** Presentation-only label for the raw Biteship status persisted on Order. */
+export const BITESHIP_STATUS_LABELS: Record<string, string> = {
+    confirmed: "Dikonfirmasi", scheduled: "Dijadwalkan", allocated: "Kurir Dialokasikan",
+    picking_up: "Kurir Menuju Lokasi Pickup", picked: "Paket Sudah Diambil", in_transit: "Dalam Perjalanan",
+    dropping_off: "Kurir Menuju Penerima", delivered: "Terkirim", on_hold: "Pengiriman Ditahan",
+    cancelled: "Dibatalkan", courier_not_found: "Kurir Tidak Ditemukan", return_in_transit: "Dalam Proses Pengembalian",
+    returned: "Dikembalikan", rejected: "Ditolak", disposed: "Paket Dimusnahkan",
+    pickingup: "Kurir Menuju Lokasi Pickup", intransit: "Dalam Perjalanan",
+    droppingoff: "Kurir Menuju Penerima", returnintransit: "Dalam Proses Pengembalian",
+    onhold: "Pengiriman Ditahan", couriernotfound: "Kurir Tidak Ditemukan",
+};
+
+export function biteshipStatusLabel(status: unknown): string {
+    const raw = typeof status === "string" ? status.trim() : "";
+    return BITESHIP_STATUS_LABELS[raw.toLowerCase()] ?? (raw || "Menunggu Pengiriman").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export type KasirDeliveryStatus = {
     key: KasirDeliveryStatusKey;

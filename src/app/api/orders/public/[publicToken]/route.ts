@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { orderStatusLabels } from "@/lib/orders";
+import { biteshipStatusLabel } from "@/lib/kasir-delivery";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pub
         select: {
             invoice: true, createdAt: true, status: true, paymentStatus: true, paymentMethod: true,
             customer: true, subtotal: true, discount: true, shipping: true, total: true,
-            courier: true, service: true, trackingNumber: true, biteshipTrackingId: true,
+            courier: true, service: true, trackingNumber: true, biteshipTrackingId: true, biteshipStatus: true,
             paidAt: true, items: { select: { name: true, itemType: true, description: true, quantity: true, unitPrice: true, price: true, subtotal: true } },
         },
     });
@@ -27,7 +28,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pub
         items: order.items.map((item) => ({ ...item, unitPrice: item.unitPrice ?? item.price })),
         subtotal: order.subtotal, discount: order.discount, shippingCost: order.shipping, grandTotal: order.total,
         shipping: order.courier || order.service || order.trackingNumber || order.biteshipTrackingId ? {
-            courier: order.courier, service: order.service, trackingNumber: order.trackingNumber ?? order.biteshipTrackingId,
+            courier: order.courier, service: order.service, statusLabel: biteshipStatusLabel(order.biteshipStatus),
+            trackingNumber: order.trackingNumber ?? order.biteshipTrackingId,
         } : null,
     }, { headers: { "Cache-Control": "no-store" } });
 }

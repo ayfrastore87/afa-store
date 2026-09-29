@@ -38,7 +38,7 @@ test("cart drawer close control is an accessible button", () => {
 test("cart drawer quantity and remove controls remain buttons with labels", () => {
     assert.match(pageSource, /aria-label=\{`Kurangi \$\{i\.name\}`\}/);
     assert.match(pageSource, /aria-label=\{`Tambah \$\{i\.name\}`\}/);
-    assert.match(pageSource, /aria-label=\{`Hapus \$\{i\.name\}`\}/);
+    assert.match(pageSource, /aria-label=\{`Hapus \$\{i\.name\} dari keranjang`\}/);
 });
 
 test("cart drawer navigation and action controls preserved", () => {

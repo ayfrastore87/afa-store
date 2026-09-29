@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentCashier } from "@/lib/server-auth";
+import { getCurrentAdmin } from "@/lib/server-auth";
 import { getQrisProvider, QrisProvider } from "@/lib/qris-config";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id: orderId } = await params;
-    const admin = await getCurrentCashier();
+    const admin = await getCurrentAdmin();
     if (!admin) {
         return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
@@ -40,8 +40,10 @@ export async function POST(
             return NextResponse.json({ message: "This order was not paid with QRIS" }, { status: 400 });
         }
 
-        // Reject if Midtrans transaction exists (prevent bypassing webhook)
-        if (order.payment.transactionId || order.payment.paymentType === "qris") {
+        // Midtrans ownership is established by stored provider metadata. Do not
+        // use paymentType alone: Midtrans's QRIS value (`qris`) is also a
+        // legitimate generic payment type and is not sufficient provenance.
+        if (order.payment.transactionId || order.payment.transactionRef || order.payment.qrisUrl) {
             return NextResponse.json(
                 { message: "Midtrans QRIS cannot be confirmed manually. Wait for webhook." },
                 { status: 400 }

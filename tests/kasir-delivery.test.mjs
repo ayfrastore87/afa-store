@@ -773,13 +773,12 @@ test("Kasir transaction flow stays canonical and payment confirmation is cashier
     assert.doesNotMatch(kasirHistory, /href="\/admin\/(?:login|kasir|orders|transaksi)/);
     assert.match(monitoring, /detailBasePath/);
 
-    assert.match(paymentConfirm, /getCurrentCashier/);
-    assert.doesNotMatch(paymentConfirm, /getCurrentAdmin/);
+    assert.match(paymentConfirm, /getCurrentAdmin/);
     assert.match(paymentConfirm, /prisma\.\$transaction\(\[/);
     assert.match(paymentConfirm, /if \(\(order\.paymentStatus \?\? ""\)\.toUpperCase\(\) === "PAID"\)/);
-    assert.match(qrisConfirm, /getCurrentCashier/);
+    assert.match(qrisConfirm, /getCurrentAdmin/);
     assert.match(qrisConfirm, /provider !== QrisProvider\.MANUAL/);
-    assert.match(qrisConfirm, /transactionId \|\| order\.payment\.paymentType === "qris"/);
+    assert.match(qrisConfirm, /transactionId \|\| order\.payment\.transactionRef \|\| order\.payment\.qrisUrl/);
 
     // Kasir unauthenticated page access is handled by the Kasir login boundary,
     // not the Admin login boundary; API errors remain in-component responses.

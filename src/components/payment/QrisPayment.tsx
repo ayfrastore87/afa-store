@@ -69,7 +69,7 @@ export function QrisPayment({ total, imageSrc, expiryLabel, showDownload = true,
 
             {/* Instruction — short, no repeated branding (the image already carries it). */}
             <p className="max-w-[340px] text-center text-sm leading-relaxed text-[#6D6558]">
-                Scan QRIS di atas menggunakan aplikasi bank atau e-wallet Anda.
+                Scan QRIS untuk melakukan pembayaran. Bayar sesuai total tagihan {money(total)}. Setelah pembayaran diterima dan diverifikasi, status pesanan akan diperbarui.
             </p>
 
             {expiryLabel ? (

@@ -8,7 +8,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!(await getCurrentAdmin())) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     try {
         const { id } = await params;
-        const order = await prisma.order.findUnique({ where: { id }, include: { items: true, payment: { select: { status: true, method: true } } } });
+        const order = await prisma.order.findUnique({ where: { id }, include: { items: true, payment: { select: { status: true, method: true, transactionId: true, paymentType: true } } } });
         if (!order) return NextResponse.json({ message: "Pesanan tidak ditemukan" }, { status: 404 });
         return NextResponse.json({ order });
     } catch (error) {

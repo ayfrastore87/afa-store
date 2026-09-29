@@ -29,6 +29,7 @@ import Swal from "sweetalert2";
      status: string;
      paymentStatus: string;
      paymentMethod?: string;
+      payment?: { transactionId?: string | null; paymentType?: string | null } | null;
      subtotal: number;
      discount: number;
      shipping: number;
@@ -54,6 +55,40 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
      const [loading, setLoading] = useState(false);
      const [error, setError] = useState("");
     const [archiving, setArchiving] = useState(false);
+
+    async function confirmPayment() {
+        if (!order || order.paymentStatus.toUpperCase() === "PAID") return;
+        const isCash = (order.paymentMethod || "").toUpperCase() === "TUNAI";
+        const isQris = (order.paymentMethod || "").toUpperCase() === "QRIS";
+        if (!isCash && !isQris) return;
+        const result = await Swal.fire({
+            title: isCash ? "Konfirmasi pembayaran tunai?" : "Konfirmasi pembayaran QRIS?",
+            html: `<p>${isCash ? `Pastikan uang sebesar <b>${formatRupiah(order.total)}</b> telah diterima.` : `Pastikan pembayaran sebesar <b>${formatRupiah(order.total)}</b> telah masuk ke rekening/merchant AFA STORE sebelum mengonfirmasi.`}</p><p class="mt-3 text-left"><b>No. Pesanan:</b> ${order.invoice}<br/><b>Nama Pelanggan:</b> ${order.customer}<br/><b>Total Tagihan:</b> ${formatRupiah(order.total)}<br/><b>Metode:</b> ${isCash ? "COD / Tunai" : "QRIS"}</p>`,
+            icon: "warning",
+            showCancelButton: true,
+            cancelButtonText: "Batal",
+            confirmButtonText: isCash ? "Ya, Uang Diterima" : "Ya, Pembayaran Diterima",
+            confirmButtonColor: "#123524",
+            cancelButtonColor: "#6b7280",
+            showLoaderOnConfirm: true,
+            preConfirm: async () => {
+                const endpoint = isCash
+                    ? `/api/admin/orders/${order.id}/payment/confirm`
+                    : `/api/admin/kasir/orders/${order.id}/confirm-qris-payment`;
+                const response = await fetch(endpoint, { method: "POST" });
+                const payload = await response.json().catch(() => null) as { message?: string } | null;
+                if (!response.ok) {
+                    Swal.showValidationMessage(payload?.message || "Pembayaran gagal dikonfirmasi.");
+                    return undefined;
+                }
+                return payload;
+            },
+        });
+        if (result.isConfirmed) {
+            await Swal.fire({ title: "Pembayaran dikonfirmasi", icon: "success", timer: 1400, showConfirmButton: false });
+            setOrder((current) => current ? { ...current, paymentStatus: "PAID" } : current);
+        }
+    }
 
     async function archiveOrder() {
         if (archiving) return;
@@ -286,6 +321,17 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
 
                                  {/* Status Badges */}
                                  <div className="space-y-2">
+                                      {(order.paymentMethod || "").toUpperCase() === "QRIS" && order.paymentStatus.toUpperCase() !== "PAID" && !order.payment?.transactionId && order.payment?.paymentType !== "qris" && (
+                                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-900/20">
+                                              <p className="font-semibold text-amber-900 dark:text-amber-200">PEMBAYARAN</p>
+                                              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">Metode: QRIS · Mode: QRIS Manual AFA STORE</p>
+                                              <p className="text-sm text-amber-800 dark:text-amber-300">Total Tagihan: {formatRupiah(order.total)}</p>
+                                              <button type="button" onClick={confirmPayment} className="mt-3 rounded-lg bg-[#123524] px-4 py-2 text-sm font-bold text-white">Konfirmasi Pembayaran Diterima</button>
+                                          </div>
+                                      )}
+                                      {(order.paymentMethod || "").toUpperCase() === "TUNAI" && order.paymentStatus.toUpperCase() !== "PAID" && (
+                                          <button type="button" onClick={confirmPayment} className="rounded-lg bg-[#123524] px-4 py-2 text-sm font-bold text-white">Konfirmasi Uang Diterima</button>
+                                      )}
                                      <div className="flex items-center justify-between">
                                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                                              Status Pembayaran

@@ -82,7 +82,7 @@ export function PaymentProofForm({ invoice, total, paymentMethod, paymentStatus,
 
                 <p className="mt-5 flex items-center justify-center gap-2 text-center text-xs font-semibold text-[#6D6558]">
                     <CheckCircle2 size={15} className="shrink-0 text-[#C9A45B]" />
-                    Setelah pembayaran berhasil, status pesanan akan diperbarui otomatis.
+                    Untuk QRIS manual, pembayaran akan diperbarui setelah diverifikasi admin.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">

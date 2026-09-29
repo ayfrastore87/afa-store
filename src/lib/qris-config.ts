@@ -22,11 +22,17 @@ export type QrisProviderType = (typeof QrisProvider)[keyof typeof QrisProvider];
  * Defaults to 'MANUAL' for safety during Midtrans production setup.
  */
 export function getQrisProvider(): QrisProviderType {
+    if (QRIS_PROVIDER_ENV === undefined || QRIS_PROVIDER_ENV === "") {
+        return QrisProvider.MANUAL;
+    }
+    if (QRIS_PROVIDER_ENV === QrisProvider.MANUAL) {
+        return QrisProvider.MANUAL;
+    }
     if (QRIS_PROVIDER_ENV === QrisProvider.MIDTRANS) {
         return QrisProvider.MIDTRANS;
     }
-    // Default to MANUAL for safety during Midtrans production verification
-    return QrisProvider.MANUAL;
+    // Unknown values fail closed: never silently enable manual confirmation.
+    return QrisProvider.MIDTRANS;
 }
 
 /**

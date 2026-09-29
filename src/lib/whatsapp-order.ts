@@ -1,7 +1,7 @@
 import { formatRupiah } from "@/lib/products";
 import { SITE_URL } from "@/lib/site-url";
 
-export const AFA_STORE_WHATSAPP_NUMBER = "6287770000883";
+const AFA_STORE_WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
 
 type WhatsAppOrderProduct = {
     name: string;
@@ -47,7 +47,8 @@ export function buildWhatsAppOrderUrl(
     phoneNumber?: string,
 ) {
     const digits = phoneNumber?.replace(/\D/g, "") || "";
-    const wa = digits || AFA_STORE_WHATSAPP_NUMBER;
+    const wa = digits || AFA_STORE_WHATSAPP_NUMBER.replace(/\D/g, "");
+    if (!wa) return "";
     return `https://wa.me/${wa}?text=${encodeURIComponent(buildWhatsAppOrderMessage(product, quantity))}`;
 }
 

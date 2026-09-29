@@ -24,6 +24,8 @@ import { useWishlist } from "@/context/wishlist-context";
 
 import { hasAuthenticatedUser } from "@/lib/client-auth";
 import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
+import { chooseGuestCartAction } from "@/lib/customer-auth-prompt";
+import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 import { fetchProducts, formatRupiah, type Product } from "@/lib/products";
 
 export default function Home() {
@@ -86,7 +88,11 @@ export default function Home() {
   };
   const addCart = async (item: { id: string; name: string; slug?: string | null; price: number; image: string }) => {
     if (addState[item.id]) return;
-    if (!(await requireAuth("/"))) return;
+    if (!(await hasAuthenticatedUser())) {
+      if (!item.slug) return;
+      await chooseGuestCartAction(`/`, buildWhatsAppOrderUrl({ name: item.name, slug: item.slug, price: item.price }));
+      return;
+    }
     setAddState((current) => ({ ...current, [item.id]: "adding" }));
     const added = await addToCart(item);
     if (added) {
@@ -100,7 +106,11 @@ export default function Home() {
   };
   const buyNow = async (item: Product) => {
     if (!item.slug) return;
-    if (!(await hasAuthenticatedUser()) && !(await guestCheckoutAvailable())) { if (!(await requireAuth("/cart", "cart"))) return; }
+    if (!(await hasAuthenticatedUser())) {
+      const url = buildWhatsAppOrderUrl(item);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setAddState((current) => ({ ...current, [item.id]: "adding" }));
     const added = await addToCart(item);
     if (added) {

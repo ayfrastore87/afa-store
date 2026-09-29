@@ -29,3 +29,24 @@ export async function confirmCustomerAuth(kind: "wishlist" | "cart", next: strin
 
     return false;
 }
+
+export async function chooseGuestCartAction(productUrl: string, whatsappUrl: string) {
+    const result = await Swal.fire({
+        title: "Pilih cara berbelanja",
+        text: "Anda dapat memesan melalui WhatsApp tanpa membuat akun, atau masuk untuk menyimpan keranjang.",
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: "WhatsApp tanpa registrasi",
+        denyButtonText: "Login / Daftar",
+        cancelButtonText: "Nanti",
+        reverseButtons: true,
+        focusCancel: true,
+        confirmButtonColor: "#25D366",
+        denyButtonColor: "#123524",
+        cancelButtonColor: "#E8E1D4",
+        customClass: { cancelButton: "!text-[#123524]" },
+    });
+    if (result.isConfirmed) window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    if (result.isDenied) window.location.assign(loginPath(productUrl));
+    return result.isConfirmed || result.isDenied;
+}

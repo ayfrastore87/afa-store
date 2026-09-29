@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { useCart } from "@/context/cart-context";
-import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
+import { chooseGuestCartAction } from "@/lib/customer-auth-prompt";
+import { hasAuthenticatedUser } from "@/lib/client-auth";
 import { formatRupiah } from "@/lib/products";
 import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 
-type Props = { product: { id: string; name: string; slug: string; price: number; image: string | null }; stock: number };
+type Props = { product: { id: string; name: string; slug: string; price: number; image: string | null; size?: string | null; flavor?: string | null }; stock: number };
 
 export default function ProductDetailCta({ product, stock }: Props) {
     const { addToCart } = useCart();
@@ -21,8 +22,11 @@ export default function ProductDetailCta({ product, stock }: Props) {
 
     const addProduct = async () => {
         if (!available || adding) return;
-        const capability = await fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).catch(() => ({}));
-        if ((capability as { guestCheckoutEnabled?: boolean }).guestCheckoutEnabled !== true && !(await confirmCustomerAuth("cart", `/produk/${product.slug}`))) return;
+        if (!(await hasAuthenticatedUser())) {
+            const url = buildWhatsAppOrderUrl(product, quantity);
+            if (url) await chooseGuestCartAction(`/produk/${product.slug}`, url);
+            return;
+        }
         setAdding(true);
         setMessage("");
         try {
@@ -41,8 +45,11 @@ export default function ProductDetailCta({ product, stock }: Props) {
 
     const buyNow = async () => {
         if (!available || adding) return;
-        const capability = await fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).catch(() => ({}));
-        if ((capability as { guestCheckoutEnabled?: boolean }).guestCheckoutEnabled !== true && !(await confirmCustomerAuth("cart", `/produk/${product.slug}`))) return;
+        if (!(await hasAuthenticatedUser())) {
+            const url = buildWhatsAppOrderUrl(product, quantity);
+            if (url) window.open(url, "_blank", "noopener,noreferrer");
+            return;
+        }
         setAdding(true);
         setMessage("");
         try {

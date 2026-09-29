@@ -279,6 +279,7 @@ export default function CheckoutPage() {
     const [rateState, setRateState] = useState<RateState>("idle");
     const [rateError, setRateError] = useState("");
     const [selected, setSelected] = useState<{ courierCode: string; serviceCode: string } | null>(null);
+    const [showAllShipping, setShowAllShipping] = useState(false);
     const rateRequestRef = useRef(0);
     // Destination signature the current rate list (and its quoteRef) belongs to. A quote
     // whose signature no longer matches the live destination is never usable. It is kept
@@ -899,11 +900,17 @@ export default function CheckoutPage() {
 
     return (
         <main className="min-h-screen bg-[#F8F5EE] px-4 py-8 pb-28 text-[#2E2A26] md:px-8 lg:pb-8">
-            <div className="mx-auto max-w-[1240px]">
+            <div className="mx-auto w-full max-w-[1280px]">
                 <Link href="/cart" className="font-semibold text-[#8B6B3F]">&larr; Kembali ke Keranjang</Link>
-                <h1 className="mt-6 font-display text-3xl font-bold text-[#123524] md:text-5xl">Selesaikan Pesanan</h1>
+                <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <h1 className="font-display text-3xl font-bold text-[#123524] md:text-5xl">Checkout</h1>
+                        <p className="mt-1 text-sm text-[#6D6558]">Checkout aman · Data Anda terlindungi</p>
+                    </div>
+                    <p className="text-sm font-semibold text-[#6D6558]">1 Pengiriman <span className="mx-1 text-[#C9A45B]">—</span> 2 Pembayaran <span className="mx-1 text-[#C9A45B]">—</span> 3 Selesai</p>
+                </div>
 
-                <form onSubmit={submit} className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)] lg:items-start">
+                <form onSubmit={submit} className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
                     {/* LEFT COLUMN — map-first address flow */}
                     <div className="space-y-6">
                         <Panel title="Alamat Pengiriman">
@@ -931,9 +938,9 @@ export default function CheckoutPage() {
                             )}
                         </Panel>
 
-                        <Panel title="1 · Pilih Lokasi di Peta">
+                        <Panel title="1 · Alamat Pengiriman">
                             {confirmedLocation === null ? (
-                                <div className="night-map-panel relative h-[230px] overflow-hidden rounded-2xl border border-[#C9A45B]/30 bg-[#e7e4da] sm:h-[260px] lg:h-[320px]">
+                                <div className="night-map-panel relative h-[190px] overflow-hidden rounded-2xl border border-[#C9A45B]/30 bg-[#e7e4da] sm:h-[220px] lg:h-[240px]">
                                     <button type="button" onClick={openLocationPicker} className="absolute inset-0 z-20 cursor-pointer text-left" aria-label="Buka peta untuk memilih lokasi">
                                         <CheckoutLocationMap center={draftLocation} zoom={mapZoom} onCenterChange={() => undefined} onZoomChange={() => undefined} onInteractionStart={() => undefined} onInteractionEnd={() => undefined} thumbnail />
                                         <span className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#123524]/95 px-4 py-2 text-xs font-bold text-white shadow-lg"><MapPin size={14} /> PILIH LOKASI · BUKA PETA</span>
@@ -1043,12 +1050,17 @@ export default function CheckoutPage() {
                                 </div>
                             )}
                         </Panel>
+
+                        <Panel title="2 · Pilih Pengiriman">
+                            <p className="mb-3 text-sm text-[#6D6558]">Pilih layanan yang paling sesuai untuk pesanan Anda.</p>
+                            <ShippingRates state={rateState} error={rateError} groups={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
+                        </Panel>
                     </div>
 
-                    {/* RIGHT COLUMN — order summary + shipping + payment */}
+                    {/* RIGHT COLUMN — compact, sticky order summary */}
                     <aside className="space-y-6 lg:sticky lg:top-6">
                         <div className="luxury-card rounded-[28px] p-5 md:p-6">
-                            <h2 className="mb-4 font-display text-2xl font-bold text-[#123524]">Ringkasan Order</h2>
+                            <h2 className="mb-4 font-display text-2xl font-bold text-[#123524]">Ringkasan Pesanan</h2>
                             {session.items.map((i) => (
                                 <div key={i.id} className="flex gap-3 border-b py-3">
                                     <Image src={i.image} alt={i.name} width={56} height={56} className="rounded-xl object-contain" />
@@ -1063,12 +1075,8 @@ export default function CheckoutPage() {
                         </div>
 
                         <div className="luxury-card rounded-[28px] p-5 md:p-6">
-                            <h2 className="mb-3 font-display text-2xl font-bold text-[#123524]">Pilih Metode Pengiriman</h2>
-                            <ShippingRates state={rateState} error={rateError} groups={groupedRates} selected={selected} onSelect={selectRate} onRetry={() => setRateReload((n) => n + 1)} />
-                        </div>
-
-                        <div className="luxury-card rounded-[28px] p-5 md:p-6">
-                            <h2 className="mb-3 font-display text-2xl font-bold text-[#123524]">Metode Pembayaran</h2>
+                            <h2 className="mb-3 font-display text-2xl font-bold text-[#123524]">3 · Pembayaran</h2>
+                            <p className="mb-3 text-sm text-[#6D6558]">Bayar dengan QRIS secara aman.</p>
                             <fieldset>
                                 <legend className="sr-only">Metode pembayaran</legend>
                                 <div className="space-y-2">
@@ -1248,6 +1256,7 @@ function AreaAutocomplete({ query, searching, options, destination, onQueryChang
 }
 
 function ShippingRates({ state, error, groups, selected, onSelect, onRetry }: { state: RateState; error: string; groups: { category: ShipmentCategory; rates: Rate[] }[]; selected: { courierCode: string; serviceCode: string } | null; onSelect: (rate: Rate) => void; onRetry: () => void }) {
+    const [expanded, setExpanded] = useState(false);
     if (state === "idle") return <p className="text-sm text-[#6D6558]">Silakan pilih kecamatan/kelurahan tujuan terlebih dahulu.</p>;
     if (state === "loading") return <div className="flex items-center gap-2 text-sm font-bold text-[#123524]"><Loader2 size={16} className="animate-spin" />Mencari layanan pengiriman...</div>;
     if (state === "configuration") return <p role="alert" className="rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Layanan pengiriman belum dapat digunakan.</p>;
@@ -1268,12 +1277,20 @@ function ShippingRates({ state, error, groups, selected, onSelect, onRetry }: { 
         );
     }
     if (state === "empty") return <p className="rounded-xl bg-[#FFF2D6] p-3 text-sm font-bold">Belum ada layanan pengiriman untuk tujuan ini.</p>;
+    const allRates = groups.flatMap((group) => group.rates);
+    const selectedKey = selected ? `${selected.courierCode}-${selected.serviceCode}` : "";
+    const recommended = allRates.slice(0, 3);
+    const selectedRate = allRates.find((rate) => `${rate.courierCode}-${rate.serviceCode}` === selectedKey);
+    const visibleRates = expanded ? allRates : [...recommended, ...(selectedRate && !recommended.some((rate) => `${rate.courierCode}-${rate.serviceCode}` === selectedKey) ? [selectedRate] : [])];
+    const visibleKeys = new Set(visibleRates.map((rate) => `${rate.courierCode}-${rate.serviceCode}`));
     return (
         <fieldset>
             <legend className="sr-only">Pilih kurir dan layanan</legend>
-            <div className="space-y-5">
+            <div className="space-y-3">
                 {groups.map((group) => {
                     const meta = SHIPPING_CATEGORY_LABELS[group.category];
+                    const rates = group.rates.filter((rate) => visibleKeys.has(`${rate.courierCode}-${rate.serviceCode}`));
+                    if (!rates.length) return null;
                     return (
                         <section key={group.category} aria-label={meta.title}>
                             <div className="mb-2 border-t border-[#C9A45B]/30 pt-3">
@@ -1282,7 +1299,7 @@ function ShippingRates({ state, error, groups, selected, onSelect, onRetry }: { 
                                 {group.category === "instant" && <p className="mt-1 text-xs text-[#8B6B3F]">Pengiriman instan tersedia sesuai jangkauan alamat.</p>}
                             </div>
                             <div className="grid gap-2">
-                                {group.rates.map((rate) => {
+                                {rates.map((rate) => {
                                     const estimate = formatShippingDuration(rate.duration);
                                     const isSelected = selected?.courierCode === rate.courierCode && selected?.serviceCode === rate.serviceCode;
                                     return (
@@ -1305,6 +1322,11 @@ function ShippingRates({ state, error, groups, selected, onSelect, onRetry }: { 
                     );
                 })}
             </div>
+            {allRates.length > 3 && (
+                <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} className="mt-3 min-h-11 w-full rounded-xl border border-[#184D47]/30 px-4 text-sm font-bold text-[#184D47] hover:bg-[#EAF1ED]">
+                    {expanded ? "Sembunyikan pilihan lain" : `Lihat semua pilihan pengiriman (${allRates.length}) ▼`}
+                </button>
+            )}
         </fieldset>
     );
 }

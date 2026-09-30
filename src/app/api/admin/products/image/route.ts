@@ -6,6 +6,14 @@ const BUCKET = "products";
 const MAX_IMAGE_BYTES = 1024 * 1024;
 const MIME_EXTENSIONS: Readonly<Record<string, string>> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
+async function hasValidImageSignature(file: File) {
+    const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (file.type === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (file.type === "image/png") return bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+    if (file.type === "image/webp") return bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+    return false;
+}
+
 function storageFailure(error: unknown) {
     const value = error as { name?: unknown; message?: unknown; statusCode?: unknown; status?: unknown } | null;
     const name = typeof value?.name === "string" ? value.name : "UnknownError";
@@ -38,6 +46,7 @@ export async function POST(request: Request) {
     if (file.size > MAX_IMAGE_BYTES) return NextResponse.json({ error: "Image file too large" }, { status: 413 });
     const extension = MIME_EXTENSIONS[file.type];
     if (!extension) { console.warn("Product image rejected", { reason: "unsupported_mime", mimeType: file.type }); return NextResponse.json({ error: "Unsupported image type" }, { status: 400 }); }
+    if (!await hasValidImageSignature(file)) return NextResponse.json({ error: "Unsupported image type" }, { status: 400 });
 
     const path = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
     try {

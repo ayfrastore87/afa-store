@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
 import { getQrisProvider, QrisProvider } from "@/lib/qris-config";
+import { paymentTransition } from "@/lib/payment-transition";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,7 @@ export async function POST(
             return NextResponse.json({
                 message: "Payment already confirmed",
                 alreadyPaid: true,
+                orderStatus: order.status,
                 paidAt: payment.paidAt?.toISOString(),
             });
         }
@@ -69,22 +71,35 @@ export async function POST(
             );
         }
 
-        // Confirm payment: Update to PAID
+        const transition = paymentTransition(
+            payment.status as "PENDING" | "PAID" | "EXPIRED" | "CANCELLED",
+            order.status.toUpperCase() as "PENDING" | "PROCESSING" | "PACKED" | "SHIPPED" | "COMPLETED" | "CANCELLED",
+            "settlement",
+        );
+        if (!transition.mutationAllowed) {
+            return NextResponse.json({ message: "Payment requires reconciliation" }, { status: 409 });
+        }
+
+        // Confirm payment atomically. The conditional payment update is the
+        // compare-and-set that makes browser/network retries harmless.
         const now = new Date();
-        await prisma.$transaction([
-            prisma.payment.update({
-                where: { id: payment.id },
+        const updatedOrder = await prisma.$transaction(async (tx) => {
+            const changed = await tx.payment.updateMany({
+                where: { id: payment.id, status: "PENDING" },
                 data: { status: "PAID", paidAt: now },
-            }),
-            prisma.order.update({
+            });
+            if (!changed.count) return tx.order.findUniqueOrThrow({ where: { id: order.id } });
+            const wasPending = order.status.toUpperCase() === "PENDING";
+            return tx.order.update({
                 where: { id: order.id },
                 data: {
                     paymentStatus: "PAID",
-                    status: order.status === "PENDING" ? "PROCESSING" : order.status,
+                    status: transition.orderStatus,
                     paidAt: now,
+                    processedAt: wasPending ? now : undefined,
                 },
-            }),
-        ]);
+            });
+        });
 
         return NextResponse.json({
             success: true,
@@ -92,7 +107,7 @@ export async function POST(
             orderId: order.id,
             invoice: order.invoice,
             paymentStatus: "PAID",
-            orderStatus: order.status === "PENDING" ? "PROCESSING" : order.status,
+            orderStatus: updatedOrder.status,
             paidAt: now.toISOString(),
         });
     } catch (error) {

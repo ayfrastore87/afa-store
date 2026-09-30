@@ -79,7 +79,7 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
                     ? `/api/admin/orders/${order.id}/payment/confirm`
                     : `/api/admin/kasir/orders/${order.id}/confirm-qris-payment`;
                 const response = await fetch(endpoint, { method: "POST" });
-                const payload = await response.json().catch(() => null) as { message?: string } | null;
+                 const payload = await response.json().catch(() => null) as { message?: string; orderStatus?: string } | null;
                 if (!response.ok) {
                     Swal.showValidationMessage(payload?.message || "Pembayaran gagal dikonfirmasi.");
                     return undefined;
@@ -89,7 +89,8 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
         });
         if (result.isConfirmed) {
             await Swal.fire({ title: "Pembayaran dikonfirmasi", icon: "success", timer: 1400, showConfirmButton: false });
-            setOrder((current) => current ? { ...current, paymentStatus: "PAID" } : current);
+             const confirmed = result.value as { orderStatus?: string } | undefined;
+             setOrder((current) => current ? { ...current, paymentStatus: "PAID", status: confirmed?.orderStatus ?? current.status } : current);
         }
     }
 

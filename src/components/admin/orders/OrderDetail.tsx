@@ -6,6 +6,7 @@ import Swal from "sweetalert2";
  import { OrderStatusBadge } from "./OrderStatusBadge";
  import { formatDate, formatRupiah } from "@/components/admin/kasir/kasir-shared";
  import { biteshipStatusLabel } from "@/lib/kasir-delivery";
+ import { hasRealShipment, kasirShipmentAction } from "@/lib/kasir-delivery";
 
  export interface OrderDetailItem {
      id: string;
@@ -40,6 +41,9 @@ import Swal from "sweetalert2";
      courier?: string | null;
       service?: string | null;
      serviceCode?: string | null;
+      courierCode?: string | null;
+      destinationAreaId?: string | null;
+      biteshipOrderId?: string | null;
      trackingNumber?: string | null;
      biteshipStatus?: string | null;
      biteshipTrackingId?: string | null;
@@ -58,6 +62,7 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
      const [loading, setLoading] = useState(false);
      const [error, setError] = useState("");
     const [archiving, setArchiving] = useState(false);
+    const [creatingShipment, setCreatingShipment] = useState(false);
 
     async function confirmPayment() {
         if (!order || order.paymentStatus.toUpperCase() === "PAID") return;
@@ -91,6 +96,44 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
             await Swal.fire({ title: "Pembayaran dikonfirmasi", icon: "success", timer: 1400, showConfirmButton: false });
              const confirmed = result.value as { orderStatus?: string } | undefined;
              setOrder((current) => current ? { ...current, paymentStatus: "PAID", status: confirmed?.orderStatus ?? current.status } : current);
+        }
+    }
+
+    async function createShipment() {
+        if (!order || creatingShipment) return;
+        const result = await Swal.fire({
+            title: "Buat Pengiriman?",
+            html: `<p>Pesanan akan dibuat ke layanan pengiriman yang telah dipilih pelanggan.</p><p class="mt-3 text-left"><b>Kurir:</b> ${order.courier || "-"}<br/><b>Layanan:</b> ${order.service || order.serviceCode || "-"}<br/><b>Ongkir:</b> ${formatRupiah(order.shipping)}</p>`,
+            icon: "question",
+            showCancelButton: true,
+            cancelButtonText: "Batal",
+            confirmButtonText: "Buat Pengiriman",
+            confirmButtonColor: "#123524",
+            cancelButtonColor: "#6b7280",
+            showLoaderOnConfirm: true,
+            allowOutsideClick: () => !Swal.isLoading(),
+            preConfirm: async () => {
+                const response = await fetch(`/api/admin/orders/${order.id}/biteship`, { method: "POST", headers: { Accept: "application/json" } });
+                const payload = await response.json().catch(() => null) as { message?: string } | null;
+                if (!response.ok) {
+                    Swal.showValidationMessage(payload?.message || "Pengiriman belum berhasil dibuat.");
+                    return undefined;
+                }
+                return payload;
+            },
+        });
+        if (!result.isConfirmed) return;
+        setCreatingShipment(true);
+        try {
+            const response = await fetch(`/api/admin/orders/${order.id}`);
+            const payload = await response.json() as { order?: OrderDetailData };
+            if (!response.ok || !payload.order) throw new Error("Status pengiriman belum dapat diperbarui.");
+            setOrder(payload.order);
+            await Swal.fire({ title: "Pengiriman dibuat", icon: "success", timer: 1400, showConfirmButton: false });
+        } catch (shipmentError) {
+            setError(shipmentError instanceof Error ? shipmentError.message : "Status pengiriman belum dapat diperbarui.");
+        } finally {
+            setCreatingShipment(false);
         }
     }
 
@@ -263,6 +306,29 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
                                                  Resi: {order.trackingNumber}
                                              </p>
                                          )}
+
+                                  {(() => {
+                                      const action = kasirShipmentAction({
+                                          biteshipOrderId: order.biteshipOrderId,
+                                          courierCode: order.courierCode,
+                                          serviceCode: order.serviceCode,
+                                          destinationAreaId: order.destinationAreaId,
+                                          paymentStatus: order.paymentStatus,
+                                          orderStatus: order.status,
+                                          paymentMethod: order.paymentMethod,
+                                          source: order.source,
+                                      });
+                                      return !hasRealShipment(order.biteshipOrderId) && action.canCreate ? (
+                                          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+                                              <p className="font-semibold text-emerald-900 dark:text-emerald-200">Pengiriman</p>
+                                              <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">{order.courier || "-"} · {order.service || order.serviceCode || "-"} · Menunggu Pengiriman</p>
+                                              <button type="button" onClick={() => void createShipment()} disabled={creatingShipment} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#123524] px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">
+                                                  {creatingShipment && <Loader2 className="h-4 w-4 animate-spin" />}
+                                                  {creatingShipment ? "Membuat Pengiriman..." : "Buat Pengiriman Biteship"}
+                                              </button>
+                                          </div>
+                                      ) : null;
+                                  })()}
                                           {order.biteshipLabelUrl && <a href={order.biteshipLabelUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold text-emerald-700 underline">Label pengiriman</a>}
                                      </div>
                                  )}

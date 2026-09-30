@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { productPayload } from "@/lib/product-validation";
 import { getCurrentAdmin, getCurrentUser } from "@/lib/auth";
+import { resolveProductImages } from "@/lib/product-gallery";
 
 export async function GET() {
     try {
         const products = await prisma.product.findMany({
             where: { isActive: true },
             orderBy: { createdAt: "desc" },
-            include: { category: true },
+            include: { category: true, images: { orderBy: { sortOrder: "asc" } } },
         });
 
         const data = products.map((product) => ({
@@ -22,6 +23,7 @@ export async function GET() {
             price: product.price,
             stock: product.stock,
             image: product.image,
+            images: resolveProductImages(product.image, product.images),
             badge: product.badge,
             rating: product.rating,
             isActive: product.isActive,

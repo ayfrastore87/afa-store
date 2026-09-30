@@ -7,6 +7,7 @@ import ProductImage from "@/components/product-image";
 import ProductDetailClose from "@/components/product-detail-close";
 import { prisma } from "@/lib/prisma";
 import { formatRupiah } from "@/lib/products";
+import { resolveProductImages } from "@/lib/product-gallery";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ProductDetail({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
-    const product = await prisma.product.findFirst({ where: { slug, isActive: true }, include: { category: true } });
+    const product = await prisma.product.findFirst({ where: { slug, isActive: true }, include: { category: true, images: { orderBy: { sortOrder: "asc" } } } });
     if (!product) notFound();
 
     const relatedProducts = await prisma.product.findMany({
@@ -32,7 +33,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
             <nav aria-label="Breadcrumb" className="product-detail-breadcrumb mb-6 flex min-w-0 items-center justify-between gap-3 rounded-none border-0 bg-transparent p-0 text-sm text-[#8B6B3F] shadow-none"><div className="flex min-w-0 items-center gap-2"><Link href="/" className="shrink-0 font-semibold hover:text-[#123524]">Beranda</Link><ChevronRight size={15} aria-hidden="true" /><Link href="/produk" className="shrink-0 font-semibold hover:text-[#123524]">Katalog</Link><ChevronRight size={15} aria-hidden="true" /><span className="truncate" aria-current="page">{product.name}</span></div><ProductDetailClose /></nav>
             <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.12fr)_minmax(380px,0.88fr)] lg:gap-12 xl:gap-16">
                 <section aria-label={`Gambar ${product.name}`} className="min-w-0">
-                    <ProductGallery product={{ id: product.id, name: product.name, price: product.price, image: product.image, badge: product.badge }} images={[product.image]} available={available} />
+                    <ProductGallery product={{ id: product.id, name: product.name, price: product.price, image: product.image, badge: product.badge }} images={resolveProductImages(product.image, product.images).map((image) => image.url)} available={available} />
                 </section>
                 <section className="min-w-0 py-1 lg:py-2" aria-labelledby="product-title">
                     {product.category?.name && <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#8B6B3F]">{product.category.name}</span>}

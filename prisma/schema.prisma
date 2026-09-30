@@ -32,6 +32,20 @@ model User {
   @@map("users")
 }
 
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([productId, sortOrder])
+  @@unique([productId, url])
+  @@map("product_images")
+}
+
 model Address {
   id            String   @id @default(cuid())
   userId        String
@@ -75,6 +89,7 @@ model Product {
   price                 Int
   stock                 Int
   image                 String?
+  images                ProductImage[]
   badge                 String?
   rating                Float
   isActive              Boolean

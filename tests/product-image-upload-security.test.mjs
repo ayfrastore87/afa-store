@@ -79,15 +79,11 @@ test("service role is server-only and never referenced by client code", () => {
     assert.doesNotMatch(legacy, /SERVICE_ROLE|supabase-admin/);
 });
 
-test("camera and gallery inputs are separate and camera requests the environment lens", () => {
-    assert.match(studio, /ref=\{cameraRef\}[^>]*accept="image\/\*"[^>]*capture="environment"/);
-    assert.match(studio, /cameraRef\.current\?\.click\(\)/);
-    assert.match(studio, /getUserMedia\(\{ video: \{ facingMode: \{ ideal: "environment" \} \}, audio: false \}\)/);
-    assert.match(studio, /getTracks\(\)\.forEach\(track => track\.stop\(\)\)/);
-    assert.match(studio, /📷 Ambil Foto/);
-    assert.match(studio, /ref=\{fileRef\}[^>]*accept="image\/\*"/);
+test("gallery uses one multi-file picker without a camera input", () => {
+    assert.equal((studio.match(/type="file"/g) ?? []).length, 1);
+    assert.match(studio, /type="file" multiple accept="image\/jpeg,image\/png,image\/webp"/);
+    assert.doesNotMatch(studio, /cameraRef|capture=|getUserMedia/);
     assert.match(studio, /fileRef\.current\?\.click\(\)/);
-    assert.doesNotMatch(studio, /ref=\{fileRef\}[^>]*capture=/);
 });
 
 test("compression, WebP target, previews, crop, rotation, reset and deletion remain", () => {
@@ -100,6 +96,16 @@ test("compression, WebP target, previews, crop, rotation, reset and deletion rem
     assert.match(imageCrop, /export const PRODUCT_IMAGE_TYPE\s*=\s*"image\/webp"/);
     assert.match(uploadClient, /blob\.size <= MAX_PRODUCT_IMAGE_BYTES/);
     for (const marker of ["photo-frame", "product-preview", "Crop", "Putar kiri", "Putar kanan", "Reset editor", "Hapus foto produk"]) assert.match(studio, new RegExp(marker));
+});
+
+test("multi-gallery editor keeps active photo separate from primary", () => {
+    assert.match(studio, /activeImageId/);
+    assert.match(studio, /onClick=\{\(\) => selectPhoto\(item\.id\)\}/);
+    assert.match(studio, /Putar kiri/);
+    assert.match(studio, /Putar kanan/);
+    assert.match(studio, /galleryRef\.current = galleryRef\.current\.map\(item => item\.id === active\.id \? edited : item\)/);
+    assert.match(studio, /URL\.revokeObjectURL\(oldUrl\)/);
+    assert.match(studio, /isPrimary: item\.id === galleryRef\.current\[0\]\?\.id/);
 });
 
 test("crop editor uses pointer interaction, square handles, bounds and cancel snapshot", () => {

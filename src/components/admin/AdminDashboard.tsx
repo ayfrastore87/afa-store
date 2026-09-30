@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart, ArrowRight, CalendarDays, Coins } from "lucide-react";
+import { Menu, Bell, X, ExternalLink, QrCode, AlertTriangle, FileText, ShieldCheck, KeyRound, MessageSquareHeart, ArrowRight, CalendarDays, Coins, ImagePlus } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import Swal from "sweetalert2";
@@ -31,6 +31,7 @@ type Product = {
     categoryId: string | null;
     category?: string | null;
     image: string | null;
+    images?: { url: string; sortOrder: number; isPrimary: boolean }[];
     isActive: boolean;
     createdAt?: string;
 };
@@ -88,6 +89,7 @@ type ProductForm = {
     badge: string;
     categoryId: string;
     image: string;
+    images: { url: string; sortOrder: number; isPrimary: boolean }[];
     isActive: boolean;
 };
 
@@ -104,6 +106,7 @@ const emptyForm: ProductForm = {
     badge: "",
     categoryId: "",
     image: "",
+    images: [],
     isActive: true,
 };
 
@@ -370,19 +373,31 @@ export default function AdminPage() {
         };
     }, [monthlyRevenue, orders, products]);
 
-    function updateForm(field: keyof ProductForm, value: string | boolean) {
+    function updateForm(field: keyof ProductForm, value: string | boolean | ProductForm["images"]) {
         setForm((current) => ({ ...current, [field]: value, ...(field === "name" ? { slug: slugify(String(value)) } : {}) }));
     }
 
-    async function uploadImage(file: File) {
-        try {
-            const optimized = await optimizeProductImage(file);
-            const { url } = await uploadProductImage(optimized.file);
-            updateForm("image", url);
-            toast("Foto produk berhasil diupload");
-        } catch (error) {
-            toast(getUserFacingMessage(error, "Gambar gagal diunggah. Silakan coba lagi."), "error");
+    async function uploadImages(files: FileList | File[]) {
+        const selected = Array.from(files);
+        const remaining = 7 - form.images.length;
+        if (selected.length > remaining) return toast("Produk maksimal memiliki 7 foto.", "error");
+        for (const [index, file] of selected.entries()) {
+            try {
+                const optimized = await optimizeProductImage(file);
+                const { url } = await uploadProductImage(optimized.file);
+                setForm((current) => ({ ...current, image: current.image || url, images: [...current.images, { url, sortOrder: current.images.length, isPrimary: current.images.length === 0 }] }));
+                toast(`Foto ${index + 1} dari ${selected.length} berhasil ditambahkan`);
+            } catch (error) { toast(getUserFacingMessage(error, "Gagal mengunggah foto. Coba lagi."), "error"); }
         }
+    }
+
+    async function uploadImage(file: File) {
+        await uploadImages([file]);
+    }
+
+    async function syncGallery(productId: string, images: ProductForm["images"]) {
+        const response = await fetch(`/api/admin/products/${productId}/images`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ images }) });
+        if (!response.ok) throw new Error(safeApiMessage(await response.json().catch(() => ({}))) || "Galeri produk gagal disimpan.");
     }
 
     async function saveProduct(event: FormEvent) {
@@ -410,6 +425,10 @@ export default function AdminPage() {
             console.error("saveProduct", data);
             resultError = safeApiMessage(data) || "Produk gagal disimpan. Silakan coba lagi.";
         }
+        if (!resultError) {
+            const saved = await response.json() as { product?: { id: string } };
+            try { await syncGallery(saved.product?.id ?? form.id ?? "", form.images); } catch (error) { resultError = getUserFacingMessage(error, "Galeri produk gagal disimpan."); }
+        }
         setSaving(false);
         if (resultError) return toast(resultError, "error");
         setForm(emptyForm);
@@ -433,6 +452,7 @@ export default function AdminPage() {
             badge: product.badge ?? "",
             categoryId: product.categoryId ?? "",
             image: product.image ?? "",
+            images: product.images ?? (product.image ? [{ url: product.image, sortOrder: 0, isPrimary: true }] : []),
             isActive: product.isActive,
         });
         setActiveTab("add");
@@ -601,7 +621,7 @@ export default function AdminPage() {
                             {activeTab === "home" && <HomePanel summary={summary} adminEmail={adminEmail} />}
                             {activeTab === "products" && <ProductsPanel products={products} onEdit={editProduct} onDelete={deleteProduct} onStock={updateStock} _isPendingProduct={pendingProductIds.has} />}
                             {activeTab === "stock" && <StockPanel />}
-                            {activeTab === "add" && <ProductFormPanel form={form} categories={categories} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUpload={uploadImage} onCancel={() => setForm(emptyForm)} />}
+                            {activeTab === "add" && <ProductFormPanel form={form} categories={categories} saving={saving} onChange={updateForm} onSubmit={saveProduct} onUploadMany={uploadImages} onCancel={() => setForm(emptyForm)} />}
                             {activeTab === "orders" && <OrdersPanel orders={orders} onStatus={updateOrderStatus} onDetail={setDetailOrder} />}
                             {activeTab === "testimonials" && <TestimonialsPanel />}
                             {activeTab === "reports" && <ReportsPanel />}
@@ -819,11 +839,16 @@ function _StockAdjustmentButtons({ product, onStock, isPending }: { product: Pro
         </div>
     );
 }
-
-function ProductFormPanel({ form, categories, saving, onChange, onSubmit, onUpload, onCancel }: { form: ProductForm; categories: { id: string; name: string }[]; saving: boolean; onChange: (field: keyof ProductForm, value: string | boolean) => void; onSubmit: (event: FormEvent) => void; onUpload: (file: File) => void; onCancel: () => void }) {
-    const fields: [keyof ProductForm, string, string][] = [["name", "Nama", "text"], ["slug", "Slug otomatis", "text"], ["price", "Harga", "number"], ["stock", "Stok", "number"], ["weight", "Berat (gram)", "number"], ["rating", "Rating", "number"], ["flavor", "Flavor", "text"], ["size", "Size", "text"], ["badge", "Badge", "text"]];
-    return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} min={type === "number" ? 0 : undefined} max={key === "rating" ? 5 : undefined} step={key === "rating" ? "0.1" : undefined} className="min-h-12 w-full rounded-2xl border bg-white px-4" required /></label>)}<label className="space-y-2"><span className="text-sm font-bold">Kategori</span><select value={form.categoryId} onChange={(event) => onChange("categoryId", event.target.value)} className="min-h-12 w-full rounded-2xl border bg-white px-4"><option value="">Tanpa Kategori</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="space-y-2 md:col-span-2"><span className="flex items-center justify-between text-sm font-bold"><span>Deskripsi Produk</span><span className="font-medium text-[#6D6558]">{form.description.length} / 1000</span></span><textarea value={form.description} onChange={(event) => onChange("description", event.target.value)} maxLength={1000} rows={5} placeholder="Tuliskan informasi lengkap produk, rasa, keunggulan, bahan, atau saran penyajian..." className="min-h-32 w-full resize-y rounded-2xl border bg-white px-4 py-3" /></label><label className="flex items-center gap-3"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Produk Aktif</label><div className="md:col-span-2 rounded-3xl border border-[#C9A45B]/30 bg-[#F8F5EE] p-4"><span className="mb-3 block text-sm font-bold">Foto Produk</span><label className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[#184D47]/20 bg-white p-4 text-center"><input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} /><PackagePlus className="text-[#C9A45B]" /><strong>{form.image ? "Ganti Foto" : "Tambahkan Foto Produk"}</strong><span className="text-sm text-[#184D47]/65">Klik untuk memilih foto • otomatis dioptimalkan maksimal 1 MB</span></label>{form.image && <div className="mt-3 flex items-center gap-3"><Image src={form.image} alt="Preview foto produk" width={72} height={72} className="h-18 w-18 rounded-2xl object-cover" unoptimized /><span className="truncate text-sm font-bold">Foto produk siap disimpan</span></div>}</div><div className="flex flex-wrap gap-3 md:col-span-2"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#0F4C45] px-6 font-black text-white">{saving ? "Menyimpan..." : "Simpan Produk"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border px-6 font-black">Batal</button></div></form></Card>;
-    return <Card><h3 className="mb-5 text-2xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="space-y-2"><span className="text-sm font-bold">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} min={type === "number" ? 0 : undefined} max={key === "rating" ? 5 : undefined} step={key === "rating" ? "0.1" : undefined} className="min-h-12 w-full rounded-2xl border bg-white px-4" required /></label>)}<label className="space-y-2"><span className="text-sm font-bold">Kategori</span><select value={form.categoryId} onChange={(event) => onChange("categoryId", event.target.value)} className="min-h-12 w-full rounded-2xl border bg-white px-4"><option value="">Tanpa Kategori</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="space-y-2 md:col-span-2"><span className="flex items-center justify-between text-sm font-bold"><span>Deskripsi Produk</span><span className="font-medium text-[#6D6558]">{form.description.length} / 1000</span></span><textarea value={form.description} onChange={(event) => onChange("description", event.target.value)} maxLength={1000} rows={5} placeholder="Tuliskan informasi lengkap produk, rasa, keunggulan, bahan, atau saran penyajian..." className="min-h-32 w-full resize-y rounded-2xl border bg-white px-4 py-3" /></label><label className="flex items-center gap-3"><input type="checkbox" checked={form.isActive} onChange={(event) => onChange("isActive", event.target.checked)} /> Produk Aktif</label><label className="space-y-2 md:col-span-2"><span className="text-sm font-bold">Foto</span><input type="file" accept="image/*" onChange={(event) => event.target.files?.[0] && void onUpload(event.target.files[0])} /><input value={form.image} onChange={(event) => onChange("image", event.target.value)} className="min-h-12 w-full rounded-2xl bg-white px-4" placeholder="URL image" /></label><div className="grid gap-3 md:col-span-2 sm:grid-cols-[1fr_auto]"><button disabled={saving} className="min-h-12 rounded-2xl bg-[#184D47] px-5 font-black text-white">{saving ? "Menyimpan..." : "Simpan"}</button><button type="button" onClick={onCancel} className="min-h-12 rounded-2xl border px-5 font-bold">Reset</button></div></form></Card>;
+function ProductFormPanel({ form, categories, saving, onChange, onSubmit, onUploadMany, onCancel }: { form: ProductForm; categories: { id: string; name: string }[]; saving: boolean; onChange: (field: keyof ProductForm, value: string | boolean | ProductForm["images"]) => void; onSubmit: (event: FormEvent) => void; onUploadMany: (files: FileList | File[]) => void; onCancel: () => void }) {
+    const fields: [keyof ProductForm, string, string][] = [["name", "Nama Produk", "text"], ["price", "Harga", "number"], ["categoryId", "Kategori", "select"], ["stock", "Stok", "number"], ["weight", "Berat (gram)", "number"], ["size", "Ukuran", "text"], ["flavor", "Rasa / Varian", "text"], ["badge", "Badge", "text"], ["rating", "Rating", "number"]];
+    const openPicker = (event: KeyboardEvent<HTMLLabelElement>) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.querySelector<HTMLInputElement>("input[type=file]")?.click(); } };
+    return <Card className="product-form-card"><div className="mb-4 flex items-center justify-between"><div><h3 className="text-xl font-black">{form.id ? "Edit Produk" : "Tambah Produk"}</h3><p className="text-xs text-[#184D47]/55">Lengkapi informasi produk dengan singkat.</p></div></div><form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
+        {fields.map(([key, label, type]) => type === "select" ? <label key={key} className="space-y-1"><span className="text-xs font-bold text-[#184D47]/75">{label}</span><select value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} className="h-11 w-full rounded-xl border border-[#184D47]/12 bg-white px-3 text-sm outline-none focus:border-[#C9A45B]" ><option value="">Tanpa Kategori</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label> : <label key={key} className="space-y-1"><span className="text-xs font-bold text-[#184D47]/75">{label}</span><input value={String(form[key])} onChange={(event) => onChange(key, event.target.value)} type={type} min={type === "number" ? 0 : undefined} max={key === "rating" ? 5 : undefined} step={key === "rating" ? "0.1" : undefined} className="h-11 w-full rounded-xl border border-[#184D47]/12 bg-white px-3 text-sm outline-none focus:border-[#C9A45B]" required={key !== "rating"} />{key === "name" && <small className="block truncate text-[11px] text-[#184D47]/50">URL: /products/{form.slug || "nama-produk"}</small>}</label>)}
+        <label className="flex items-center justify-between rounded-xl border border-[#184D47]/10 bg-[#F8F5EE] px-3 py-2 md:col-span-2"><span className="text-sm font-bold">Produk Aktif</span><button type="button" role="switch" aria-checked={form.isActive} onClick={() => onChange("isActive", !form.isActive)} className={`relative h-6 w-11 rounded-full transition ${form.isActive ? "bg-[#184D47]" : "bg-slate-300"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${form.isActive ? "left-6" : "left-1"}`} /></button></label>
+        <label className="space-y-1 md:col-span-2"><span className="flex justify-between text-xs font-bold text-[#184D47]/75"><span>Deskripsi Produk</span><span className="font-medium">{form.description.length} / 1000</span></span><textarea value={form.description} onChange={(event) => onChange("description", event.target.value)} maxLength={1000} rows={3} className="min-h-[100px] w-full resize-none rounded-xl border border-[#184D47]/12 bg-white px-3 py-2 text-sm outline-none focus:border-[#C9A45B]" /></label>
+        <div className="md:col-span-2"><div className="mb-1 flex items-center justify-between"><span className="text-xs font-bold text-[#184D47]/75">Foto Produk</span><span className="text-xs font-black text-[#184D47]/60">{form.images.length} / 7</span></div><div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#184D47]/12 bg-[#F8F5EE] p-3">{form.images.map((image, index) => <div key={image.url} className="group relative"><Image src={image.url} alt={`Foto produk ${index + 1}`} width={80} height={80} className="h-20 w-20 rounded-xl object-cover" unoptimized /><button type="button" title="Jadikan utama" onClick={() => onChange("images", form.images.map((item, itemIndex) => ({ ...item, sortOrder: itemIndex === index ? 0 : itemIndex < index ? itemIndex + 1 : itemIndex, isPrimary: itemIndex === index })))} className={`absolute left-1 top-1 rounded-md px-1 text-[9px] font-black ${image.isPrimary ? "bg-[#D4AF37] text-white" : "bg-white/90 text-[#184D47]"}`}>{image.isPrimary ? "UTAMA" : "★"}</button><button type="button" aria-label={`Hapus foto ${index + 1}`} onClick={() => { const next = form.images.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, sortOrder: itemIndex, isPrimary: itemIndex === 0 })); onChange("images", next); onChange("image", next[0]?.url || ""); }} className="absolute right-1 top-1 hidden rounded-md bg-red-600 px-1 text-xs text-white group-hover:block">×</button></div>)}{form.images.length < 7 && <label tabIndex={0} onKeyDown={openPicker} className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#C9A45B] text-[#184D47]"><PlusCircle size={20} /><span className="text-[10px] font-black">Tambah</span><input hidden type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => { if (event.target.files) onUploadMany(event.target.files); event.currentTarget.value = ""; }} /></label>}</div>{form.images.length === 7 && <small className="mt-1 block text-xs font-bold text-[#184D47]/55">Maksimal 7 foto</small>}</div>
+        <div className="flex justify-end gap-2 border-t border-[#184D47]/10 pt-3 md:col-span-2"><button type="button" onClick={onCancel} className="min-h-10 rounded-xl border border-[#184D47]/20 px-5 text-sm font-bold">Batal</button><button disabled={saving} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#184D47] px-5 text-sm font-black text-white disabled:opacity-60">{saving && <Loader2 className="animate-spin" size={16} />}{saving ? "Menyimpan..." : "Simpan Produk"}</button></div>
+    </form></Card>;
 }
 
 function OrdersPanel({ orders, onStatus, onDetail }: { orders: Order[]; onStatus: (order: Order, status: string) => void; onDetail: (order: Order) => void }) {

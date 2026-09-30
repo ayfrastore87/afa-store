@@ -47,7 +47,12 @@ test("guest add remains behind the server capability while authenticated cart st
 });
 
 test("product detail renders real data: name, price, stock, rating, category, badge", () => {
-    assert.match(detailPageSource, /prisma\.product\.findFirst\(\{ where: \{ slug, isActive: true \}, include: \{ category: true \} \}\)/);
+    assert.match(detailPageSource, /prisma\.product\.findFirst/);
+    assert.match(detailPageSource, /category: true/);
+    assert.match(detailPageSource, /images:\s*\{\s*orderBy:\s*\{ sortOrder:\s*"asc"\s*\}/);
+    assert.match(detailPageSource, /resolveProductImages\(product\.image, product\.images\)/);
+    assert.match(detailPageSource, /ProductGallery/);
+    assert.match(fs.readFileSync(new URL("../src/lib/product-gallery.ts", import.meta.url), "utf8"), /productImage/);
     assert.match(detailPageSource, /formatRupiah\(product\.price\)/);
     assert.match(detailPageSource, /product\.stock/);
     assert.match(detailPageSource, /product\.rating/);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Heart } from "lucide-react";
 import ProductImage from "@/components/product-image";
 import { useWishlist } from "@/context/wishlist-context";
@@ -34,12 +34,15 @@ export default function ProductGallery({ product, images, available }: { product
     }, [images, product.image]);
 
     const [active, setActive] = useState(0);
+    const trackRef = useRef<HTMLDivElement>(null);
     const hasMultiple = gallery.length > 1;
     const currentIndex = Math.min(active, gallery.length - 1);
 
     const goTo = (index: number) => {
         const total = gallery.length;
-        setActive(((index % total) + total) % total);
+        const next = ((index % total) + total) % total;
+        setActive(next);
+        trackRef.current?.children[next]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     };
 
     const wished = isWishlisted(product.id);
@@ -65,15 +68,10 @@ export default function ProductGallery({ product, images, available }: { product
                     <Heart size={20} className={wished ? "text-[#D14343]" : "text-[#123524]"} fill={wished ? "currentColor" : "none"} />
                 </button>
 
-                <div className="relative h-full w-full">
-                    <ProductImage
-                        key={gallery[currentIndex] ?? "single"}
-                        src={gallery[currentIndex] ?? product.image}
-                        alt={product.name}
-                        priority
-                        sizes="(max-width: 1023px) 100vw, 55vw"
-                        imgClassName="p-6 sm:p-10 duration-500"
-                    />
+                <div ref={trackRef} onScroll={(event) => { const el = event.currentTarget; const index = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (index !== currentIndex) setActive(Math.min(index, gallery.length - 1)); }} className="relative flex h-full w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {gallery.map((src, index) => <div key={`${src}-${index}`} className="relative h-full min-w-full snap-center">
+                        <ProductImage src={src} alt={`${product.name} ${index + 1}`} priority={index === 0} sizes="(max-width: 1023px) 100vw, 55vw" imgClassName="p-6 sm:p-10 duration-500" />
+                    </div>)}
                 </div>
 
                 {!available && (
@@ -102,6 +100,7 @@ export default function ProductGallery({ product, images, available }: { product
                         </button>
                     </>
                 )}
+                {hasMultiple && <span aria-live="polite" className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-[#123524]">{currentIndex + 1} / {gallery.length}</span>}
             </div>
 
             {hasMultiple && (

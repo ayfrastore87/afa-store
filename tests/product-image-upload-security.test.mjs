@@ -65,7 +65,8 @@ test("missing, empty, unsupported, oversized, and valid WebP files are covered",
 test("both admin UIs use the authorized endpoint and no direct product Storage upload remains", () => {
     assert.match(uploadClient, /fetch\("\/api\/admin\/products\/image"/);
     assert.match(studio, /uploadProductImage\(photo\.file\)/);
-    assert.match(legacy, /uploadProductImage\(file\)/);
+    assert.match(legacy, /optimizeProductImage\(file\)/);
+    assert.match(legacy, /uploadProductImage\(optimized\.file\)/);
     assert.doesNotMatch(studio, /storage\.from\("products"\)/);
     assert.doesNotMatch(legacy, /storage\.from\("products"\)/);
 });
@@ -90,11 +91,14 @@ test("camera and gallery inputs are separate and camera requests the environment
 });
 
 test("compression, WebP target, previews, crop, rotation, reset and deletion remain", () => {
-    assert.match(studio, /const TARGET = 950_000/);
+    assert.match(uploadClient, /TARGET_PRODUCT_IMAGE_BYTES = 800 \* 1024/);
+    assert.match(uploadClient, /MAX_PRODUCT_IMAGE_BYTES = 1024 \* 1024/);
+    assert.match(uploadClient, /1600, 1400, 1200, 1000, 800, 640/);
+    assert.match(uploadClient, /0\.85, 0\.78, 0\.7, 0\.62, 0\.54, 0\.46, 0\.38/);
     assert.match(studio, /canvas\.toBlob\(resolve, PRODUCT_IMAGE_TYPE,/);
     assert.match(studio, /PRODUCT_IMAGE_TYPE/);
     assert.match(imageCrop, /export const PRODUCT_IMAGE_TYPE\s*=\s*"image\/webp"/);
-    assert.match(studio, /photo\.file\.size > 1024 \* 1024/);
+    assert.match(uploadClient, /blob\.size <= MAX_PRODUCT_IMAGE_BYTES/);
     for (const marker of ["photo-frame", "product-preview", "Crop", "Putar kiri", "Putar kanan", "Reset editor", "Hapus foto produk"]) assert.match(studio, new RegExp(marker));
 });
 

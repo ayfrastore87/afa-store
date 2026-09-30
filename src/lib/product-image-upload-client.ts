@@ -1,5 +1,8 @@
 export const MAX_PRODUCT_IMAGE_BYTES = 1024 * 1024;
+export const TARGET_PRODUCT_IMAGE_BYTES = 800 * 1024;
 export const MAX_PRODUCT_SOURCE_BYTES = 15 * 1024 * 1024;
+export const PRODUCT_IMAGE_RESOLUTIONS = [1600, 1400, 1200, 1000, 800, 640] as const;
+export const PRODUCT_IMAGE_QUALITIES = [0.85, 0.78, 0.7, 0.62, 0.54, 0.46, 0.38] as const;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export type OptimizedProductImage = { file: File; width: number; height: number };
@@ -22,21 +25,29 @@ export async function optimizeProductImage(source: File): Promise<OptimizedProdu
     const image = await loadImage(source);
     const sourceWidth = image.width;
     const sourceHeight = image.height;
-    let scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
     let result: Blob | null = null;
     let width = sourceWidth;
     let height = sourceHeight;
-    for (let pass = 0; pass < 12; pass++) {
+    let fallback: { blob: Blob; width: number; height: number } | null = null;
+    for (const maxDimension of PRODUCT_IMAGE_RESOLUTIONS) {
+        const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
         width = Math.max(1, Math.round(sourceWidth * scale));
         height = Math.max(1, Math.round(sourceHeight * scale));
         const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
         const context = canvas.getContext("2d"); if (!context) throw new Error("Browser tidak mendukung pemrosesan gambar.");
         context.imageSmoothingQuality = "high"; context.drawImage(image, 0, 0, width, height);
-        const quality = [0.85, 0.78, 0.7, 0.62, 0.55, 0.48][Math.min(pass, 5)];
-        result = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", quality));
-        if (result && result.size <= MAX_PRODUCT_IMAGE_BYTES) break;
-        if (pass >= 5) scale *= 0.82;
+        for (const quality of PRODUCT_IMAGE_QUALITIES) {
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", quality));
+            if (!blob) continue;
+            if (blob.size <= MAX_PRODUCT_IMAGE_BYTES && !fallback) fallback = { blob, width, height };
+            if (blob.size <= TARGET_PRODUCT_IMAGE_BYTES) {
+                result = blob;
+                break;
+            }
+        }
+        if (result) break;
     }
+    if (!result && fallback) { result = fallback.blob; width = fallback.width; height = fallback.height; }
     if ("close" in image && typeof image.close === "function") image.close();
     if (!result || result.size > MAX_PRODUCT_IMAGE_BYTES) throw new Error("Foto belum dapat dioptimalkan hingga 1 MB. Silakan gunakan foto lain.");
     const base = source.name.replace(/\.[^.]+$/, "") || "produk";

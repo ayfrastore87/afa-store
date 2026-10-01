@@ -17,6 +17,7 @@ import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
 import { chooseGuestCartAction } from "@/lib/customer-auth-prompt";
 
 import type { Product } from "@/lib/products";
+import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 import {
     CATALOG_SORT_LABELS,
     buildCatalogHref,
@@ -124,8 +125,11 @@ export default function CatalogExperience({ products, categories, totalActive, q
     const buyNow = useCallback(
         async (item: Product) => {
             if (addState[item.id]) return;
-            const capability = await fetch("/api/guest-checkout/capability", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}).catch(() => ({}));
-            if (!(await hasAuthenticatedUser()) && (capability as { guestCheckoutEnabled?: boolean }).guestCheckoutEnabled !== true && !(await requireAuth("/cart"))) return;
+            if (!(await hasAuthenticatedUser())) {
+                const url = buildWhatsAppOrderUrl(item);
+                if (url) window.open(url, "_blank", "noopener,noreferrer");
+                return;
+            }
             setAddState((current) => ({ ...current, [item.id]: "adding" }));
             const added = await addToCart(item);
             if (added) {

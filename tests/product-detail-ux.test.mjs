@@ -94,9 +94,10 @@ test("WhatsApp secondary contact link present on product detail; buy-now and cat
     assert.match(ctaSource, /Tanya via WhatsApp/);
     // ProductCard still exposes onBuy callback for parent to wire
     assert.match(productCardSource, /onClick=\{onBuy\}/);
-    // Neither homepage nor catalog sends buyNow to WhatsApp anymore
-    assert.doesNotMatch(pageSource, /window\.open.*buildWhatsAppOrderUrl/);
-    assert.doesNotMatch(catalogSource, /window\.open.*buildWhatsAppOrderUrl/);
+    // Homepage and catalog also use direct guest WhatsApp buy-now.
+    assert.match(pageSource, /window\.open\(url, "_blank", "noopener,noreferrer"\)/);
+    assert.match(catalogSource, /window\.open\(url, "_blank", "noopener,noreferrer"\)/);
+    assert.match(catalogSource, /buildWhatsAppOrderUrl\(item\)/);
 });
 
 test("schema remains untouched by the customer WhatsApp flow", () => {

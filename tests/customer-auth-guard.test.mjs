@@ -49,12 +49,12 @@ test("guest cart modal offers WhatsApp first, existing login flow, and dismiss",
 });
 
 test("homepage, catalog/category, and detail cart buttons use guest modal before cart mutation", () => {
-    for (const [source, branch, modal] of [
-        [homeSource, "const addCart", /chooseGuestCartAction\(`\/`, \{ \.\.\.item, slug: item\.slug \}\)/],
-        [catalogSource, "const addCart", /chooseGuestCartAction\("\/produk", item\)/],
-        [detailCta, "const addProduct", /chooseGuestCartAction\(`\/produk\/\$\{product\.slug\}`, product, quantity\)/],
+    for (const [source, branch, end, modal] of [
+        [homeSource, "const addCart", "const continueToCheckout", /chooseGuestCartAction\(`\/`, \{ \.\.\.item, slug: item\.slug \}\)/],
+        [catalogSource, "const addCart", "const onWish", /chooseGuestCartAction\("\/produk", item\)/],
+        [detailCta, "const addProduct", "const buyNow", /chooseGuestCartAction\(`\/produk\/\$\{product\.slug\}`, product, quantity\)/],
     ]) {
-        const handler = source.slice(source.indexOf(branch), source.indexOf("const ", source.indexOf(branch) + 6));
+        const handler = source.slice(source.indexOf(branch), source.indexOf(end));
         assert.match(handler, /if \(!\(await hasAuthenticatedUser\(\)\)\) \{/);
         assert.match(handler, modal);
         assert.match(handler, /await addToCart\(/);
@@ -62,6 +62,22 @@ test("homepage, catalog/category, and detail cart buttons use guest modal before
         assert.doesNotMatch(guestBranch.slice(0, guestBranch.indexOf("return;")), /addToCart\(|\/api\/checkout\/order/);
     }
     assert.match(cartContext, /body: JSON\.stringify\(\{ item: \{ id: item\.id, qty \} \}\)/);
+});
+
+test("guest Beli Sekarang opens WhatsApp directly across homepage, catalog, and detail", () => {
+    for (const [source, branch, end, productCall] of [
+        [homeSource, "const buyNow", "const continueToCheckout", /buildWhatsAppOrderUrl\(item\)/],
+        [catalogSource, "const buyNow", "const onWish", /buildWhatsAppOrderUrl\(item\)/],
+        [detailCta, "const buyNow", "const controls", /buildWhatsAppOrderUrl\(product, quantity\)/],
+    ]) {
+        const handler = source.slice(source.indexOf(branch), source.indexOf(end));
+        assert.match(handler, /if \(!\(await hasAuthenticatedUser\(\)\)\) \{/);
+        assert.match(handler, productCall);
+        assert.match(handler, /window\.open\(url, "_blank", "noopener,noreferrer"\)/);
+        const guestBranch = handler.slice(handler.indexOf("if (!(await hasAuthenticatedUser())"));
+        const guestBeforeReturn = guestBranch.slice(0, guestBranch.indexOf("return;"));
+        assert.doesNotMatch(guestBeforeReturn, /chooseGuestCartAction|confirmCustomerAuth|requireAuth|addToCart|router\.push/);
+    }
 });
 
 test("WhatsApp order uses configured number and product metadata, not URL price, session or internal id", () => {

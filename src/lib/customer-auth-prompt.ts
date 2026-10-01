@@ -1,16 +1,18 @@
 import Swal from "sweetalert2";
 
 import { hasAuthenticatedUser, loginPath } from "@/lib/client-auth";
+import type { WhatsAppOrderProduct } from "@/lib/whatsapp-order";
+import { buildWhatsAppOrderUrl } from "@/lib/whatsapp-order";
 
 export async function confirmCustomerAuth(kind: "wishlist" | "cart", next: string) {
     if (await hasAuthenticatedUser()) return true;
 
     const wishlist = kind === "wishlist";
     const result = await Swal.fire({
-        title: wishlist ? "Login untuk menggunakan Wishlist" : "Login untuk menggunakan Keranjang",
+        title: wishlist ? "Login untuk menggunakan Wishlist" : "Login untuk melihat Keranjang",
         text: wishlist
             ? "Simpan produk favorit Anda dengan masuk atau membuat akun AFA STORE."
-            : "Masuk atau buat akun AFA STORE untuk menyimpan produk ke keranjang.",
+            : "Masuk atau buat akun AFA STORE untuk melihat keranjang Anda.",
         showCancelButton: true,
         cancelButtonText: "Nanti",
         confirmButtonText: "Login / Daftar",
@@ -30,13 +32,14 @@ export async function confirmCustomerAuth(kind: "wishlist" | "cart", next: strin
     return false;
 }
 
-export async function chooseGuestCartAction(productUrl: string, whatsappUrl: string) {
+export async function chooseGuestCartAction(productUrl: string, product: WhatsAppOrderProduct, quantity = 1) {
+    const whatsappUrl = buildWhatsAppOrderUrl(product, quantity);
     const result = await Swal.fire({
-        title: "Pilih cara berbelanja",
-        text: "Anda dapat memesan melalui WhatsApp tanpa membuat akun, atau masuk untuk menyimpan keranjang.",
+        title: "Pesan Produk AFA STORE",
+        text: "Pilih cara melanjutkan pesanan Anda.",
         showDenyButton: true,
         showCancelButton: true,
-        confirmButtonText: "WhatsApp tanpa registrasi",
+        confirmButtonText: "Pesan via WhatsApp",
         denyButtonText: "Login / Daftar",
         cancelButtonText: "Nanti",
         reverseButtons: true,
@@ -46,7 +49,7 @@ export async function chooseGuestCartAction(productUrl: string, whatsappUrl: str
         cancelButtonColor: "#E8E1D4",
         customClass: { cancelButton: "!text-[#123524]" },
     });
-    if (result.isConfirmed) window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    if (result.isConfirmed && whatsappUrl) window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     if (result.isDenied) window.location.assign(loginPath(productUrl));
     return result.isConfirmed || result.isDenied;
 }

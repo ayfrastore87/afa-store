@@ -14,6 +14,7 @@ import { useCart } from "@/context/cart-context";
 import { useWishlist } from "@/context/wishlist-context";
 import { hasAuthenticatedUser } from "@/lib/client-auth";
 import { confirmCustomerAuth } from "@/lib/customer-auth-prompt";
+import { chooseGuestCartAction } from "@/lib/customer-auth-prompt";
 
 import type { Product } from "@/lib/products";
 import {
@@ -94,7 +95,10 @@ export default function CatalogExperience({ products, categories, totalActive, q
     const addCart = useCallback(
         async (item: Product) => {
             if (addState[item.id]) return;
-            if (!(await requireAuth("/produk"))) return;
+            if (!(await hasAuthenticatedUser())) {
+                await chooseGuestCartAction("/produk", item);
+                return;
+            }
             setAddState((current) => ({ ...current, [item.id]: "adding" }));
             const added = await addToCart(item);
             if (added) {

@@ -90,7 +90,7 @@ export default function Home() {
     if (addState[item.id]) return;
     if (!(await hasAuthenticatedUser())) {
       if (!item.slug) return;
-      await chooseGuestCartAction(`/`, buildWhatsAppOrderUrl({ name: item.name, slug: item.slug, price: item.price }));
+      await chooseGuestCartAction(`/`, { ...item, slug: item.slug });
       return;
     }
     setAddState((current) => ({ ...current, [item.id]: "adding" }));

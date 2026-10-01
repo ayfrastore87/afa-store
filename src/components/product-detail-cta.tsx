@@ -23,8 +23,7 @@ export default function ProductDetailCta({ product, stock }: Props) {
     const addProduct = async () => {
         if (!available || adding) return;
         if (!(await hasAuthenticatedUser())) {
-            const url = buildWhatsAppOrderUrl(product, quantity);
-            if (url) await chooseGuestCartAction(`/produk/${product.slug}`, url);
+            await chooseGuestCartAction(`/produk/${product.slug}`, product, quantity);
             return;
         }
         setAdding(true);

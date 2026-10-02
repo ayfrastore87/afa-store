@@ -16,6 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pub
             invoice: true, createdAt: true, status: true, paymentStatus: true, paymentMethod: true,
             customer: true, subtotal: true, discount: true, shipping: true, total: true,
             courier: true, service: true, trackingNumber: true, biteshipTrackingId: true, biteshipStatus: true,
+            handoverPhotoUrl: true, handedOverAt: true, shippedAt: true, completedAt: true,
             paidAt: true, items: { select: { name: true, itemType: true, description: true, quantity: true, unitPrice: true, price: true, subtotal: true } },
         },
     });
@@ -23,6 +24,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pub
     return NextResponse.json({
         orderNumber: order.invoice, invoice: order.invoice, createdAt: order.createdAt,
         status: order.status, statusLabel: orderStatusLabels[order.status] ?? order.status,
+        timeline: [
+            { label: "Pesanan Dibuat", completed: true, at: order.createdAt },
+            { label: "Pembayaran Diterima", completed: ["PAID", "SETTLEMENT"].includes(order.paymentStatus.toUpperCase()), at: order.paidAt },
+            { label: "Dalam Proses", completed: ["PROCESSING", "PACKED", "SHIPPED", "COMPLETED"].includes(order.status.toUpperCase()) },
+            { label: "Sudah Dikirim", completed: ["SHIPPED", "COMPLETED"].includes(order.status.toUpperCase()), at: order.handedOverAt ?? order.shippedAt },
+            { label: "Selesai", completed: order.status.toUpperCase() === "COMPLETED", at: order.completedAt },
+        ],
         paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod, paidAt: order.paidAt,
         customerName: order.customer,
         items: order.items.map((item) => ({ ...item, unitPrice: item.unitPrice ?? item.price })),
@@ -30,6 +38,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pub
         shipping: order.courier || order.service || order.trackingNumber || order.biteshipTrackingId ? {
             courier: order.courier, service: order.service, statusLabel: biteshipStatusLabel(order.biteshipStatus),
             trackingNumber: order.trackingNumber ?? order.biteshipTrackingId,
+             handoverPhotoUrl: order.handoverPhotoUrl, handedOverAt: order.handedOverAt,
         } : null,
     }, { headers: { "Cache-Control": "no-store" } });
 }

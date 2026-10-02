@@ -1,12 +1,13 @@
  "use client";
 
  import { useEffect, useState } from "react";
- import { X, Loader2, AlertCircle } from "lucide-react";
+import { X, Loader2, AlertCircle, Upload, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
  import { OrderStatusBadge } from "./OrderStatusBadge";
  import { formatDate, formatRupiah } from "@/components/admin/kasir/kasir-shared";
  import { biteshipStatusLabel } from "@/lib/kasir-delivery";
  import { hasRealShipment, kasirShipmentAction } from "@/lib/kasir-delivery";
+import { compressHandoverImage } from "@/lib/client-image";
 
  export interface OrderDetailItem {
      id: string;
@@ -48,6 +49,8 @@ import Swal from "sweetalert2";
      biteshipStatus?: string | null;
      biteshipTrackingId?: string | null;
       biteshipLabelUrl?: string | null;
+      handoverPhotoUrl?: string | null;
+      handedOverAt?: string | null;
  }
 
  interface OrderDetailProps {
@@ -63,6 +66,35 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
      const [error, setError] = useState("");
     const [archiving, setArchiving] = useState(false);
     const [creatingShipment, setCreatingShipment] = useState(false);
+    const [handoverFile, setHandoverFile] = useState<File | null>(null);
+    const [originalHandoverSize, setOriginalHandoverSize] = useState<number | null>(null);
+    const [processingHandover, setProcessingHandover] = useState(false);
+    const [savingHandover, setSavingHandover] = useState(false);
+
+    async function saveHandover() {
+        if (!order || !handoverFile || savingHandover) return;
+        setSavingHandover(true);
+        try {
+            const body = new FormData(); body.append("file", handoverFile);
+            const response = await fetch(`/api/admin/orders/${order.id}/handover`, { method: "POST", body });
+            const contentType = response.headers.get("content-type") || "";
+            let payload: { message?: string; error?: string; order?: OrderDetailData } = {};
+            if (contentType.toLowerCase().includes("application/json")) { try { payload = await response.json(); } catch { payload = {}; } }
+            else { try { await response.text(); } catch { /* safe fallback */ } }
+            if (!response.ok) throw new Error(payload.error || payload.message || "Gagal menyimpan bukti penyerahan. Silakan coba lagi.");
+            setOrder(current => current && payload.order ? { ...current, ...payload.order } : current);
+            setHandoverFile(null);
+            await Swal.fire({ title: "Status diperbarui", text: "Paket telah diserahkan kepada driver oleh petugas AFA STORE.", icon: "success", timer: 1500, showConfirmButton: false });
+        } catch (e) { setError(e instanceof Error ? e.message : "Foto gagal disimpan."); } finally { setSavingHandover(false); }
+    }
+
+    async function chooseHandoverFile(file: File | undefined) {
+        if (!file) return;
+        setProcessingHandover(true); setError(""); setOriginalHandoverSize(file.size);
+        try { setHandoverFile(await compressHandoverImage(file)); }
+        catch (e) { setHandoverFile(null); setError(e instanceof Error ? e.message : "Foto tidak dapat diproses."); }
+        finally { setProcessingHandover(false); }
+    }
 
     async function confirmPayment() {
         if (!order || order.paymentStatus.toUpperCase() === "PAID") return;
@@ -332,6 +364,15 @@ export function OrderDetail({ orderId, isOpen, onClose, onArchived }: OrderDetai
                                           {order.biteshipLabelUrl && <a href={order.biteshipLabelUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold text-emerald-700 underline">Label pengiriman</a>}
                                      </div>
                                  )}
+                                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
+                                       <p className="font-semibold text-emerald-900 dark:text-emerald-200">Foto Penyerahan Paket ke Driver</p>
+                                       <p className="mt-1 text-xs text-emerald-800">Foto akan otomatis dikompres hingga maks. 1 MB.</p>
+                                       {(handoverFile || order.handoverPhotoUrl) && <div className="relative mt-3 w-fit"><img src={handoverFile ? URL.createObjectURL(handoverFile) : order.handoverPhotoUrl!} alt="Bukti penyerahan ke driver" className="max-h-48 rounded-lg object-cover" />{handoverFile && <button type="button" onClick={() => { setHandoverFile(null); setOriginalHandoverSize(null); }} className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><Trash2 size={15} /></button>}</div>}
+                                       {handoverFile && <p className="mt-2 text-xs text-emerald-800">Foto asli: {((originalHandoverSize ?? 0) / 1024 / 1024).toFixed(2)} MB · Hasil: {(handoverFile.size / 1024).toFixed(0)} KB</p>}
+                                       <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-emerald-400 p-3 text-sm font-semibold text-emerald-900"><Upload size={18} /> {processingHandover ? "Menyiapkan foto..." : handoverFile ? "Ganti Foto" : "Upload Foto Penyerahan ke Driver"}<input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" disabled={processingHandover || savingHandover} onChange={e => void chooseHandoverFile(e.target.files?.[0])} /></label>
+                                      {order.handedOverAt && <p className="mt-2 text-xs text-emerald-800">Diserahkan: {formatDate(order.handedOverAt)}</p>}
+                                       {handoverFile && <button type="button" onClick={() => void saveHandover()} disabled={savingHandover || processingHandover} className="mt-3 rounded-lg bg-[#123524] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{savingHandover ? "Menyimpan bukti penyerahan..." : "Konfirmasi Penyerahan ke Driver"}</button>}
+                                  </div>
 
                                  {/* Items */}
                                  <div>

@@ -21,6 +21,7 @@ import {
 } from "@/lib/biteship";
 import { resolveKasirOrderType } from "@/lib/kasir-delivery";
 import { isKasirSource } from "@/lib/kasir";
+import { orderStatusFromBiteship } from "@/lib/orders";
 
 export const runtime = "nodejs";
 
@@ -194,6 +195,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
                 biteshipTrackingId: created.trackingId,
                 biteshipLabelUrl: created.labelUrl,
                 biteshipCreatedAt: new Date(),
+                ...(orderStatusFromBiteship(created.status, order.status) ? { status: orderStatusFromBiteship(created.status, order.status)! } : {}),
             },
         });
         return NextResponse.json({ order: biteshipOrderView(updated) });
@@ -211,6 +213,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
                             biteshipTrackingId: existing.trackingId,
                             biteshipLabelUrl: existing.labelUrl,
                             biteshipCreatedAt: order.biteshipCreatedAt ?? new Date(),
+                            ...(orderStatusFromBiteship(existing.status, order.status) ? { status: orderStatusFromBiteship(existing.status, order.status)! } : {}),
                         },
                     });
                     return NextResponse.json({ order: biteshipOrderView(updated) });
@@ -288,6 +291,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
                 biteshipStatus: nextStatus,
                 biteshipTrackingId: remote.trackingId ?? order.biteshipTrackingId,
                 biteshipLabelUrl: remote.labelUrl ?? order.biteshipLabelUrl,
+                ...(orderStatusFromBiteship(nextStatus, undefined) === "COMPLETED" ? { status: "COMPLETED", completedAt: new Date() } : orderStatusFromBiteship(nextStatus, undefined) === "SHIPPED" ? { status: "SHIPPED", shippedAt: new Date() } : {}),
             },
             select: SHIPMENT_SYNC_SELECT,
         });

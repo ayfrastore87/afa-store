@@ -188,6 +188,8 @@ model Order {
   processedAt         DateTime?
   packedAt            DateTime?
   shippedAt           DateTime?
+  handoverPhotoUrl    String?
+  handedOverAt        DateTime?
   completedAt         DateTime?
   cancelledAt         DateTime?
   items               OrderItem[]

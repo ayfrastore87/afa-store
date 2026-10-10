@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 
-import { Heart, Star, Check } from "lucide-react";
+import { CalendarDays, Check, Heart, ShoppingCart, Star, Zap } from "lucide-react";
 import ProductImage from "./product-image";
 import type { Product } from "@/lib/products";
 import { formatRupiah } from "@/lib/products";
@@ -92,50 +92,87 @@ export function ProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addS
         </p>
       </div>
 
-      {/* ACTION AREA */}
+      {/* ACTION AREA — Icon-only buttons: [ShoppingCart] [Zap] [CalendarDays] */}
       <div className="night-card-actions border-t border-gray-100 px-4 py-3">
-        <div className="flex flex-col gap-2">
-          {/* Add to Cart Button */}
-          <button 
-            type="button" 
-            onClick={onAdd} 
-            disabled={outOfStock || addState === "adding" || addState === "added"}
-            aria-busy={addState === "adding"}
-            aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke keranjang`}
-            className="night-secondary-button group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#C9A45B]/30 bg-white px-4 py-2.5 text-[10px] font-semibold text-[#8B6B3F] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-sm active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/30 disabled:hover:bg-transparent sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
-          >
-            {addState === "adding" ? (
-              <>
-                <svg className="h-3.5 w-3.5 animate-spin text-[#C9A45B]" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Menambahkan...
-              </>
-            ) : addState === "added" ? (
-              <>
-                <Check size={14} className="text-green-600" />
-                Ditambahkan
-              </>
-            ) : outOfStock ? (
-              <span className="uppercase tracking-wide">Stok Habis</span>
-            ) : (
-              <>+ Keranjang</>
-            )}
-          </button>
+        <div
+          className="flex items-center justify-center gap-2.5"
+          role="group"
+          aria-label={`Aksi untuk ${item.name}`}
+        >
+          {/* Add to Cart — icon only */}
+          <span className="group/tip relative inline-flex">
+            <button
+              type="button"
+              onClick={onAdd}
+              disabled={outOfStock || addState === "adding" || addState === "added"}
+              aria-busy={addState === "adding"}
+              aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke Keranjang`}
+              title="Tambah ke Keranjang"
+              className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#123524] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/50 disabled:hover:bg-[#FFFDF7] disabled:hover:shadow-[0_1px_3px_rgba(18,53,36,0.06)] sm:h-11 sm:w-11"
+            >
+              {addState === "adding" ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin text-[#C9A45B]" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="sr-only">Menambahkan...</span>
+                </>
+              ) : addState === "added" ? (
+                <>
+                  <Check size={17} className="text-[#315d45]" aria-hidden="true" />
+                  <span className="sr-only">Ditambahkan</span>
+                </>
+              ) : (
+                <ShoppingCart size={17} aria-hidden="true" />
+              )}
+            </button>
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+            >
+              Tambah ke Keranjang
+            </span>
+          </span>
 
-          {/* Buy Now Button */}
-          <button 
-            type="button" 
-            disabled={outOfStock} 
-            onClick={onBuy}
-            className="group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#123524] px-4 py-2.5 text-[10px] font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-lg active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
-          >
-            Beli Sekarang
-          </button>
-          <button type="button" onClick={onPreOrder} className="flex min-h-[36px] w-full items-center justify-center rounded-full border border-[#C9A45B] bg-[#FFF8E8] px-4 py-2.5 text-[10px] font-bold text-[#8B6B3F] transition-all hover:-translate-y-0.5 hover:bg-[#F8EBCB] active:scale-[0.98] sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm">
-            Pre-Order
-          </button>
+          {/* Buy Now — primary, icon only, slightly larger */}
+          <span className="group/tip relative inline-flex">
+            <button
+              type="button"
+              disabled={outOfStock}
+              onClick={onBuy}
+              aria-label="Beli Sekarang"
+              title="Beli Sekarang"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#123524] text-[#D4AF37] shadow-[0_6px_14px_rgba(18,53,36,0.22)] ring-1 ring-[#D4AF37]/35 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-[0_8px_18px_rgba(18,53,36,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4AF37] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white disabled:shadow-none disabled:ring-0 disabled:hover:translate-y-0 sm:h-12 sm:w-12"
+            >
+              <Zap size={18} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+            >
+              Beli Sekarang
+            </span>
+          </span>
+
+          {/* Pre-Order — icon only */}
+          <span className="group/tip relative inline-flex">
+            <button
+              type="button"
+              onClick={onPreOrder}
+              aria-label="Pre-Order"
+              title="Pre-Order"
+              className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#A7833A] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8EBCB] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:translate-y-0 active:scale-95 sm:h-11 sm:w-11"
+            >
+              <CalendarDays size={17} aria-hidden="true" />
+            </button>
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+            >
+              Pre-Order
+            </span>
+          </span>
         </div>
       </div>
     </motion.article>

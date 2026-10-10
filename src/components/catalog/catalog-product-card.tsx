@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Heart, ShoppingCart, Star } from "lucide-react";
+import { CalendarDays, Check, Heart, ShoppingCart, Star, Zap } from "lucide-react";
 import ProductImage from "@/components/product-image";
 import type { Product } from "@/lib/products";
 import { formatRupiah } from "@/lib/products";
@@ -20,12 +20,14 @@ interface CatalogProductCardProps {
  * Compact, marketplace-style product card for the /produk catalog grid.
  *
  * Dominant image (aspect-square, object-contain, no crop), then name
- * (line-clamp-2), size, real rating, and bold dark-green price. Actions stay
- * compact: an icon "+ Keranjang" button plus a small "Beli Sekarang" — the
- * existing buy-now logic is preserved, just visually smaller than on the
- * detail page. Image and name link to /produk/[slug] using the real DB slug;
- * interactive buttons never nest inside the link so there is no invalid markup
- * or double navigation.
+ * (line-clamp-2), size, real rating, and bold dark-green price. Action area is
+ * icon-only: ShoppingCart (add), Zap (buy-now, primary), CalendarDays
+ * (pre-order). Each button exposes an accessible tooltip (hover + focus) with
+ * aria-label + title fallback for mobile/assistive tech. All existing
+ * handlers, loading states, and routing are preserved — only the UI changed.
+ * Image and name link to /produk/[slug] using the real DB slug; interactive
+ * buttons never nest inside the link so there is no invalid markup or double
+ * navigation.
  */
 export function CatalogProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addState }: CatalogProductCardProps) {
     const outOfStock = item.stock <= 0;
@@ -92,37 +94,75 @@ export function CatalogProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wis
 
                 <p className="mt-auto whitespace-nowrap pt-1 text-[16px] font-bold text-[#123524] sm:text-[17px]">{formatRupiah(item.price)}</p>
 
-                <div className="mt-2 flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={onAdd}
-                        disabled={outOfStock || addState === "adding" || addState === "added"}
-                        aria-busy={addState === "adding"}
-                        aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke keranjang`}
-                        className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/40 bg-white text-[#8B6B3F] transition-all hover:border-[#C9A45B] hover:bg-[#F8F5EE] active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                        {addState === "adding" ? (
-                            <svg className="h-4 w-4 animate-spin text-[#C9A45B]" viewBox="0 0 24 24" aria-hidden="true">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                        ) : addState === "added" ? (
-                            <Check size={16} className="text-[#315d45]" />
-                        ) : (
-                            <ShoppingCart size={16} />
-                        )}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onBuy}
-                        disabled={outOfStock}
-                        className="flex min-w-0 flex-1 items-center justify-center rounded-xl bg-[#123524] px-3 py-2.5 text-[11px] font-bold text-white transition-all hover:bg-[#1c5138] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 sm:text-xs"
-                    >
-                        Beli Sekarang
-                    </button>
-                    <button type="button" onClick={onPreOrder} className="col-span-2 flex min-h-9 items-center justify-center rounded-xl border border-[#C9A45B] bg-[#FFF8E8] px-3 py-2 text-[11px] font-bold text-[#8B6B3F] transition hover:bg-[#F8EBCB] sm:text-xs">
-                        Pre-Order
-                    </button>
+                <div className="mt-2 flex items-center justify-start gap-2 sm:gap-2.5">
+                    {/* Add to Cart — icon only */}
+                    <span className="group/tip relative inline-flex">
+                        <button
+                            type="button"
+                            onClick={onAdd}
+                            disabled={outOfStock || addState === "adding" || addState === "added"}
+                            aria-busy={addState === "adding"}
+                            aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke Keranjang`}
+                            title="Tambah ke Keranjang"
+                            className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#123524] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                            {addState === "adding" ? (
+                                <svg className="h-4 w-4 animate-spin text-[#C9A45B]" viewBox="0 0 24 24" aria-hidden="true">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                            ) : addState === "added" ? (
+                                <Check size={17} className="text-[#315d45]" aria-hidden="true" />
+                            ) : (
+                                <ShoppingCart size={17} aria-hidden="true" />
+                            )}
+                        </button>
+                        <span
+                            role="tooltip"
+                            className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+                        >
+                            Tambah ke Keranjang
+                        </span>
+                    </span>
+
+                    {/* Buy Now — primary action, icon only */}
+                    <span className="group/tip relative inline-flex">
+                        <button
+                            type="button"
+                            onClick={onBuy}
+                            disabled={outOfStock}
+                            aria-label="Beli Sekarang"
+                            title="Beli Sekarang"
+                            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#123524] text-[#D4AF37] shadow-[0_6px_14px_rgba(18,53,36,0.22)] ring-1 ring-[#D4AF37]/35 transition-all hover:bg-[#1c5138] hover:shadow-[0_8px_18px_rgba(18,53,36,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4AF37] active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white disabled:shadow-none disabled:ring-0"
+                        >
+                            <Zap size={18} strokeWidth={2.4} aria-hidden="true" />
+                        </button>
+                        <span
+                            role="tooltip"
+                            className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+                        >
+                            Beli Sekarang
+                        </span>
+                    </span>
+
+                    {/* Pre-Order — icon only */}
+                    <span className="group/tip relative inline-flex">
+                        <button
+                            type="button"
+                            onClick={onPreOrder}
+                            aria-label="Pre-Order"
+                            title="Pre-Order"
+                            className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#A7833A] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all hover:border-[#C9A45B] hover:bg-[#F8EBCB] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:scale-95"
+                        >
+                            <CalendarDays size={17} aria-hidden="true" />
+                        </button>
+                        <span
+                            role="tooltip"
+                            className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+                        >
+                            Pre-Order
+                        </span>
+                    </span>
                 </div>
             </div>
         </article>

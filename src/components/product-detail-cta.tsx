@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Minus, Plus, ShoppingBag, X } from "lucide-react";
+import { CalendarDays, Check, Minus, Plus, ShoppingBag, ShoppingCart, X, Zap } from "lucide-react";
 import { useCart } from "@/context/cart-context";
 import { chooseGuestCartAction } from "@/lib/customer-auth-prompt";
 import { hasAuthenticatedUser } from "@/lib/client-auth";
@@ -64,9 +64,29 @@ export default function ProductDetailCta({ product, stock }: Props) {
         }
     };
 
+    const tooltip = "pointer-events-none absolute -top-9 left-1/2 z-20 hidden -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 md:block md:group-hover/tip:translate-y-0 md:group-hover/tip:opacity-100 md:group-focus-within/tip:translate-y-0 md:group-focus-within/tip:opacity-100";
     const controls = <>
         <div className="flex items-center justify-between gap-4"><label htmlFor="product-quantity" className="text-sm font-bold text-[#123524]">Jumlah</label><div className="inline-flex items-center overflow-hidden rounded-full border border-[#C9A45B]/35 bg-white" role="group" aria-label="Atur jumlah produk"><button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} disabled={!available || quantity <= 1} aria-label="Kurangi jumlah" className="grid min-h-11 min-w-11 place-items-center text-[#123524] disabled:opacity-35"><Minus size={17} /></button><output id="product-quantity" className="min-w-11 text-center font-bold">{quantity}</output><button type="button" onClick={() => setQuantity((value) => Math.min(stock, value + 1))} disabled={!available || quantity >= stock} aria-label="Tambah jumlah" className="grid min-h-11 min-w-11 place-items-center text-[#123524] disabled:opacity-35"><Plus size={17} /></button></div></div>
-        <div className="grid gap-3 sm:grid-cols-3"><button type="button" onClick={() => void addProduct()} disabled={!available || adding} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#123524] px-5 py-3 font-bold text-white disabled:bg-[#9b9b91]">{adding ? "Menambahkan…" : <><ShoppingBag size={19} /> Tambah ke Keranjang</>}</button><button type="button" onClick={() => void buyNow()} disabled={!available || adding} className="min-h-12 rounded-full bg-[#C9A45B] px-5 py-3 font-bold text-white disabled:bg-[#b7aa91]">Beli Sekarang</button><button type="button" onClick={() => router.push(`/pre-order?productId=${encodeURIComponent(product.id)}`)} className="min-h-12 rounded-full border border-[#C9A45B] bg-[#FFF8E8] px-5 py-3 font-bold text-[#8B6B3F]">Pre-Order</button></div>
+        <div className="flex flex-wrap items-center gap-3" role="group" aria-label="Aksi produk">
+            <span className="group/tip relative inline-flex">
+                <button type="button" onClick={() => void addProduct()} disabled={!available || adding} aria-busy={adding} aria-label={available ? "Tambah ke Keranjang" : "Stok habis"} className="night-secondary-button grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#123524] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
+                    {adding ? (<><svg aria-hidden="true" className="h-5 w-5 animate-spin text-[#123524]" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity=".25" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="sr-only">Menambahkan…</span></>) : (<ShoppingCart size={19} aria-hidden="true" />)}
+                </button>
+                <span role="tooltip" className={tooltip}>Keranjang</span>
+            </span>
+            <span className="group/tip relative inline-flex">
+                <button type="button" onClick={() => void buyNow()} disabled={!available || adding} aria-label="Beli Sekarang" className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-[#123524] text-[#D4AF37] shadow-[0_6px_14px_rgba(18,53,36,0.22)] ring-1 ring-[#D4AF37]/35 transition-all hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-[0_8px_18px_rgba(18,53,36,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4AF37] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white disabled:shadow-none disabled:ring-0">
+                    <Zap size={20} strokeWidth={2.4} aria-hidden="true" />
+                </button>
+                <span role="tooltip" className={tooltip}>Beli Sekarang</span>
+            </span>
+            <span className="group/tip relative inline-flex">
+                <button type="button" onClick={() => router.push(`/pre-order?productId=${encodeURIComponent(product.id)}`)} aria-label="Pre-Order" className="night-secondary-button grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#A7833A] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all hover:border-[#C9A45B] hover:bg-[#F8EBCB] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:scale-95">
+                    <CalendarDays size={19} aria-hidden="true" />
+                </button>
+                <span role="tooltip" className={tooltip}>Pre-Order</span>
+            </span>
+        </div>
         <a href={buildWhatsAppOrderUrl(product, quantity)} target="_blank" rel="noopener noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#25D366]/40 px-5 py-3 text-sm font-bold text-[#187B3A]">Tanya via WhatsApp</a>
     </>;
 

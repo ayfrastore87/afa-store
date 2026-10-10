@@ -107,8 +107,7 @@ export function ProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addS
               disabled={outOfStock || addState === "adding" || addState === "added"}
               aria-busy={addState === "adding"}
               aria-label={outOfStock ? `${item.name} stok habis` : `Tambah ${item.name} ke Keranjang`}
-              title="Tambah ke Keranjang"
-              className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#123524] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/50 disabled:hover:bg-[#FFFDF7] disabled:hover:shadow-[0_1px_3px_rgba(18,53,36,0.06)] sm:h-11 sm:w-11"
+              className="night-secondary-button grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#123524] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8F5EE] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:border-[#C9A45B]/50 disabled:hover:bg-[#FFFDF7] disabled:hover:shadow-[0_1px_3px_rgba(18,53,36,0.06)] sm:h-11 sm:w-11"
             >
               {addState === "adding" ? (
                 <>
@@ -129,9 +128,9 @@ export function ProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addS
             </button>
             <span
               role="tooltip"
-              className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+              className="pointer-events-none absolute -top-9 left-1/2 z-20 hidden -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 md:block md:group-hover/tip:translate-y-0 md:group-hover/tip:opacity-100 md:group-focus-within/tip:translate-y-0 md:group-focus-within/tip:opacity-100"
             >
-              Tambah ke Keranjang
+              Keranjang
             </span>
           </span>
 
@@ -142,14 +141,13 @@ export function ProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addS
               disabled={outOfStock}
               onClick={onBuy}
               aria-label="Beli Sekarang"
-              title="Beli Sekarang"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#123524] text-[#D4AF37] shadow-[0_6px_14px_rgba(18,53,36,0.22)] ring-1 ring-[#D4AF37]/35 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-[0_8px_18px_rgba(18,53,36,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4AF37] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white disabled:shadow-none disabled:ring-0 disabled:hover:translate-y-0 sm:h-12 sm:w-12"
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#123524] text-[#D4AF37] shadow-[0_6px_14px_rgba(18,53,36,0.22)] ring-1 ring-[#D4AF37]/35 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-[0_8px_18px_rgba(18,53,36,0.28)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4AF37] active:translate-y-0 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white disabled:shadow-none disabled:ring-0 disabled:hover:translate-y-0 sm:h-12 sm:w-12"
             >
-              <Zap size={18} strokeWidth={2.4} aria-hidden="true" />
+              <Zap size={19} strokeWidth={2.4} aria-hidden="true" />
             </button>
             <span
               role="tooltip"
-              className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+              className="pointer-events-none absolute -top-9 left-1/2 z-20 hidden -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 md:block md:group-hover/tip:translate-y-0 md:group-hover/tip:opacity-100 md:group-focus-within/tip:translate-y-0 md:group-focus-within/tip:opacity-100"
             >
               Beli Sekarang
             </span>
@@ -161,14 +159,13 @@ export function ProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addS
               type="button"
               onClick={onPreOrder}
               aria-label="Pre-Order"
-              title="Pre-Order"
-              className="night-secondary-button grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#A7833A] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8EBCB] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:translate-y-0 active:scale-95 sm:h-11 sm:w-11"
+              className="night-secondary-button grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#C9A45B]/50 bg-[#FFFDF7] text-[#A7833A] shadow-[0_1px_3px_rgba(18,53,36,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#C9A45B] hover:bg-[#F8EBCB] hover:shadow-[0_3px_8px_rgba(18,53,36,0.10)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C9A45B] active:translate-y-0 active:scale-95 sm:h-11 sm:w-11"
             >
-              <CalendarDays size={17} aria-hidden="true" />
+              <CalendarDays size={18} aria-hidden="true" />
             </button>
             <span
               role="tooltip"
-              className="pointer-events-none absolute -top-9 left-1/2 z-20 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+              className="pointer-events-none absolute -top-9 left-1/2 z-20 hidden -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md bg-[#0E2A1C] px-2 py-1 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-all duration-150 md:block md:group-hover/tip:translate-y-0 md:group-hover/tip:opacity-100 md:group-focus-within/tip:translate-y-0 md:group-focus-within/tip:opacity-100"
             >
               Pre-Order
             </span>

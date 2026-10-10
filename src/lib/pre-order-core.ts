@@ -87,7 +87,7 @@ export const PRE_ORDER_MAX_PRICE = 100_000_000;
  * error string (Bahasa) when invalid. Catalog prices are resolved by the API
  * from the DB before this is called, so client prices are never trusted there.
  */
-export function buildPreOrderItems(raw: unknown): { ok: true; items: PreOrderItemSnapshot[]; subtotal: number } | { ok: false; message: string } {
+export function buildPreOrderItems(raw: unknown, options: { allowZeroTotal?: boolean } = {}): { ok: true; items: PreOrderItemSnapshot[]; subtotal: number } | { ok: false; message: string } {
     if (!Array.isArray(raw) || raw.length === 0) return { ok: false, message: "Minimal satu item pre-order diperlukan." };
     if (raw.length > PRE_ORDER_MAX_ITEMS) return { ok: false, message: `Maksimal ${PRE_ORDER_MAX_ITEMS} item per pre-order.` };
     const items: PreOrderItemSnapshot[] = [];
@@ -105,7 +105,7 @@ export function buildPreOrderItems(raw: unknown): { ok: true; items: PreOrderIte
         items.push({ productId, name, notes, quantity, price, subtotal: quantity * price });
     }
     const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
-    if (subtotal <= 0) return { ok: false, message: "Total pre-order harus lebih dari Rp 0." };
+    if (!options.allowZeroTotal && subtotal <= 0) return { ok: false, message: "Total pre-order harus lebih dari Rp 0." };
     return { ok: true, items, subtotal };
 }
 

@@ -210,11 +210,13 @@ function parsePickupDate(value: unknown) {
  * are admin-only.
  */
 async function resolveItems(tx: Tx, raw: unknown, trustClientPrice: boolean) {
-    const built = buildPreOrderItems(raw);
+    // Guest catalog rows intentionally carry price 0 until the product is
+    // re-read below. Do not reject that placeholder before server resolution.
+    const built = buildPreOrderItems(raw, { allowZeroTotal: true });
     if (!built.ok) throw new PreOrderError(built.message);
     const productIds = built.items.map((item) => item.productId).filter((id): id is string => Boolean(id));
     const products = productIds.length
-        ? await tx.product.findMany({ where: { id: { in: productIds }, isActive: true }, select: { id: true, name: true, price: true } })
+        ? await tx.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true, price: true, isActive: true } })
         : [];
     const map = new Map(products.map((product) => [product.id, product]));
     for (const item of built.items) {
@@ -223,10 +225,18 @@ async function resolveItems(tx: Tx, raw: unknown, trustClientPrice: boolean) {
             continue;
         }
         const product = map.get(item.productId);
-        if (!product) throw new PreOrderError(`Produk "${item.name}" tidak tersedia.`);
+        if (!product) throw new PreOrderError(`Produk dengan ID "${item.productId}" tidak ditemukan.`);
+        if (!product.isActive) throw new PreOrderError(`Produk "${product.name}" sedang tidak aktif.`);
+        // Prisma currently maps Product.price to Int, but normalize at this
+        // boundary as a defense against Decimal/string runtime values from
+        // older schemas or alternate Prisma adapters.
+        const price = Number(product.price);
+        if (!Number.isSafeInteger(price) || price <= 0 || price > 100_000_000) {
+            throw new PreOrderError(`Harga produk "${product.name}" tidak valid.`);
+        }
         item.name = product.name;
-        item.price = product.price;
-        item.subtotal = product.price * item.quantity;
+        item.price = price;
+        item.subtotal = price * item.quantity;
     }
     const subtotal = built.items.reduce((sum, item) => sum + item.subtotal, 0);
     if (subtotal <= 0) throw new PreOrderError("Total pre-order harus lebih dari Rp 0.");

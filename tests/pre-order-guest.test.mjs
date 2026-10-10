@@ -175,3 +175,27 @@ test("guest PO code never touches Order / Payment / checkout / webhook tables", 
     }
     assert.doesNotMatch(guestLib, /prisma\.(?!preOrder)/);
 });
+
+// ── Server price resolution regression coverage ──────────────────────────────
+test("guest items are resolved by Product.id and server price, never browser price", () => {
+    assert.match(poLib, /where: \{ id: \{ in: productIds \} \}/);
+    assert.match(poLib, /select: \{ id: true, name: true, price: true, isActive: true \}/);
+    assert.match(poLib, /const price = Number\(product\.price\)/);
+    assert.match(poLib, /item\.subtotal = price \* item\.quantity/);
+    assert.match(poLib, /allowZeroTotal: true/);
+    assert.doesNotMatch(poLib, /item\.price\s*=\s*Number\(.*input|body\.price/);
+});
+
+test("server rejects missing, inactive, invalid-price products instead of producing zero total", () => {
+    assert.match(poLib, /Produk dengan ID.*tidak ditemukan/);
+    assert.match(poLib, /Produk.*sedang tidak aktif/);
+    assert.match(poLib, /Harga produk.*tidak valid/);
+    assert.match(poLib, /price <= 0/);
+    assert.match(poLib, /subtotal <= 0/);
+});
+
+test("quantity multiplication and numeric Decimal/string normalization are explicit", () => {
+    assert.match(poLib, /const price = Number\(product\.price\)/);
+    assert.match(poLib, /item\.subtotal = price \* item\.quantity/);
+    assert.match(poLib, /Number\.isSafeInteger\(price\)/);
+});

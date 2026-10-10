@@ -22,6 +22,7 @@ const breadcrumbs: Record<string, string> = {
     "/admin/akun": "Akun",
     "/admin/kasir": "Kasir",
     "/admin/kasir/riwayat": "Riwayat Kasir",
+    "/admin/kasir/pre-order": "Pre-Order",
     "/admin/mitra": "Mitra",
     "/admin/pelanggan": "Pelanggan",
     "/admin/titip-jual": "Sales & Titip Jual",

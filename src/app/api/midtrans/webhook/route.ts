@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyMidtransSignature } from "@/lib/midtrans";
 import { paymentTransition, type PaymentEvent } from "@/lib/payment-transition";
+import { applyMidtransEventToPreOrderPayment, isPreOrderPaymentReference } from "@/lib/pre-order";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,20 @@ export async function POST(request: Request) {
         const event: PaymentEvent | null = payload.transaction_status === "settlement" ? "settlement" : payload.transaction_status === "capture" && payload.fraud_status === "accept" ? "capture_accept" : payload.transaction_status === "expire" ? "expire" : payload.transaction_status === "cancel" || payload.transaction_status === "deny" ? "cancel" : null;
         if (event) {
             const grossAmount = parseIdr(payload.gross_amount);
+            // Pre-order payments use order_id "PO-YYYYMMDD-XXXX-P<n>" and live in a
+            // separate ledger. They never share an invoice with Order, so this is
+            // a strict branch: either handled here, or the legacy path below runs.
+            if (isPreOrderPaymentReference(invoice)) {
+                const handled = await applyMidtransEventToPreOrderPayment({
+                    transactionRef: invoice,
+                    transactionId: payload.transaction_id,
+                    paymentType: payload.payment_type,
+                    grossAmount,
+                    event,
+                });
+                if (!handled) throw new Error("pre_order_payment_not_found");
+                return NextResponse.json({ received: true });
+            }
             await prisma.$transaction(async (tx) => {
                 const order = await tx.order.findUnique({ where: { invoice } });
                 if (!order || grossAmount === null || grossAmount !== order.total) throw new Error("gross_amount_mismatch");

@@ -200,6 +200,13 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
         }
         chunks.push(cmdFeed(1));
     }
+    // Optional receipt title (pre-order DP / cicilan / pelunasan). Absent on
+    // regular kasir receipts so their byte layout is unchanged.
+    if (data.title) {
+        chunks.push(cmdBold(true));
+        chunks.push(cmdLine(formatReceiptLine(data.title, width, "center")));
+        chunks.push(cmdBold(false));
+    }
     // Reset all header formatting before the transaction body.
     chunks.push(cmdSize(SIZE.normal), cmdAlign("left"));
 
@@ -262,6 +269,14 @@ export function createReceipt(data: ReceiptData, profile: ThermalPrinterProfile)
     for (const [label, value] of payment) {
         for (const line of formatColumns(label, value, width)) {
             chunks.push(cmdLine(line));
+        }
+    }
+    // Extra payment rows (pre-order: dibayar sekarang / total dibayar / sisa).
+    if (data.extraPaymentRows && data.extraPaymentRows.length > 0) {
+        for (const [label, value] of data.extraPaymentRows) {
+            for (const line of formatColumns(label, value, width)) {
+                chunks.push(cmdLine(line));
+            }
         }
     }
 

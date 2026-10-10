@@ -701,3 +701,93 @@ model StorePayment {
   @@index([salesId, paymentDate])
   @@map("store_payments")
 }
+
+// ---------------------------------------------------------------------------
+// PRE-ORDER (PO). Fully separate from Order/Payment so partial payments
+// (DP / cicilan / pelunasan) never touch the 1-order-1-payment invariant that
+// the Midtrans webhook and revenue engine rely on. Status / paymentStatus /
+// kind / method are validated strings (see src/lib/pre-order-core.ts), which
+// mirrors the String-status convention used by Order and Payment.
+// ---------------------------------------------------------------------------
+
+model PreOrder {
+  id             String            @id @default(cuid())
+  poNumber       String            @unique
+  /** Unguessable tracking token for the public (no-login) status page. */
+  publicToken    String?           @unique
+  customer       String
+  phone          String
+  note           String?
+  pickupDate     DateTime?
+  subtotal       Int
+  discount       Int               @default(0)
+  total          Int
+  status         String            @default("CONFIRMED")
+  paymentStatus  String            @default("UNPAID")
+  source         String            @default("ADMIN_MANUAL")
+  userId         String?
+  createdById    String?
+  handedOverById String?
+  handedOverAt   DateTime?
+  cancelledAt    DateTime?
+  confirmedAt    DateTime?
+  readyAt        DateTime?
+  deletedAt      DateTime?
+  items          PreOrderItem[]
+  payments       PreOrderPayment[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([phone])
+  @@index([status, paymentStatus])
+  @@index([pickupDate])
+  @@index([createdAt])
+  @@map("pre_orders")
+}
+
+model PreOrderItem {
+  id         String   @id @default(cuid())
+  preOrderId String
+  preOrder   PreOrder @relation(fields: [preOrderId], references: [id], onDelete: Cascade)
+  productId  String?
+  name       String
+  notes      String?
+  quantity   Int
+  price      Int
+  subtotal   Int
+
+  @@index([preOrderId])
+  @@map("pre_order_items")
+}
+
+model PreOrderPayment {
+  id             String    @id @default(cuid())
+  preOrderId     String
+  preOrder       PreOrder  @relation(fields: [preOrderId], references: [id], onDelete: Cascade)
+  sequence       Int
+  amount         Int
+  method         String
+  kind           String
+  status         String    @default("PENDING")
+  idempotencyKey String?   @unique
+  operatorId     String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  cancelledAt    DateTime?
+  cashReceived   Int?
+  change         Int?
+  transactionRef String?   @unique
+  transactionId  String?
+  paymentType    String?
+  qrisUrl        String?
+  rawResponse    Json?
+  expiredAt      DateTime?
+  note           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([preOrderId, sequence])
+  @@index([preOrderId, status])
+  @@index([status, verifiedAt])
+  @@map("pre_order_payments")
+}

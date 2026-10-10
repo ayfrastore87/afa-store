@@ -84,4 +84,14 @@ export interface ReceiptData {
     footer: string[];
     /** Store identity information (address, WA, website). Printed centered at top. */
     storeAddress?: string[] | null;
+    /**
+     * Optional bold centered title under the store header (e.g. "STRUK DP PRE-ORDER").
+     * Regular kasir receipts omit it, so their layout is byte-for-byte unchanged.
+     */
+    title?: string | null;
+    /**
+     * Optional extra label/value rows appended after the payment block. Used by the
+     * pre-order receipt for "Dibayar Sekarang" / "Total Dibayar" / "Sisa Tagihan".
+     */
+    extraPaymentRows?: Array<[string, string]> | null;
 }

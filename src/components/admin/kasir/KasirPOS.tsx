@@ -425,6 +425,15 @@ export default function KasirPOS() {
 
                     <div className="flex items-center gap-2">
                         <Link
+                            href="/kasir/pre-order"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#C9A45B]/50 bg-white/80 px-3 text-sm font-black text-[#184D47] transition hover:bg-white active:scale-95"
+                            data-testid="kasir-cari-po"
+                        >
+                            <PackageSearch size={18} />
+                            <span className="hidden sm:inline">Cari PO</span>
+                            <span className="sm:hidden">PO</span>
+                        </Link>
+                        <Link
                             href="/kasir/riwayat"
                             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#D4AF37] px-3 text-sm font-black text-[#184D47] transition hover:brightness-105 active:scale-95"
                         >

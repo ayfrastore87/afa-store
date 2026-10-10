@@ -209,6 +209,7 @@ const tabByPath: Record<string, (typeof tabs)[number]["id"]> = {
     "/admin/pesanan": "orders",
     "/admin/kasir": "kasir",
     "/admin/kasir/riwayat": "kasir",
+    "/admin/kasir/pre-order": "kasir",
     "/admin/testimonials": "testimonials",
     "/admin/testimoni": "testimonials",
     "/admin/mitra": "mitra",

@@ -10,6 +10,7 @@ interface CatalogProductCardProps {
     item: Product;
     onAdd: () => void;
     onBuy: () => void;
+    onPreOrder: () => void;
     onWish: () => void;
     wish: boolean;
     addState?: "adding" | "added";
@@ -26,7 +27,7 @@ interface CatalogProductCardProps {
  * interactive buttons never nest inside the link so there is no invalid markup
  * or double navigation.
  */
-export function CatalogProductCard({ item, onAdd, onBuy, onWish, wish, addState }: CatalogProductCardProps) {
+export function CatalogProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addState }: CatalogProductCardProps) {
     const outOfStock = item.stock <= 0;
 
     return (
@@ -118,6 +119,9 @@ export function CatalogProductCard({ item, onAdd, onBuy, onWish, wish, addState 
                         className="flex min-w-0 flex-1 items-center justify-center rounded-xl bg-[#123524] px-3 py-2.5 text-[11px] font-bold text-white transition-all hover:bg-[#1c5138] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 sm:text-xs"
                     >
                         Beli Sekarang
+                    </button>
+                    <button type="button" onClick={onPreOrder} className="col-span-2 flex min-h-9 items-center justify-center rounded-xl border border-[#C9A45B] bg-[#FFF8E8] px-3 py-2 text-[11px] font-bold text-[#8B6B3F] transition hover:bg-[#F8EBCB] sm:text-xs">
+                        Pre-Order
                     </button>
                 </div>
             </div>

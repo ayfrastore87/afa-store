@@ -30,13 +30,24 @@ export default function GuestPreOrderForm() {
     const [error, setError] = useState("");
     // Form open time (for the server-side minimum fill-time bot check). Set on mount, not during render.
     const startedAt = useRef(0);
+    const preselectedProductId = useRef<string | null>(null);
     useEffect(() => { startedAt.current = Date.now(); }, []);
+    useEffect(() => {
+        preselectedProductId.current = new URLSearchParams(window.location.search).get("productId");
+    }, []);
 
     const load = useCallback(() => {
         setLoading(true);
         setLoadError("");
         fetchProducts()
-            .then((rows) => setProducts(rows.filter((p) => p.isActive !== false)))
+            .then((rows) => {
+                const activeRows = rows.filter((p) => p.isActive !== false);
+                setProducts(activeRows);
+                const selected = preselectedProductId.current;
+                if (selected && activeRows.some((p) => p.id === selected)) {
+                    setLines([{ productId: selected, quantity: 1, notes: "" }]);
+                }
+            })
             .catch(() => setLoadError("Produk belum dapat dimuat. Silakan coba lagi."))
             .finally(() => setLoading(false));
     }, []);

@@ -10,12 +10,13 @@ interface ProductCardProps {
   item: Product;
   onAdd: () => void;
   onBuy: () => void;
+  onPreOrder: () => void;
   onWish?: () => void;
   wish?: boolean;
   addState?: "adding" | "added";
 }
 
-export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: ProductCardProps) {
+export function ProductCard({ item, onAdd, onBuy, onPreOrder, onWish, wish, addState }: ProductCardProps) {
   const outOfStock = item.stock <= 0;
 
   return (
@@ -131,6 +132,9 @@ export function ProductCard({ item, onAdd, onBuy, onWish, wish, addState }: Prod
             className="group flex min-h-[36px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#123524] px-4 py-2.5 text-[10px] font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#184D47] hover:shadow-lg active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm"
           >
             Beli Sekarang
+          </button>
+          <button type="button" onClick={onPreOrder} className="flex min-h-[36px] w-full items-center justify-center rounded-full border border-[#C9A45B] bg-[#FFF8E8] px-4 py-2.5 text-[10px] font-bold text-[#8B6B3F] transition-all hover:-translate-y-0.5 hover:bg-[#F8EBCB] active:scale-[0.98] sm:min-h-[38px] sm:text-xs md:min-h-[40px] md:text-sm">
+            Pre-Order
           </button>
         </div>
       </div>

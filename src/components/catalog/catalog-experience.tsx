@@ -385,6 +385,7 @@ export default function CatalogExperience({ products, categories, totalActive, q
                                         addState={addState[product.id]}
                                         onAdd={() => void addCart(product)}
                                         onBuy={() => void buyNow(product)}
+                                        onPreOrder={() => router.push(`/pre-order?productId=${encodeURIComponent(product.id)}`)}
                                         onWish={() => onWish(product)}
                                     />
                                 ))}

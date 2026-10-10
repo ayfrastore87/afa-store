@@ -42,7 +42,8 @@ const RATING_OPTIONS = [4, 3] as const;
 
 export default function CatalogExperience({ products, categories, totalActive, query, total, totalPages, currentPage }: Props) {
     const router = useRouter();
-    const { totalItems, addToCart, toast: cartToast, dismissToast } = useCart();
+    const { totalItems, loading: cartLoading, isAuthenticated, addToCart, toast: cartToast, dismissToast } = useCart();
+    const visibleCartItemCount = !cartLoading && isAuthenticated ? totalItems : 0;
     const { toast: wishToast, toggleWishlist, isWishlisted } = useWishlist();
 
     const [addState, setAddState] = useState<Record<string, "adding" | "added">>({});
@@ -446,10 +447,10 @@ export default function CatalogExperience({ products, categories, totalActive, q
             </AnimatePresence>
 
             {/* Floating helpers: cart, WhatsApp, back-to-top. */}
-            <Link href="/cart" onClick={async (event) => { event.preventDefault(); if (await requireAuth("/cart")) router.push("/cart"); }} aria-label={totalItems > 0 ? `Keranjang, ${totalItems} item` : "Keranjang"} className="fixed bottom-[156px] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-white/90 text-[#123524] shadow-[0_5px_16px_rgba(18,53,36,0.12)] transition hover:scale-105 active:scale-95">
+            <Link href="/cart" onClick={async (event) => { event.preventDefault(); if (await requireAuth("/cart")) router.push("/cart"); }} aria-label={visibleCartItemCount > 0 ? `Keranjang, ${visibleCartItemCount} item` : "Keranjang"} className="fixed bottom-[156px] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-white/90 text-[#123524] shadow-[0_5px_16px_rgba(18,53,36,0.12)] transition hover:scale-105 active:scale-95">
                 <span className="relative grid h-10 w-10 place-items-center">
                     <ShoppingCart size={28} strokeWidth={2.2} className="drop-shadow-[0_3px_4px_rgba(18,53,36,0.35)]" />
-                    {totalItems > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-[#C9A45B] px-1.5 text-[10px] font-bold text-white">{totalItems > 99 ? "99+" : totalItems}</span>}
+                    {visibleCartItemCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-[#C9A45B] px-1.5 text-[10px] font-bold text-white">{visibleCartItemCount > 99 ? "99+" : visibleCartItemCount}</span>}
                 </span>
             </Link>
             <FloatingWhatsApp />

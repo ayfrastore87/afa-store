@@ -45,10 +45,11 @@ export default function Home() {
   const productsCarouselRef = useRef<HTMLDivElement | null>(null);
   const carouselPauseRef = useRef(false);
   const router = useRouter();
-  const { cart, subtotal, totalItems, itemState, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, toast: cartToast, dismissToast } = useCart();
+  const { cart, subtotal, totalItems, loading: cartLoading, isAuthenticated, itemState, addToCart, increaseQty, decreaseQty, removeFromCart, clearCart, toast: cartToast, dismissToast } = useCart();
   const { wishlistCount, toast, toggleWishlist, isWishlisted } = useWishlist();
   const { scrollYProgress } = useScroll();
-  const cartItemCount = totalItems;
+  // Never expose guest/stale cart state in either badge while auth is resolving.
+  const cartItemCount = !cartLoading && isAuthenticated ? totalItems : 0;
   const accountInitials = userName ? userName.trim().slice(0, 3).toUpperCase() : "";
   const visibleProducts = useMemo(() => products.filter((p) => { const term = query.trim().toLowerCase(); const searchable = [p.name, p.slug, p.flavor, p.size, p.category].filter(Boolean).join(" ").toLowerCase(); return (filter === "Semua" || p.category === filter) && searchable.includes(term); }).sort((a, b) => sort === "low" ? a.price - b.price : sort === "high" ? b.price - a.price : b.rating - a.rating), [filter, products, query, sort]);
   const moveProducts = useCallback((direction: 1 | -1) => {
@@ -187,7 +188,7 @@ export default function Home() {
     <HomeCategories groups={categoryGroups} loading={productsLoading} onSelect={selectCatalogCategory} />
     <CustomOrderCta whatsapp={whatsappSetting || undefined} />
     <HomeFeaturedProducts products={visibleProducts} loading={productsLoading} error={productsError} isWishlisted={isWishlisted} toggleWishlist={toggleWishlist} addCart={addCart} addState={addState} buyNow={buyNow} onRetry={loadProducts} carouselRef={productsCarouselRef} onPause={() => { carouselPauseRef.current = true; }} onResume={() => { carouselPauseRef.current = false; }} onPrevious={() => moveProducts(-1)} onNext={() => moveProducts(1)} />
-    <HomeCustomerReviews /><HomeTrustBar /><PremiumFooter /><Floating onCart={openCart} totalItems={totalItems} whatsapp={whatsappSetting || undefined} /><CartDrawer open={cartOpen} cart={cart} subtotal={subtotal} checkoutPending={checkoutPending} checkoutError={checkoutError} itemState={itemState} onClose={() => setCartOpen(false)} onCheckout={continueToCheckout} increaseQty={increaseQty} decreaseQty={decreaseQty} removeFromCart={removeFromCart} clearCart={clearCart} />
+    <HomeCustomerReviews /><HomeTrustBar /><PremiumFooter /><Floating onCart={openCart} totalItems={cartItemCount} whatsapp={whatsappSetting || undefined} /><CartDrawer open={cartOpen} cart={cart} subtotal={subtotal} checkoutPending={checkoutPending} checkoutError={checkoutError} itemState={itemState} onClose={() => setCartOpen(false)} onCheckout={continueToCheckout} increaseQty={increaseQty} decreaseQty={decreaseQty} removeFromCart={removeFromCart} clearCart={clearCart} />
   </main>;
 }
 function CategoryCluster({ groups, loading, onSelect }: { groups: { name: string; items: Product[] }[]; loading: boolean; onSelect: (category: string) => void }) {

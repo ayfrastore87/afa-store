@@ -9,23 +9,41 @@ import { prisma } from "@/lib/prisma";
 import { formatRupiah } from "@/lib/products";
 import { resolveProductImages } from "@/lib/product-gallery";
 
+const TRANSIENT_DB_CODES = new Set(["P1001", "P1002", "P1008", "P1017"]);
+
+// Runs a read query with at most one retry for transient connectivity errors.
+// Failures are logged server-side without connection details and surfaced as a
+// generic error, so they reach error.tsx and are never mistaken for a 404.
+async function readProduct<T>(label: string, query: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await query();
+        } catch (error) {
+            const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "unknown";
+            if (attempt < 2 && TRANSIENT_DB_CODES.has(code)) continue;
+            console.error(`[produk/detail] ${label} failed`, { code, attempt });
+            throw new Error("Produk belum dapat dimuat.");
+        }
+    }
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
-    const product = await prisma.product.findFirst({ where: { slug, isActive: true }, select: { name: true, flavor: true, size: true, category: true } });
+    const product = await readProduct("metadata", () => prisma.product.findFirst({ where: { slug, isActive: true }, select: { name: true, flavor: true, size: true, category: true } })).catch(() => null);
     return { title: product ? `${product.name} | AFA STORE` : "Produk | AFA STORE", description: product ? [product.category?.name, product.flavor, product.size].filter(Boolean).join(" · ") : "Produk AFA STORE" };
 }
 
 export default async function ProductDetail({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
-    const product = await prisma.product.findFirst({ where: { slug, isActive: true }, include: { category: true, images: { orderBy: { sortOrder: "asc" } } } });
+    const product = await readProduct("product", () => prisma.product.findFirst({ where: { slug, isActive: true }, include: { category: true, images: { orderBy: { sortOrder: "asc" } } } }));
     if (!product) notFound();
 
-    const relatedProducts = await prisma.product.findMany({
+    const relatedProducts = await readProduct("related", () => prisma.product.findMany({
         where: { isActive: true, id: { not: product.id }, ...(product.categoryId ? { categoryId: product.categoryId } : {}) },
         orderBy: [{ rating: "desc" }, { createdAt: "desc" }],
         take: 4,
         include: { category: true },
-    });
+    }));
     const available = product.stock > 0;
 
     return <main className="product-detail-page min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_10%_5%,rgba(201,164,91,0.16),transparent_25rem),linear-gradient(135deg,#F8F5EE,#FFFDF8_58%,#EFE6D5)] pb-28 text-[#123524] md:pb-16">
@@ -92,7 +110,7 @@ export default async function ProductDetail({ params }: { params: Promise<{ slug
                 <div className="luxury-card rounded-[28px] p-8 text-center sm:p-12">
                     <Star size={40} className="mx-auto text-[#C9A45B]/40" aria-hidden="true" />
                     <h3 className="mt-4 font-display text-2xl font-bold text-[#123524]">Belum ada ulasan untuk produk ini.</h3>
-                    <p className="mx-auto mt-3 max-w-xl text-[#8B6B3F]">Ulasan tertulis per produk membutuhkan desain data dan API terpisah. Saat ini rating produk bersumber dari data produk AFA STORE.</p>
+                    <p className="mx-auto mt-3 max-w-xl text-[#8B6B3F]">Jadilah yang pertama memberikan ulasan setelah mencoba produk ini.</p>
                 </div>
             </section>
             {relatedProducts.length > 0 && <section aria-labelledby="related-title" className="mt-16 border-t border-[#C9A45B]/20 pt-10 lg:mt-24 lg:pt-14"><div className="mb-7"><p className="text-xs font-bold uppercase tracking-[0.22em] text-[#C9A45B]">Pilihan AFA</p><h2 id="related-title" className="mt-2 font-display text-3xl font-bold sm:text-4xl">Mungkin Anda Juga Suka</h2></div><div className="flex snap-x gap-4 overflow-x-auto pb-4 sm:grid sm:grid-cols-2 sm:overflow-visible md:grid-cols-3 lg:grid-cols-4">{relatedProducts.map((related) => <article key={related.id} className="min-w-[72vw] max-w-[290px] snap-start sm:min-w-0 sm:max-w-none"><Link href={`/produk/${related.slug}`} className="group block"><div className="relative aspect-square overflow-hidden rounded-[24px] border border-[#C9A45B]/15 bg-[#F7EEDC]"><ProductImage src={related.image} alt={related.name} sizes="(max-width: 639px) 72vw, (max-width: 1023px) 33vw, 25vw" /></div><div className="px-1 pt-4">{related.category?.name && <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8B6B3F]">{related.category.name}</p>}<h3 className="mt-1 line-clamp-2 min-h-[3rem] font-display text-lg font-bold leading-snug group-hover:text-[#8B6B3F]">{related.name}</h3><div className="mt-2 flex items-center justify-between gap-3"><p className="font-bold text-[#8B6B3F]">{formatRupiah(related.price)}</p><span className={`text-xs font-semibold ${related.stock > 0 ? "text-[#315d45]" : "text-red-700"}`}>{related.stock > 0 ? "Tersedia" : "Habis"}</span></div></div></Link></article>)}</div></section>}

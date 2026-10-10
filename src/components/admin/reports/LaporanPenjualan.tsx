@@ -23,6 +23,7 @@ type StatusFilter = "semua" | "selesai" | "diproses" | "pending" | "dibatalkan";
 
 export default function LaporanPenjualan() {
     const [period, setPeriod] = useState<Period>("hari");
+    const [month, setMonth] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit" }).format(new Date()));
     const [report, setReport] = useState<SalesReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -39,7 +40,9 @@ export default function LaporanPenjualan() {
         setLoading(true);
         setError("");
         try {
-            const response = await fetch(`/api/admin/sales/report?period=${period}`, { headers: { Accept: "application/json" } });
+            const params = new URLSearchParams({ period });
+            if (period === "bulan-pilihan") params.set("month", month);
+            const response = await fetch(`/api/admin/sales/report?${params}`, { headers: { Accept: "application/json" } });
             const payload = (await response.json().catch(() => null)) as (SalesReport & { message?: string }) | null;
             if (!response.ok || !payload) throw new Error(payload?.message || "Laporan gagal dimuat.");
             setReport(payload);
@@ -48,13 +51,14 @@ export default function LaporanPenjualan() {
         } finally {
             setLoading(false);
         }
-    }, [period]);
+    }, [period, month]);
 
     const loadTransactions = useCallback(async () => {
         setTableLoading(true);
         try {
             const params = new URLSearchParams();
             params.set("period", period);
+            if (period === "bulan-pilihan") params.set("month", month);
             if (query.trim()) params.set("q", query.trim());
             if (statusFilter !== "semua") params.set("status", statusFilter);
             params.set("page", String(page));
@@ -73,7 +77,7 @@ export default function LaporanPenjualan() {
         } finally {
             setTableLoading(false);
         }
-    }, [period, query, statusFilter, page]);
+    }, [period, month, query, statusFilter, page]);
 
     useEffect(() => {
         void loadReport();
@@ -84,9 +88,9 @@ export default function LaporanPenjualan() {
     }, [loadTransactions]);
 
     return (
-        <div className="min-h-screen text-[#184D47]">
+        <div data-report-page className="min-h-screen bg-[#F8F5EE] text-[#123524] dark:bg-[#07150F] dark:text-[#F2EDE3]">
             <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-                <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <header data-report-header className="mb-6 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#184D47] text-[#D4AF37]">
                             <BarChart3 size={24} />
@@ -96,7 +100,7 @@ export default function LaporanPenjualan() {
                             <h1 className="text-2xl font-black leading-tight">Laporan Penjualan</h1>
                         </div>
                     </div>
-                    <Link
+                    <Link data-report-hide-print
                         href="/admin"
                         className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[#184D47]/15 bg-white/80 px-4 font-bold text-[#184D47] transition hover:bg-white active:scale-95"
                     >
@@ -117,6 +121,8 @@ export default function LaporanPenjualan() {
                         report={report}
                         period={period}
                         setPeriod={setPeriod}
+                        month={month}
+                        setMonth={setMonth}
                         orders={orders}
                         query={query}
                         setQuery={setQuery}

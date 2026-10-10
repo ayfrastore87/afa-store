@@ -1,8 +1,8 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { periodStart, type ReportPeriod } from "@/lib/admin-report";
-import { calculateRevenue, CASHIER_SOURCES, isValidPaidOrder, type RevenueOrder, type RevenueResult, type RevenueRow } from "@/lib/revenue-core";
+import { periodRange, type ReportPeriod } from "@/lib/admin-report";
+import { calculateRevenue, CASHIER_SOURCES, isValidPaidOrder, type RevenueOrder, type RevenueResult, type RevenueRow, type DailyRevenue } from "@/lib/revenue-core";
 import { wibStartOfDay, wibStartOfMonth, wibStartOfYear, wibDaysAgo } from "@/lib/wib";
 
 export type RevenueSource = "ONLINE" | (typeof CASHIER_SOURCES)[number];
@@ -23,12 +23,21 @@ export function revenuePeriodStart(period: ReportPeriod, now = new Date()): Date
     return wibStartOfYear(now);
 }
 
-export async function getRevenue(period: ReportPeriod = "bulan"): Promise<RevenueResult> {
-    const from = revenuePeriodStart(period) ?? periodStart("semua");
+export async function getRevenue(period: ReportPeriod = "bulan", month?: string | null): Promise<RevenueResult> {
+    const { from, to } = periodRange(period, month);
+    const dateRange = from ? { gte: from, ...(to ? { lt: to } : {}) } : undefined;
     const [orders, visits, payments] = await Promise.all([
-        prisma.order.findMany({ where: from ? { OR: [{ paidAt: { gte: from } }, { payment: { paidAt: { gte: from } } }] } : {}, select: { source: true, total: true, paymentStatus: true, status: true, paidAt: true, payment: { select: { status: true, paidAt: true } } } }),
-        prisma.salesVisit.findMany({ where: { ...(from ? { visitedAt: { gte: from } } : {}), status: "COMPLETED" }, select: { salesAmount: true, visitedAt: true } }),
-        prisma.storePayment.findMany({ where: { ...(from ? { paymentDate: { gte: from } } : {}), status: "VALID" }, select: { amount: true, paymentDate: true } }),
+        prisma.order.findMany({ where: dateRange ? { OR: [{ paidAt: dateRange }, { payment: { paidAt: dateRange } }] } : {}, select: { source: true, total: true, paymentStatus: true, status: true, paidAt: true, payment: { select: { status: true, paidAt: true } } } }),
+        prisma.salesVisit.findMany({ where: { ...(dateRange ? { visitedAt: dateRange } : {}), status: "COMPLETED" }, select: { salesAmount: true, visitedAt: true } }),
+        prisma.storePayment.findMany({ where: { ...(dateRange ? { paymentDate: dateRange } : {}), status: "VALID" }, select: { amount: true, paymentDate: true } }),
     ]);
-    return calculateRevenue({ orders, sales: visits.map((v) => ({ amount: v.salesAmount, at: v.visitedAt })), payments: payments.map((p) => ({ amount: p.amount, at: p.paymentDate })) });
+    const result = calculateRevenue({ orders, sales: visits.map((v) => ({ amount: v.salesAmount, at: v.visitedAt })), payments: payments.map((p) => ({ amount: p.amount, at: p.paymentDate })) });
+    const days = new Map<string, DailyRevenue>();
+    const day = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
+    const ensure = (date: string) => days.get(date) ?? (() => { const row = { date, online: 0, cashier: 0, sales: 0, total: 0, transactionCount: 0 }; days.set(date, row); return row; })();
+    for (const order of orders) { if (!isValidPaidOrder(order)) continue; const row = ensure(day(order.payment?.paidAt ?? order.paidAt ?? new Date())); if (order.source === "ONLINE") row.online += order.total; else if (CASHIER_SOURCES.includes(order.source as never)) row.cashier += order.total; row.total += order.total; row.transactionCount += 1; }
+    for (const visit of visits) { const row = ensure(day(visit.visitedAt)); row.sales += visit.salesAmount; row.total += visit.salesAmount; }
+    if (from && to) { for (let cursor = from.getTime(); cursor < to.getTime(); cursor += 86_400_000) ensure(day(new Date(cursor))); }
+    result.daily = [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+    return result;
 }

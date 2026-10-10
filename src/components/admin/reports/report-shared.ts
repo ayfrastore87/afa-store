@@ -1,7 +1,7 @@
 // Shared types, labels, and export helpers for the AFA STORE admin "Laporan
 // Penjualan" page. Pure client-side helpers — no data fetching or mutation.
 
-export type Period = "hari" | "minggu" | "bulan" | "tahun" | "semua";
+export type Period = "hari" | "minggu" | "bulan" | "tahun" | "semua" | "bulan-pilihan";
 export type ChartGranularity = "harian" | "mingguan" | "bulanan";
 
 export const PERIODS: { id: Period; label: string }[] = [
@@ -10,6 +10,7 @@ export const PERIODS: { id: Period; label: string }[] = [
     { id: "bulan", label: "Bulan Ini" },
     { id: "tahun", label: "Tahun Ini" },
     { id: "semua", label: "Semua Waktu" },
+    { id: "bulan-pilihan", label: "Pilih Bulan dan Tahun" },
 ];
 
 export const CHART_GRANULARITIES: { id: ChartGranularity; label: string }[] = [
@@ -46,6 +47,7 @@ export type PaymentMethodStat = { method: string; count: number; total: number }
 export type SourceStat = { source: string; count: number; total: number };
 export type OrderStatusStat = { status: string; count: number };
 export type ChartPoint = { label: string; revenue: number; count: number };
+export type DailyRevenue = { date: string; online: number; cashier: number; sales: number; total: number; transactionCount: number };
 
 export type SalesReport = {
     period: Period;
@@ -63,6 +65,7 @@ export type SalesReport = {
         bulanan: ChartPoint[];
     };
     recentOrders: ReportTransaction[];
+    dailyRevenue?: DailyRevenue[];
 };
 
 export type ReportTransaction = {

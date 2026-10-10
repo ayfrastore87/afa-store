@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
-import { periodStart, REPORT_PERIODS, type ReportPeriod } from "@/lib/admin-report";
+import { periodRange, REPORT_PERIODS, type ReportPeriod } from "@/lib/admin-report";
 import { wibStartOfDay } from "@/lib/wib";
 import { getRevenue } from "@/lib/revenue";
 
@@ -67,6 +67,18 @@ function bucketChart(rows: ChartRow[], granularity: Granularity): { label: strin
         .map((b) => ({ label: labelFor(b.start, granularity), revenue: b.revenue, count: b.count }));
 }
 
+function completeDailyChart(rows: ChartRow[], from: Date | null, to: Date | null) {
+    if (!from || !to) return bucketChart(rows, "harian");
+    const buckets = new Map(bucketChart(rows, "harian").map((item) => [item.label, item]));
+    const result: { label: string; revenue: number; count: number }[] = [];
+    for (let cursor = from.getTime(); cursor < to.getTime(); cursor += WIB_DAY) {
+        const date = new Date(cursor);
+        const label = labelFor(date, "harian");
+        result.push(buckets.get(label) ?? { label, revenue: 0, count: 0 });
+    }
+    return result;
+}
+
 const STATUS_GROUPS = {
     completed: ["COMPLETED"],
     cancelled: ["CANCELLED", "CANCELED"],
@@ -90,9 +102,9 @@ export async function GET(request: Request) {
     const period: ReportPeriod = (REPORT_PERIODS as readonly string[]).includes(periodParam)
         ? (periodParam as ReportPeriod)
         : "bulan";
-
-    const from = periodStart(period);
-    const where: Prisma.OrderWhereInput = from ? { createdAt: { gte: from } } : {};
+    const month = searchParams.get("month");
+    const { from, to } = periodRange(period, month);
+    const where: Prisma.OrderWhereInput = from ? { createdAt: { gte: from, ...(to ? { lt: to } : {}) } } : {};
 
     try {
         const [orderAgg, itemAgg, groupRows, itemsForTop, customerIds, methodRows, chartRows, recentRows, sourceRows, revenueResult] =
@@ -139,7 +151,7 @@ export async function GET(request: Request) {
                     take: 50,
                 }),
                 prisma.order.groupBy({ by: ["source"], where, _count: { _all: true }, _sum: { total: true } }),
-                getRevenue(period),
+                getRevenue(period, month),
             ]);
 
         const transactionCount = orderAgg._count._all;
@@ -211,13 +223,14 @@ export async function GET(request: Request) {
                 salesCashReceived: revenueResult.salesCashReceived,
                 salesReceivable: revenueResult.salesReceivable,
             },
+            dailyRevenue: revenueResult.daily ?? [],
             topProducts,
             customers: { total: customerUserIds.length, newCount, returningCount },
             paymentMethods,
             sources: sourceRows.map((row) => ({ source: row.source, count: row._count._all, total: row._sum.total ?? 0 })),
             orderStatuses: ORDERED_BARS.map((status) => ({ status, count: grouped[status] })),
             chart: {
-                harian: bucketChart(chartRows, "harian"),
+                harian: completeDailyChart(chartRows, from, to),
                 mingguan: bucketChart(chartRows, "mingguan"),
                 bulanan: bucketChart(chartRows, "bulanan"),
             },

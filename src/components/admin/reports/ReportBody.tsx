@@ -20,6 +20,7 @@ import {
     Download,
     FileSpreadsheet,
     FileText,
+    Printer,
     Loader2,
     Package,
     Repeat,
@@ -67,6 +68,8 @@ type ReportBodyProps = {
     report: SalesReport;
     period: Period;
     setPeriod: (period: Period) => void;
+    month: string;
+    setMonth: (month: string) => void;
     orders: ReportTransaction[];
     query: string;
     setQuery: (query: string) => void;
@@ -82,6 +85,8 @@ export function ReportBody({
     report,
     period,
     setPeriod,
+    month,
+    setMonth,
     orders,
     query,
     setQuery,
@@ -97,9 +102,7 @@ export function ReportBody({
 
     const chartData = useMemo(() => report.chart[granularity] ?? [], [report, granularity]);
 
-    const exportRows = useMemo<Record<string, string | number>[]>(
-        () =>
-            orders.map((order) => ({
+    const exportRows = useMemo<Record<string, string | number>[]>(() => orders.map((order) => ({
                 Invoice: order.invoice,
                 Pelanggan: order.customer,
                 Telepon: order.phone,
@@ -108,13 +111,20 @@ export function ReportBody({
                 Status: statusLabel(order.status),
                 Total: order.total,
                 Tanggal: formatDate(order.createdAt),
-            })),
-        [orders]
-    );
+            })), [orders]);
 
-    const onExportPdf = () => void exportPdf("Laporan Penjualan", exportRows);
-    const onExportXlsx = () => void exportXlsx("laporan-penjualan.xlsx", exportRows);
-    const onExportCsv = () => exportCsv("laporan-penjualan.csv", exportRows);
+    const periodLabel = period === "bulan-pilihan" ? month : (PERIODS.find((item) => item.id === period)?.label ?? period);
+    const fetchExportRows = async () => {
+        const params = new URLSearchParams({ period });
+        if (period === "bulan-pilihan") params.set("month", month);
+        const response = await fetch(`/api/admin/sales/export?${params}`, { headers: { Accept: "application/json" } });
+        const payload = await response.json().catch(() => null) as { orders?: ReportTransaction[]; message?: string } | null;
+        if (!response.ok || !payload?.orders) throw new Error(payload?.message ?? "Ekspor gagal dimuat.");
+        return payload.orders.map((order) => ({ Invoice: order.invoice, Pelanggan: order.customer, Sumber: order.source, Pembayaran: paymentMethodLabel(order.paymentMethod), Status: statusLabel(order.status), Total: order.total, Tanggal: formatDate(order.createdAt) }));
+    };
+    const onExportPdf = async () => { try { await exportPdf(`Laporan Keuangan AFA STORE — ${periodLabel}`, await fetchExportRows()); } catch (error) { window.alert(error instanceof Error ? error.message : "Ekspor gagal."); } };
+    const onExportXlsx = async () => { try { await exportXlsx(`laporan-keuangan-${month}.xlsx`, await fetchExportRows()); } catch (error) { window.alert(error instanceof Error ? error.message : "Ekspor gagal."); } };
+    const onExportCsv = async () => { try { exportCsv(`laporan-keuangan-${month}.csv`, await fetchExportRows()); } catch (error) { window.alert(error instanceof Error ? error.message : "Ekspor gagal."); } };
 
     const summaryCards = [
         { label: "Omzet", value: formatRupiah(report.summary.revenue), icon: CircleDollarSign },
@@ -138,9 +148,12 @@ export function ReportBody({
             <Toolbar
                 period={period}
                 setPeriod={setPeriod}
+                month={month}
+                setMonth={setMonth}
                 onExportPdf={onExportPdf}
                 onExportXlsx={onExportXlsx}
                 onExportCsv={onExportCsv}
+                onPrint={() => window.print()}
             />
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -157,15 +170,17 @@ export function ReportBody({
 
             <ChartCard granularity={granularity} setGranularity={setGranularity} data={chartData} />
 
-            <section className="rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm">
-                <h3 className="mb-4 text-lg font-black text-[#184D47]">Penjualan berdasarkan sumber</h3>
+            <DailyRevenueTable rows={report.dailyRevenue ?? []} />
+
+            <section className="rounded-2xl border border-[#D8D2C5] bg-white p-5 shadow-sm dark:border-[#31523F] dark:bg-[#0E2118]">
+                <h3 className="mb-4 text-lg font-black text-[#123524] dark:text-[#F2EDE3]">Penjualan berdasarkan sumber</h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                     {(report.sources ?? []).map((item) => <div key={item.source} className="rounded-xl bg-[#f8f6f0] p-3"><p className="text-xs font-bold text-[#184D47]/60">{item.source}</p><p className="font-black text-[#184D47]">{formatRupiah(item.total)}</p><p className="text-xs text-[#184D47]/60">{item.count} transaksi</p></div>)}
                 </div>
             </section>
 
             <section className="grid gap-5 lg:grid-cols-2">
-                <div className="rounded-2xl border border-white/70 bg-white/90 p-5 shadow-sm">
+                <div className="rounded-2xl border border-[#D8D2C5] bg-white p-5 shadow-sm dark:border-[#31523F] dark:bg-[#0E2118]">
                     <h3 className="mb-4 text-lg font-black text-[#184D47]">Penjualan</h3>
                     <dl className="space-y-2">
                         {penjualan.map((item) => (
@@ -235,18 +250,33 @@ export function ReportBody({
     );
 }
 
+function DailyRevenueTable({ rows }: { rows: { date: string; online: number; cashier: number; sales: number; total: number; transactionCount: number }[] }) {
+    const totals = rows.reduce((sum, row) => ({ online: sum.online + row.online, cashier: sum.cashier + row.cashier, sales: sum.sales + row.sales, total: sum.total + row.total, count: sum.count + row.transactionCount }), { online: 0, cashier: 0, sales: 0, total: 0, count: 0 });
+    return <section className="rounded-2xl border border-[#D8D2C5] bg-white p-5 shadow-sm dark:border-[#31523F] dark:bg-[#0E2118]" data-report-detail>
+        <h3 className="text-lg font-black text-[#123524] dark:text-[#F2EDE3]">Rincian Pendapatan Harian</h3>
+        <p className="mb-4 mt-1 text-xs text-[#123524]/70 dark:text-[#F2EDE3]/70">Pendapatan berdasarkan tanggal pembayaran/order yang diakui; setoran sales adalah pelunasan piutang dan tidak dihitung sebagai pendapatan baru.</p>
+        <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-sm"><thead><tr className="border-b border-[#D8D2C5] text-left dark:border-[#31523F]"><th className="p-2">Tanggal</th><th className="p-2">Online</th><th className="p-2">Kasir</th><th className="p-2">Sales</th><th className="p-2">Total</th><th className="p-2">Jumlah Transaksi</th></tr></thead><tbody>{rows.map((row) => <tr key={row.date} className="border-b border-[#D8D2C5]/60 dark:border-[#31523F]/60"><td className="p-2">{row.date}</td><td className="p-2">{formatRupiah(row.online)}</td><td className="p-2">{formatRupiah(row.cashier)}</td><td className="p-2">{formatRupiah(row.sales)}</td><td className="p-2 font-bold">{formatRupiah(row.total)}</td><td className="p-2">{row.transactionCount}</td></tr>)}</tbody><tfoot><tr className="font-black"><td className="p-2">Total</td><td className="p-2">{formatRupiah(totals.online)}</td><td className="p-2">{formatRupiah(totals.cashier)}</td><td className="p-2">{formatRupiah(totals.sales)}</td><td className="p-2">{formatRupiah(totals.total)}</td><td className="p-2">{totals.count}</td></tr></tfoot></table></div>
+    </section>;
+}
+
 function Toolbar({
     period,
     setPeriod,
+    month,
+    setMonth,
     onExportPdf,
     onExportXlsx,
     onExportCsv,
+    onPrint,
 }: {
     period: Period;
     setPeriod: (period: Period) => void;
+    month: string;
+    setMonth: (month: string) => void;
     onExportPdf: () => void;
     onExportXlsx: () => void;
     onExportCsv: () => void;
+    onPrint: () => void;
 }) {
     return (
         <section className="flex flex-wrap items-center justify-between gap-3">
@@ -264,6 +294,12 @@ function Toolbar({
                         {item.label}
                     </button>
                 ))}
+                {period === "bulan-pilihan" && (
+                    <label className="flex items-center gap-2 rounded-xl border border-[#184D47]/20 bg-white px-3 py-2 text-sm font-bold text-[#123524]">
+                        Periode:
+                        <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} className="bg-transparent text-[#123524] outline-none" />
+                    </label>
+                )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -286,6 +322,9 @@ function Toolbar({
                 >
                     <Download size={16} />
                     CSV
+                </button>
+                <button onClick={onPrint} className="inline-flex items-center gap-2 rounded-xl border border-[#D4AF37] bg-[#F8F5EE] px-4 py-2 text-sm font-bold text-[#123524]">
+                    <Printer size={16} /> Print
                 </button>
             </div>
         </section>

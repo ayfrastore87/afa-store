@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAdmin } from "@/lib/server-auth";
-import { periodStart, REPORT_PERIODS, type ReportPeriod } from "@/lib/admin-report";
+import { periodRange, REPORT_PERIODS, type ReportPeriod } from "@/lib/admin-report";
 
 export const runtime = "nodejs";
 
@@ -46,10 +46,10 @@ export async function GET(request: Request) {
     const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("limit") ?? "20", 10) || 20));
 
-    const from = periodStart(period);
+    const { from, to } = periodRange(period, searchParams.get("month"));
 
     const where: Prisma.OrderWhereInput = {
-        ...(from ? { createdAt: { gte: from } } : {}),
+        ...(from ? { createdAt: { gte: from, ...(to ? { lt: to } : {}) } } : {}),
         ...(q
             ? {
                   OR: [

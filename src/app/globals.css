@@ -904,6 +904,18 @@ html[data-theme="dark"] .catalog-page .catalog-control:hover {
 }
 
 @media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  [data-report-page] { background: #fff !important; color: #123524 !important; }
+  [data-report-page] [data-report-hide-print],
+  [data-report-page] button,
+  [data-report-page] input,
+  [data-report-page] select { display: none !important; }
+  [data-report-page] section { break-inside: avoid; box-shadow: none !important; border-color: #d8d2c5 !important; }
+  [data-report-page] table { width: 100%; font-size: 9pt; }
+  [data-report-page] .overflow-x-auto { overflow: visible !important; }
+}
+
+@media print {
   @page {
     size: 58mm auto;
     margin: 0;

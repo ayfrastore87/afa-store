@@ -44,10 +44,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
     if (!(await getCurrentAdmin())) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
-    const body = await request.json().catch(() => ({})) as { name?: unknown; imageUrl?: unknown };
+    const body = await request.json().catch(() => ({})) as { name?: unknown; slug?: unknown; imageUrl?: unknown };
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) return NextResponse.json({ success: false, error: "Nama kategori wajib diisi." }, { status: 400 });
-    const slug = slugify(name);
+    const customSlug = typeof body.slug === "string" ? slugify(body.slug) : "";
+    const slug = customSlug || slugify(name);
     if (!slug) return NextResponse.json({ success: false, error: "Nama kategori tidak valid." }, { status: 400 });
     const duplicate = await prisma.category.findFirst({ where: { OR: [{ name }, { slug }] }, select: { id: true } });
     if (duplicate) return NextResponse.json({ success: false, error: "Kategori sudah tersedia." }, { status: 409 });

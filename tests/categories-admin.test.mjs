@@ -36,7 +36,10 @@ test("duplicate, empty-name, and in-use delete protections exist", () => {
 test("admin UI supports create/edit/delete and reads the shared API", () => {
     assert.match(page, /fetch\("\/api\/categories"/);
     assert.match(page, /Tambah Kategori/);
-    assert.match(page, /window\.confirm/);
+    assert.match(page, /role="alertdialog"/);
+    assert.match(page, /pendingDelete/);
+    assert.match(page, /confirmRemove/);
+    assert.doesNotMatch(page, /window\.confirm/);
     assert.match(page, /_count\?\.products/);
 });
 test("products and catalog retain categoryId and Category.slug architecture", () => {

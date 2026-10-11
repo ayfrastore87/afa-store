@@ -18,21 +18,16 @@ const footer      = read("src/components/premium-footer.tsx");
 const layout      = read("src/app/layout.tsx");
 const tentangPage = read("src/app/tentang-kami/page.tsx");
 
-// ── 1. Footer legal strip ─────────────────────────────────────────────────────
-test("footer: legal name IRMA RATNA MARYANI in markup", () => {
-  match(footer, /IRMA RATNA MARYANI/);
-});
-test("footer: NIB 2411220051724 in markup", () => {
-  match(footer, /2411220051724/);
-});
-test("footer: legal strip not hidden (no display:none / opacity-0)", () => {
-  // The legal strip must never carry display:none or opacity-0 on the same element
-  doesNotMatch(footer, /IRMA RATNA MARYANI[\s\S]{0,80}display:none/);
-  doesNotMatch(footer, /IRMA RATNA MARYANI[\s\S]{0,80}opacity-0/);
-});
-test("footer: link to /tentang-kami present", () => {
+// ── 1. Footer legal link ───────────────────────────────────────────────────────
+test("footer: legal link points to /tentang-kami", () => {
   match(footer, /href="\/tentang-kami"/);
   match(footer, /Informasi Legal/);
+  match(footer, /ArrowUpRight/);
+});
+test("footer: legal details are not duplicated", () => {
+  doesNotMatch(footer, /IRMA RATNA MARYANI/);
+  doesNotMatch(footer, /2411220051724/);
+  doesNotMatch(footer, /Legalitas Usaha/);
 });
 
 // ── 2. JSON-LD structured data in layout ─────────────────────────────────────
@@ -100,14 +95,12 @@ test("tentang-kami: name IRMA RATNA MARYANI NOT in display:none context", () => 
   doesNotMatch(tentangPage, /IRMA RATNA MARYANI[\s\S]{0,100}display:none/);
 });
 
-// ── 4. Consistency check — name must be spelled the same everywhere ───────────
+// ── 4. Consistency check — name remains consistent where displayed ─────────────
 test("cross-file: legal name spelled consistently", () => {
   const name = "IRMA RATNA MARYANI";
-  match(footer,      new RegExp(name));
   match(layout,      new RegExp(name));
   match(tentangPage, new RegExp(name));
   // Ensure no alternative misspelling exists
-  doesNotMatch(footer,      /IRMA RATNA MARY[^A]/);
   doesNotMatch(layout,      /IRMA RATNA MARY[^A]/);
   doesNotMatch(tentangPage, /IRMA RATNA MARY[^A]/);
 });

@@ -127,11 +127,6 @@ export default function TentangKamiPage() {
               </div>
             </dl>
 
-            <p className="mt-5 text-[13px] leading-relaxed text-[#5C5444]">
-              AFA STORE adalah nama dagang usaha yang terdaftar atas nama{" "}
-              <strong className="font-semibold text-[#123524]">IRMA RATNA MARYANI</strong>.
-              NIB (Nomor Induk Berusaha): <strong className="font-semibold text-[#123524]">2411220051724</strong>.
-            </p>
           </section>
 
           <div className="mt-8">
